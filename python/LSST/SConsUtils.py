@@ -314,7 +314,7 @@ def SharedLibraryIncomplete(self, target, source, LIBS=None):
     if myenv['PLATFORM'] == 'darwin':
         myenv['SHLINKFLAGS'] += " -undefined suppress -flat_namespace"
 
-    return myenv.SharedLibrary(target, source. LIBS=LIBS)
+    return myenv.SharedLibrary(target, source, LIBS=LIBS)
 
 SConsEnvironment.SharedLibraryIncomplete = SharedLibraryIncomplete
 
