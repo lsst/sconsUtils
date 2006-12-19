@@ -504,15 +504,38 @@ SConsEnvironment.Declare = Declare
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+try:
+    type(_Install)
+except:
+    _Install = SConsEnvironment.Install
+
+def MyInstall(env, dest, files):
+    """Like Install, but remove the target when cleaning if files is a directory"""
+
+    if CleanFlagIsSet() and os.path.isdir(files):
+        dir = os.path.join(dest, files)
+        print >> sys.stderr, "Removing", dir
+        #shutil.rmtree(dir, ignore_errors=True)
+
+    return _Install(env, dest, files)
+
+SConsEnvironment.Install = MyInstall
+
+#=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
 def InstallEups(env, dest, files):
     """Install a ups directory, setting absolute versions as appropriate"""
 
-    env = env.Clone(ENV = os.environ)
+    if CleanFlagIsSet():
+        print >> sys.stderr, "Removing", dest
+        shutil.rmtree(dest, ignore_errors=True)
+    else:
+        env = env.Clone(ENV = os.environ)
 
-    obj = env.Install(dest, files)
-    for i in obj:
-        cmd = "eups_expandtable -i %s" % (str(i))
-        env.AddPostAction(i, Action("%s" %(cmd), cmd, ENV = os.environ))
+        obj = env.Install(dest, files)
+        for i in obj:
+            cmd = "eups_expandtable -i %s" % (str(i))
+            env.AddPostAction(i, Action("%s" %(cmd), cmd, ENV = os.environ))
 
     return dest
 
