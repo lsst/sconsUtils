@@ -64,9 +64,11 @@ def makeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     env['eups_product'] = eups_product
     Help(opts.GenerateHelpText(env))
     #
-    # Fix some scons errors on Darwin
+    # SCons gets confused about shareable/static objects if
+    # you specify libraries as e.g. "#libwcs.a", but it's OK
+    # if you say LIBS = ["wcs"].
     #
-    if env['PLATFORM'] == 'darwin':
+    if False:
         env['STATIC_AND_SHARED_OBJECTS_ARE_THE_SAME'] = True
     #
     # Remove valid options from the arguments
@@ -304,7 +306,7 @@ def searchEnvForDirs(env, product):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-def SharedLibraryIncomplete(self, target, source):
+def SharedLibraryIncomplete(self, target, source, LIBS=None):
     """Like SharedLibrary, but don't insist that all symbols are resolved"""
 
     myenv = self.Clone()
@@ -312,12 +314,12 @@ def SharedLibraryIncomplete(self, target, source):
     if myenv['PLATFORM'] == 'darwin':
         myenv['SHLINKFLAGS'] += " -undefined suppress -flat_namespace"
 
-    return myenv.SharedLibrary(target, source)
+    return myenv.SharedLibrary(target, source. LIBS=LIBS)
 
 SConsEnvironment.SharedLibraryIncomplete = SharedLibraryIncomplete
 
 
-def LoadableModuleIncomplete(self, target, source):
+def LoadableModuleIncomplete(self, target, source, LIBS=None):
     """Like LoadableModule, but don't insist that all symbols are resolved"""
 
     myenv = self.Clone()
@@ -326,7 +328,7 @@ def LoadableModuleIncomplete(self, target, source):
         myenv['LDMODULEFLAGS'] += " -undefined suppress -flat_namespace"
         myenv['LDMODULESUFFIX'] = ".so"
 
-    return myenv.LoadableModule(target, source)
+    return myenv.LoadableModule(target, source, LIBS=LIBS)
 
 SConsEnvironment.LoadableModuleIncomplete = LoadableModuleIncomplete
 
@@ -487,9 +489,12 @@ def Declare(self):
             self['ENV']['PATH'] += os.pathsep + "%s/bin" % (os.environ["EUPS_DIR"])
             
             if CleanFlagIsSet():
-                command = "-eups undeclare --flavor %s %s %s" % \
-                          (self['eups_flavor'].title(), self['eups_product'], self['version'])
-                self.Execute(command)
+                if self.has_key('version'):
+                    command = "-eups undeclare --flavor %s %s %s" % \
+                              (self['eups_flavor'].title(), self['eups_product'], self['version'])
+                    self.Execute(command)
+                else:
+                    print >> sys.stderr, "I don't know your version; not undeclaring to eups"
             else:
                 command = "eups declare --force --flavor %s --root %s" % \
                           (self['eups_flavor'].title(), self['prefix'])
