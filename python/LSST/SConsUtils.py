@@ -115,6 +115,13 @@ def makeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         del env['flavor']
     except KeyError:
         pass
+    #
+    # We need a binary name, not just "Posix"
+    #
+    if env['PLATFORM'] == "posix":
+        env['eups_flavor'] = os.uname()[0]
+    else:
+        env['eups_flavor'] = env['PLATFORM']
 
     if env['opt']:
         env.Append(CCFLAGS = '-O%d' % int(env['opt']))
@@ -444,7 +451,7 @@ def setPrefix(env, versionString):
     """Set a prefix based on the EUPS_PATH, the product name, and a versionString from cvs or svn"""
 
     if env.has_key('eups_path') and env['eups_path']:
-        eups_prefix = os.path.join(env['eups_path'], env['PLATFORM'].title(),
+        eups_prefix = os.path.join(env['eups_path'], env['eups_flavor'].title(),
                                    env['eups_product'], getVersion(env, versionString))
     else:
         eups_prefix = None
@@ -481,10 +488,10 @@ def Declare(self):
             
             if CleanFlagIsSet():
                 command = "-eups undeclare --flavor %s %s %s" % \
-                          (self['PLATFORM'].title(), self['eups_product'], self['version'])
+                          (self['eups_flavor'].title(), self['eups_product'], self['version'])
                 self.Execute(command)
             else:
-                command = "eups declare --force --flavor %s --root %s" % (self['PLATFORM'].title(), self['prefix'])
+                command = "eups declare --force --flavor %s --root %s" % (self['eups_flavor'].title(), self['prefix'])
                 self.Command("declare", "", action=command)
 
 SConsEnvironment.Declare = Declare
