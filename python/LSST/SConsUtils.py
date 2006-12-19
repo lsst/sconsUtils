@@ -491,7 +491,12 @@ def Declare(self):
                           (self['eups_flavor'].title(), self['eups_product'], self['version'])
                 self.Execute(command)
             else:
-                command = "eups declare --force --flavor %s --root %s" % (self['eups_flavor'].title(), self['prefix'])
+                command = "eups declare --force --flavor %s --root %s" % \
+                          (self['eups_flavor'].title(), self['prefix'])
+
+                if self.has_key('version'):
+                    command += " %s %s" % (self['eups_product'], self['version'])
+                    
                 self.Command("declare", "", action=command)
 
 SConsEnvironment.Declare = Declare
