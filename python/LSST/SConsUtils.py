@@ -54,7 +54,11 @@ def makeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     for p in products:
         dir = productDir(p)
         opts.AddOptions(
-            PathOption(p, "Specify the location of %s" % p, dir)
+            PathOption(p, "Specify the location of %s" % p, dir),
+            PathOption(p + "Include", "Specify the location of %s's include files" % p,
+                       dir and dir + "/include" or None),
+            PathOption(p + "Lib", "Specify the location of %s's libraries" % p,
+                       dir and dir + "/lib" or None),
             )
 
     env = Environment(ENV = {'EUPS_DIR' : os.environ['EUPS_DIR'],
@@ -118,6 +122,15 @@ def makeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     except KeyError:
         pass
     #
+    # Check for unprocessed arguments
+    #
+    errors = []
+    errorStr = ""
+    for key in ARGUMENTS.keys():
+        errorStr += " %s=%s" % (key, ARGUMENTS[key])
+    if errorStr:
+        errors += ["Unprocessed arguments:%s" % errorStr]
+    #
     # We need a binary name, not just "Posix"
     #
     if env['PLATFORM'] == "posix":
@@ -130,7 +143,6 @@ def makeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     #
     # Process dependencies
     #
-    errors = []
     env['CPPPATH'] = []
     env['LIBPATH'] = []
     if not CleanFlagIsSet() and not HelpFlagIsSet() and dependencies:
@@ -149,9 +161,7 @@ def makeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                 env.CheckPython()
             #
             # Did they specify a directory on the command line? We accept:
-            #   product=DIR
-            #   product-lib=DIR
-            #   product-include=DIR
+            #   product{,Lib,Include}=DIR
             #
             (topdir, incdir, libdir) = searchEnvForDirs(env, product)
             #
@@ -220,20 +230,6 @@ def makeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         else:
             sys.excepthook(RuntimeError, msg, None)
     #
-    # Check for unprocessed arguments
-    #
-    errors = ""
-    for key in ARGUMENTS.keys():
-        errors += " %s=%s" % (key, ARGUMENTS[key])
-    if errors:
-        msg = "Unprocessed arguments:%s" % errors
-        if HelpFlagIsSet():
-            print >> sys.stderr, msg
-        elif traceback:
-            raise RuntimeError, msg
-        else:
-            sys.excepthook(RuntimeError, msg, None)
-    #
     #
     # Where to install
     #
@@ -250,10 +246,10 @@ def makeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 def searchArgumentsForDirs(ARGUMENTS, product):
-    """If product, product-include, or product-lib is set in ARGUMENTS,
+    """If product, productInclude, or productLib is set in ARGUMENTS,
     return a triple of all three values, and delete the ARGUMENTS"""
-    product_include = product + "-include"
-    product_lib = product + "-lib"
+    product_include = product + "Include"
+    product_lib = product + "Lib"
     #
     # Set ARGUMENTS[product] if either of product-{include,lib} is set
     #
@@ -290,10 +286,10 @@ def searchArgumentsForDirs(ARGUMENTS, product):
     return (topdir, incdir, libdir)
 
 def searchEnvForDirs(env, product):
-    """If product, product-include, or product-lib is set in env,
+    """If product, productInclude, or productLib is set in env,
     return a triple of all three values"""
-    product_include = product + "-include"
-    product_lib = product + "-lib"
+    product_include = product + "Include"
+    product_lib = product + "Lib"
     #
     ARGUMENTS = {}
     for k in [product, product_include, product_lib]:
