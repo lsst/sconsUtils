@@ -75,6 +75,11 @@ def makeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     if False:
         env['STATIC_AND_SHARED_OBJECTS_ARE_THE_SAME'] = True
     #
+    # We don't want "lib" inserted at the beginning of loadable module names;
+    # we'll import them under their given names.
+    #
+    env['LDMODULEPREFIX'] = ""
+    #
     # Remove valid options from the arguments
     #
     for opt in opts.keys():
