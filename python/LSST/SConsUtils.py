@@ -535,7 +535,7 @@ SConsEnvironment.Install = MyInstall
 def InstallEups(env, dest, files):
     """Install a ups directory, setting absolute versions as appropriate"""
 
-    if CleanFlagIsSet():
+    if False and CleanFlagIsSet():
         print >> sys.stderr, "Removing", dest
         shutil.rmtree(dest, ignore_errors=True)
     else:
