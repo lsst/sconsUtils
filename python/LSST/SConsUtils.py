@@ -56,9 +56,9 @@ def makeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         opts.AddOptions(
             PathOption(p, "Specify the location of %s" % p, dir),
             PathOption(p + "Include", "Specify the location of %s's include files" % p,
-                       dir and dir + "/include" or None),
+                       dir and os.path.isdir(dir + "/include") and dir + "/include" or None),
             PathOption(p + "Lib", "Specify the location of %s's libraries" % p,
-                       dir and dir + "/lib" or None),
+                       dir and os.path.isdir(dir + "/lib") and dir + "/lib" or None),
             )
 
     env = Environment(ENV = {'EUPS_DIR' : os.environ['EUPS_DIR'],
@@ -302,7 +302,7 @@ def searchEnvForDirs(env, product):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-def SharedLibraryIncomplete(self, target, source, LIBS=None):
+def SharedLibraryIncomplete(self, target, source, **keywords):
     """Like SharedLibrary, but don't insist that all symbols are resolved"""
 
     myenv = self.Clone()
@@ -310,12 +310,12 @@ def SharedLibraryIncomplete(self, target, source, LIBS=None):
     if myenv['PLATFORM'] == 'darwin':
         myenv['SHLINKFLAGS'] += " -undefined suppress -flat_namespace"
 
-    return myenv.SharedLibrary(target, source, LIBS=LIBS)
+    return myenv.SharedLibrary(target, source, **keywords)
 
 SConsEnvironment.SharedLibraryIncomplete = SharedLibraryIncomplete
 
 
-def LoadableModuleIncomplete(self, target, source, LIBS=None):
+def LoadableModuleIncomplete(self, target, source, **keywords):
     """Like LoadableModule, but don't insist that all symbols are resolved"""
 
     myenv = self.Clone()
@@ -324,7 +324,7 @@ def LoadableModuleIncomplete(self, target, source, LIBS=None):
         myenv['LDMODULEFLAGS'] += " -undefined suppress -flat_namespace"
         myenv['LDMODULESUFFIX'] = ".so"
 
-    return myenv.LoadableModule(target, source, LIBS=LIBS)
+    return myenv.LoadableModule(target, source, **keywords)
 
 SConsEnvironment.LoadableModuleIncomplete = LoadableModuleIncomplete
 
@@ -512,10 +512,14 @@ except:
 def MyInstall(env, dest, files):
     """Like Install, but remove the target when cleaning if files is a directory"""
 
-    if CleanFlagIsSet() and os.path.isdir(files):
-        dir = os.path.join(dest, files)
-        print >> sys.stderr, "Removing", dir
-        #shutil.rmtree(dir, ignore_errors=True)
+    if CleanFlagIsSet():
+        try:
+            if os.path.isdir(files):
+                dir = os.path.join(dest, files)
+                print >> sys.stderr, "Removing", dir
+                shutil.rmtree(dir, ignore_errors=True)
+        except TypeError:
+            pass                        # "files" isn't a string
 
     return _Install(env, dest, files)
 
