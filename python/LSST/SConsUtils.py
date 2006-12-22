@@ -10,7 +10,7 @@ from SCons.Script.SConscript import SConsEnvironment
 import stat
 import sys
 
-def makeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
+def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     """Setup a standard SCons environment, add our dependencies, and fix some os/x problems"""
     #
     # We don't usually want a traceback at the interactive prompt
@@ -248,6 +248,8 @@ def makeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
 
     return env
 
+makeEnv = MakeEnv                       # backwards compatibility
+
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 def searchArgumentsForDirs(ARGUMENTS, product):
@@ -484,8 +486,10 @@ def HelpFlagIsSet():
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 def Declare(self):
-    """Create a declare target; we'll add this to class Environment"""
-    if "declare" in COMMAND_LINE_TARGETS:
+    """Create current and declare targets; we'll add Declare to class Environment"""
+    if \
+           "declare" in COMMAND_LINE_TARGETS or \
+           "current" in COMMAND_LINE_TARGETS:
         if "EUPS_DIR" in os.environ.keys():
             self['ENV']['PATH'] += os.pathsep + "%s/bin" % (os.environ["EUPS_DIR"])
             
@@ -502,7 +506,8 @@ def Declare(self):
 
                 if self.has_key('version'):
                     command += " %s %s" % (self['eups_product'], self['version'])
-                    
+
+                self.Command("current", "", action=command + " --current")
                 self.Command("declare", "", action=command)
 
 SConsEnvironment.Declare = Declare

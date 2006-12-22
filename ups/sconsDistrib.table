@@ -1,0 +1,2 @@
+envAppend(PATH, ${PRODUCT_DIR}/bin)
+envAppend(MANPATH, ${PRODUCT_DIR}/man)

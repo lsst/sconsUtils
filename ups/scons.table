@@ -1,3 +1,2 @@
-envAppend(PATH, ${PRODUCT_DIR}/bin)
-envAppend(MANPATH, ${PRODUCT_DIR}/man)
+setupOptional(sconsDistrib)
 envAppend(PYTHONPATH, ${PRODUCT_DIR}/python)
