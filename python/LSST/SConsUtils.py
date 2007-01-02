@@ -387,12 +387,14 @@ def copytree(src, dst, symlinks=False, ignore = None):
     if errors:
         raise Error, errors
 
-def installFunc(dest, source, env, ignore=False):
+def installFunc(dest, source, env):
     """Install a source file or directory into a destination by copying,
     (including copying permission/mode bits)."""
 
     if env.has_key('IgnoreFiles'):
         ignore = env['IgnoreFiles']
+    else:
+        ignore = False
 
     if os.path.isdir(source):
         if os.path.exists(dest):
