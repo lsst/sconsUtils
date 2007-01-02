@@ -387,14 +387,12 @@ def copytree(src, dst, symlinks=False, ignore = None):
     if errors:
         raise Error, errors
 
-def installFunc(dest, source, env):
+def installFunc(dest, source, env, ignore=False):
     """Install a source file or directory into a destination by copying,
     (including copying permission/mode bits)."""
 
     if env.has_key('IgnoreFiles'):
         ignore = env['IgnoreFiles']
-    else:
-        ignore = False
 
     if os.path.isdir(source):
         if os.path.exists(dest):
@@ -495,7 +493,7 @@ def Declare(self):
             
             if CleanFlagIsSet():
                 if self.has_key('version'):
-                    command = "-eups undeclare --flavor %s %s %s" % \
+                    command = "eups undeclare --flavor %s %s %s" % \
                               (self['eups_flavor'].title(), self['eups_product'], self['version'])
                     self.Execute(command)
                 else:
