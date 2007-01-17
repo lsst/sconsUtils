@@ -158,7 +158,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                 print >> sys.stderr, "Ignoring extra values while configuring %s: %s" % \
                       (productProps[0], " ".join(productProps[4:]))
 
-            (product, incfile, libs, symbol) = productProps[0:4]
+            (product, incfiles, libs, symbol) = productProps[0:4]
             #
             # Special case python itself
             #
@@ -184,19 +184,21 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
             #
             if topdir:
                 success = True          # they said they knew what was going on.  If they didn't
-                                        # specify incfile/libs, we'll have to trust them
-                if incfile:
-                    conf = env.Clone(CPPPATH = env['CPPPATH'] + [incdir]).Configure()
-                    if conf.CheckCHeader(incfile):
-                        env.Replace(CPPPATH = env['CPPPATH'] + [incdir])
-                    else:
-                        errors += ["Failed to find %s in %s" % (incfile, incdir)]
-                        success = False
+                                        # specify incfiles/libs, we'll have to trust them
+                if product == "pycore":
+                    import numpy
+                    incdir = numpy.get_include()
+
+                if incfiles:
+                    try:
+                        if env.CheckHeaderGuessLanguage(incdir, incfiles):
+                            env.Replace(CPPPATH = env['CPPPATH'] + [incdir])
+                    except RuntimeError, msg:
+                        errors += [str(msg)]
                         
-                    conf.Finish()
                 if libs:
                     conf = env.Clone(LIBPATH = env['LIBPATH'] + [libdir]).Configure()
-                    if conf.CheckLib(libs, symbol):
+                    if conf.CheckLib(libs, symbol) and libdir not in env['LIBPATH']:
                         env.Replace(LIBPATH = env['LIBPATH'] + [libdir])
                         Repository(libdir)                        
                     else:
@@ -206,16 +208,22 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
 
                 if success:
                     continue
-            elif incfile or libs:       # Not specified; see if we got lucky in the environment
-                conf = env.Configure()
-
+            elif incfiles or libs:       # Not specified; see if we got lucky in the environment
                 success = True
-                if incfile and not conf.CheckCHeader(incfile):
-                    success = False
-                if libs and not conf.CheckLib(libs, symbol):
-                    success = False
+                
+                if incfiles:
+                    try:
+                        if env.CheckHeaderGuessLanguage(incdir, incfiles):
+                            env.Replace(CPPPATH = env['CPPPATH'] + [incdir])
+                    except RuntimeError, msg:
+                        errors += [str(msg)]
+                        success = False
 
-                conf.Finish()
+                if libs:
+                    conf = env.Configure()
+                    if not conf.CheckLib(libs, symbol):
+                        success = False
+                    conf.Finish()
 
                 if success:
                     continue
@@ -235,7 +243,6 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         else:
             sys.excepthook(RuntimeError, msg, None)
     #
-    #
     # Where to install
     #
     prefix = setPrefix(env, versionString)
@@ -249,6 +256,35 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     return env
 
 makeEnv = MakeEnv                       # backwards compatibility
+
+#=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def CheckHeaderGuessLanguage(self, incdir, incfiles):
+    """Like CheckHeader, but guess the proper language"""
+
+    incfiles = Split(incfiles)
+    
+    if re.search(r"\.h$", incfiles[-1]):
+        languages = ["C", "C++"]
+    elif re.search(r"\.hpp$", incfiles[-1]):
+        languages = ["C++"]
+    else:
+        raise RuntimeError, "Unknown header file suffix for file %s" % (incfiles[-1])
+
+    for lang in languages:
+        conf = self.Clone(CPPPATH = self['CPPPATH'] + [incdir]).Configure()
+        foundHeader = conf.CheckHeader(incfiles, language=lang)
+        conf.Finish()
+
+        if foundHeader:
+            if incdir in self['CPPPATH']:
+                return False            # no need for another copy
+            else:
+                return True
+
+    raise RuntimeError, "Failed to find %s in %s" % (incfiles[-1], incdir)
+
+SConsEnvironment.CheckHeaderGuessLanguage = CheckHeaderGuessLanguage
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -617,3 +653,41 @@ def CheckSwig(self, language="python", swigdir=None):
     self['SWIGFLAGS'] = "-%s" % language
 
 SConsEnvironment.CheckSwig = CheckSwig
+
+#
+# Teach scons about swig included dependencies
+#
+# From http://www.scons.org/wiki/SwigBuilder
+#
+SWIGScanner = SCons.Scanner.ClassicCPP(
+    "SWIGScan",
+    ".i",
+    "CPPPATH",
+    '^[ \t]*[%,#][ \t]*(?:include|import)[ \t]*(<|")([^>"]+)(>|")'
+)
+
+def SwigDependencies(self):
+    self.Append(SCANNERS=[SWIGScanner])
+    
+SConsEnvironment.SwigDependencies = SwigDependencies
+
+#=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+if False:
+    # Here's a way to cache other information if we want to e.g. save
+    # the configured include files -- the TryAction could save the
+    # paths to a file [I think]
+    #
+    # As the cached tests don't seem to take any time, we're not using this
+    def CheckEups(self, product):
+        self.Message("Checking %s ... " % product)
+        self.TryAction("echo XX %s" % product)
+        ret = True
+        self.Result(ret)
+
+        return ret
+
+    conf = env.Configure( custom_tests = { 'CheckEups' : CheckEups } )
+    conf.CheckEups("numpy")
+    conf.Finish()
+
