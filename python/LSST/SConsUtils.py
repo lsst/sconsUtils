@@ -512,8 +512,12 @@ def setPrefix(env, versionString):
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 def CleanFlagIsSet():
-    """Return True iff they're running "scons clean" """
+    """Return True iff they're running "scons --clean" """
     return SCons.Script.Main.options.clean
+
+def NoexecFlagIsSet():
+    """Return True iff they're running "scons -n" """
+    return SCons.Script.Main.options.noexec
 
 def HelpFlagIsSet():
     """Return True iff they're running "scons --help" """
@@ -547,6 +551,44 @@ def Declare(self):
                 self.Command("declare", "", action=command)
 
 SConsEnvironment.Declare = Declare
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def CleanTree(files, dir=".", recurse=True, verbose=False):
+    """Remove files matching the argument list starting at dir
+    when scons is invoked with -c/--clean
+    
+    E.g. CleanTree(r"*~ core")
+
+    If recurse is True, recursively descend the file system; if
+    verbose is True, print each filename after deleting it
+    """
+    
+    if CleanFlagIsSet() :
+	files_expr = ""
+	for file in Split(files):
+	    if files_expr:
+		files_expr += " -o "
+
+	    files_expr += "-name %s" % file
+	#
+	# don't use xargs --- who knows what needs quoting?
+	#
+	action = "find %s" % dir
+	if not recurse:
+	    action += " ! -name . -prune"
+
+	file_action = "rm -f"
+
+	action += r" \( %s \) -exec %s {} \;" % \
+	    (files_expr, file_action)
+	
+	if verbose:
+	    action += " -print"
+	
+	Execute(Action([action]))
+
+SConsEnvironment.CleanTree = CleanTree
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
