@@ -64,7 +64,10 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     env = Environment(ENV = {'EUPS_DIR' : os.environ['EUPS_DIR'],
                              'EUPS_PATH' : os.environ['EUPS_PATH'],
                              'PATH' : os.defpath,
-                             }, options = opts)
+                             }, options = opts,
+		      tools = ["default", "doxygen"],
+		      toolpath = ["%s/python/LSST" % os.environ['SCONS_DIR']]
+		      )
     env['eups_product'] = eups_product
     Help(opts.GenerateHelpText(env))
     #
@@ -498,8 +501,13 @@ def setPrefix(env, versionString):
     """Set a prefix based on the EUPS_PATH, the product name, and a versionString from cvs or svn"""
 
     if env.has_key('eups_path') and env['eups_path']:
-        eups_prefix = os.path.join(env['eups_path'], env['eups_flavor'].title(),
-                                   env['eups_product'], getVersion(env, versionString))
+        eups_prefix = env['eups_path']
+	flavor = env['eups_flavor'].title()
+	if not re.search("/" + flavor + "$", eups_prefix):
+	    eups_prefix = os.path.join(eups_prefix, flavor)
+
+        eups_prefix = os.path.join(eups_prefix, env['eups_product'],
+				   getVersion(env, versionString))
     else:
         eups_prefix = None
 
@@ -694,7 +702,6 @@ def CheckSwig(self, language="python", swigdir=None):
     if swigdir not in self['ENV']['PATH'].split(os.pathsep):
         self['ENV']['PATH'] += os.pathsep + swigdir
 
-
     swigTool = Tool('swig'); swigTool(self)
     self['SWIGFLAGS'] = "-%s" % language
 
@@ -736,4 +743,3 @@ if False:
     conf = env.Configure( custom_tests = { 'CheckEups' : CheckEups } )
     conf.CheckEups("numpy")
     conf.Finish()
-
