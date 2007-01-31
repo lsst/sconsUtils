@@ -274,7 +274,9 @@ def CheckHeaderGuessLanguage(self, incdir, incfiles):
     incfiles = Split(incfiles)
     
     if re.search(r"\.h$", incfiles[-1]):
-        languages = ["C", "C++"]
+	# put C++ first; if the first language fails then the scons
+	# cache seems to have trouble.  Besides, most C++ will compile as C
+        languages = ["C++", "C"]
     elif re.search(r"\.hpp$", incfiles[-1]):
         languages = ["C++"]
     else:
