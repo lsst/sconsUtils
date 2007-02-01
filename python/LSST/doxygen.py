@@ -119,7 +119,18 @@ def DoxySourceScan(node, env, path):
    file_patterns = data.get("FILE_PATTERNS", default_file_patterns)
    exclude_patterns = data.get("EXCLUDE_PATTERNS", default_exclude_patterns)
 
+   #
+   # We're running in the top-level directory, but the doxygen
+   # configuration file is in the same directory as node; this means
+   # that relative pathnames in node must be adjusted before they can
+   # go onto the sources list
+   #
+   conf_dir = os.path.dirname(str(node))
+
    for node in data.get("INPUT", []):
+      if not os.path.isabs(node):
+         node = os.path.join(conf_dir, node)
+	 
       if os.path.isfile(node):
          sources.append(node)
       elif os.path.isdir(node):
