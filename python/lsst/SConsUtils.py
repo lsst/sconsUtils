@@ -246,11 +246,13 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         else:
             sys.excepthook(RuntimeError, msg, None)
     #
-    # Include ./src while searching for .h files;
-    # include ./lib while searching for libraries
+    # Include TOPLEVEL/src while searching for .h files;
+    # include TOPLEVEL/lib while searching for libraries
     #
-    env.Replace(CPPPATH = env['CPPPATH'] + [Dir("src")])
-    env.Replace(LIBPATH = env['LIBPATH'] + [Dir("lib")])
+    if os.path.isdir("src"):
+	env.Replace(CPPPATH = env['CPPPATH'] + [Dir("src")])
+    if os.path.isdir("lib"):
+	env.Replace(LIBPATH = env['LIBPATH'] + [Dir("lib")])
     #
     # Where to install
     #
