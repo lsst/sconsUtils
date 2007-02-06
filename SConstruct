@@ -6,10 +6,10 @@ import glob
 import sys
 
 sys.path = ["python"] + sys.path        # ensure that we use our copy of sconsLSST
-import LSST.SConsUtils as scons
+import lsst.SConsUtils as scons
 
 env = scons.makeEnv("scons",
-                    r"$HeadURL: svn+ssh://lsstarchive.ncsa.uiuc.edu/DC2/sconsLSST/branches/rhl/SConstruct $")
+                    r"$HeadURL$")
 #
 # Install things
 #
