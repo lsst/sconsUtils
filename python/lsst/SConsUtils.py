@@ -145,7 +145,23 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         env['eups_flavor'] = os.uname()[0]
     else:
         env['eups_flavor'] = env['PLATFORM']
+    #
+    # Is the C compiler really gcc/g++?
+    #
+    def IsGcc(context):
+        context.Message("Checking if  CC is really gcc...")
+        result = context.TryAction(["%s --help | grep gcc" % env['CC']])[0]
+        context.Result(result)
+        return result
 
+    conf = Configure(env, custom_tests = {'IsGcc' : IsGcc})
+    isGcc = conf.IsGcc()
+    conf.Finish()
+    #
+    # Compiler flags; CCFLAGS => C and C++
+    #
+    if isGcc:
+        env.Append(CCFLAGS = '-Wall')
     if env['opt']:
         env.Append(CCFLAGS = '-O%d' % int(env['opt']))
     #
@@ -246,13 +262,14 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         else:
             sys.excepthook(RuntimeError, msg, None)
     #
-    # Include TOPLEVEL/src while searching for .h files;
+    # Include TOPLEVEL/{include,src} while searching for .h files;
     # include TOPLEVEL/lib while searching for libraries
     #
-    if os.path.isdir("src"):
-	env.Replace(CPPPATH = env['CPPPATH'] + [Dir("src")])
+    for d in ["include", "src"]:
+        if os.path.isdir(d):
+            env.Append(CPPPATH = Dir(d))
     if os.path.isdir("lib"):
-	env.Replace(LIBPATH = env['LIBPATH'] + [Dir("lib")])
+	env.Append(LIBPATH = Dir("lib"))
     #
     # Where to install
     #
@@ -747,3 +764,18 @@ if False:
     conf = env.Configure( custom_tests = { 'CheckEups' : CheckEups } )
     conf.CheckEups("numpy")
     conf.Finish()
+
+# See if a program supports a given flag
+if False:
+    def CheckOption(context, prog, flag):
+        context.Message('Checking for option %s to %s... ' % (flag, prog))
+        result = context.TryAction(["%s %s" % (prog, flag)])[0]
+        context.Result(result)
+        return result
+
+    env = Environment()
+    conf = Configure(env, custom_tests = {'CheckOption' : CheckOption})
+    if not conf.CheckOption("gcc", "-Wall"):
+        print "Can't find flag"
+    env = conf.Finish()
+    
