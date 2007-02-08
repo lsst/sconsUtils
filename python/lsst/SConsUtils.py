@@ -516,6 +516,7 @@ def getVersion(env, versionString):
     else:
         version = "unknown"
 
+    env["version"] = version
     return version
 
 def setPrefix(env, versionString):
@@ -564,15 +565,19 @@ def Declare(self):
     """Create current and declare targets; we'll add Declare to class Environment"""
     if \
            "declare" in COMMAND_LINE_TARGETS or \
+           "undeclare" in COMMAND_LINE_TARGETS or \
            "current" in COMMAND_LINE_TARGETS:
         if "EUPS_DIR" in os.environ.keys():
             self['ENV']['PATH'] += os.pathsep + "%s/bin" % (os.environ["EUPS_DIR"])
             
-            if CleanFlagIsSet():
+            if "undeclare" in COMMAND_LINE_TARGETS or CleanFlagIsSet():
                 if self.has_key('version'):
                     command = "eups undeclare --flavor %s %s %s" % \
                               (self['eups_flavor'].title(), self['eups_product'], self['version'])
-                    self.Execute(command)
+                    if CleanFlagIsSet():
+                        self.Execute(command)
+                    else:
+                        self.Command("undeclare", "", action=command)
                 else:
                     print >> sys.stderr, "I don't know your version; not undeclaring to eups"
             else:
@@ -584,7 +589,7 @@ def Declare(self):
 
                 self.Command("current", "", action=command + " --current")
                 self.Command("declare", "", action=command)
-
+                
 SConsEnvironment.Declare = Declare
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -651,7 +656,7 @@ SConsEnvironment.Install = MyInstall
 def InstallEups(env, dest, files):
     """Install a ups directory, setting absolute versions as appropriate"""
 
-    if False and CleanFlagIsSet():
+    if CleanFlagIsSet():
         print >> sys.stderr, "Removing", dest
         shutil.rmtree(dest, ignore_errors=True)
     else:
