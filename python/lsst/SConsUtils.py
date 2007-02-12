@@ -169,6 +169,10 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     if env['opt']:
         env.Append(CCFLAGS = '-O%d' % int(env['opt']))
     #
+    # Check for dependencies in swig input files
+    #
+    env.SwigDependencies();
+    #
     # Process dependencies
     #
     env['CPPPATH'] = []
