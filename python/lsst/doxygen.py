@@ -214,8 +214,30 @@ def generate(env):
       DOXYGEN = 'doxygen',
    )
 
+   FindDoxygen(env)
+
 def exists(env):
    """
    Make sure doxygen exists.
    """
    return env.Detect("doxygen")
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+def FindDoxygen(env, doxygendir=None):
+    """Adjust the construction environment to allow the use of doxygen;
+    if doxygendir is specified it's the path to the doxygen binary, otherwise
+    the calling process' PATH is searched"""
+    
+    if not doxygendir:
+        for d in os.environ['PATH'].split(os.pathsep):
+            if os.path.isfile(os.path.join(d, "doxygen")):
+                doxygendir = d
+                break
+
+    if not doxygendir:
+        raise RuntimeError, "Failed to find doxygen executable"
+
+    if doxygendir not in env['ENV']['PATH'].split(os.pathsep):
+        env['ENV']['PATH'] += os.pathsep + doxygendir
+
