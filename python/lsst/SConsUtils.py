@@ -61,12 +61,16 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                        dir and os.path.isdir(dir + "/lib") and dir + "/lib" or None),
             )
 
+    toolpath = []
+    if os.environ.has_key('SCONS_DIR'):
+        toolpath += ["%s/python/lsst" % os.environ['SCONS_DIR']]
+        
     env = Environment(ENV = {'EUPS_DIR' : os.environ['EUPS_DIR'],
                              'EUPS_PATH' : os.environ['EUPS_PATH'],
                              'PATH' : os.defpath,
                              }, options = opts,
 		      tools = ["default", "doxygen"],
-		      toolpath = ["%s/python/LSST" % os.environ['SCONS_DIR']]
+		      toolpath = toolpath
 		      )
     env['eups_product'] = eups_product
     Help(opts.GenerateHelpText(env))
@@ -711,10 +715,11 @@ SConsEnvironment.CheckPython = CheckPython
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-def CheckSwig(self, language="python", swigdir=None):
+def CheckSwig(self, language="python", ilang="C", swigdir=None):
     """Adjust the construction environment to allow the use of swig;
     if swigdir is specified it's the path to the swig binary, otherwise
-    the calling process' PATH is searched"""
+    the calling process' PATH is searched.  Bindings are generated for
+    LANGUAGE (e.g. "python") using implementation language ilang (e.g. "c")"""
     
     if not swigdir:
         for d in os.environ['PATH'].split(os.pathsep):
@@ -729,7 +734,21 @@ def CheckSwig(self, language="python", swigdir=None):
         self['ENV']['PATH'] += os.pathsep + swigdir
 
     swigTool = Tool('swig'); swigTool(self)
-    self['SWIGFLAGS'] = "-%s" % language
+    self['SWIGFLAGS'] = ""
+    if ilang == "c" or ilang == "C":
+        pass
+    elif ilang == "c++" or ilang == "C++":
+        self['SWIGFLAGS'] += " -c++"
+    else:
+        print >> sys.stderr, "Unknown input language %s" % ilang
+        
+    self['SWIGFLAGS'] += " -%s" % language
+    #
+    # Allow swig to search all directories that the compiler sees
+    #
+    for d in self['CPPPATH']:
+        if d:
+            self['SWIGFLAGS'] += " -I%s" % Dir(d)
 
 SConsEnvironment.CheckSwig = CheckSwig
 
