@@ -10,6 +10,11 @@ from SCons.Script.SConscript import SConsEnvironment
 import stat
 import sys
 
+try:
+    import eups
+except ImportError:
+    pass    
+
 def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     """Setup a standard SCons environment, add our dependencies, and fix some os/x problems"""
     #
@@ -145,10 +150,14 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     #
     # We need a binary name, not just "Posix"
     #
-    if env['PLATFORM'] == "posix":
-        env['eups_flavor'] = os.uname()[0]
-    else:
-        env['eups_flavor'] = env['PLATFORM']
+    try:
+        env['eups_flavor'] = eups.flavor()
+    except:
+        print >> sys.stderr, "Unable to import eups; guessing flavor"
+        if env['PLATFORM'] == "posix":
+            env['eups_flavor'] = os.uname()[0].title()
+        else:
+            env['eups_flavor'] = env['PLATFORM'].title()
     #
     # Is the C compiler really gcc/g++?
     #
@@ -168,6 +177,12 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         env.Append(CCFLAGS = '-Wall')
     if env['opt']:
         env.Append(CCFLAGS = '-O%d' % int(env['opt']))
+    #
+    # Byte order
+    #
+    import socket
+    if socket.htons(1) != 1:
+        env.Append(CCFLAGS = '-DLSST_LITTLE_ENDIAN=1')
     #
     # Check for dependencies in swig input files
     #
@@ -532,7 +547,7 @@ def setPrefix(env, versionString):
 
     if env.has_key('eups_path') and env['eups_path']:
         eups_prefix = env['eups_path']
-	flavor = env['eups_flavor'].title()
+	flavor = env['eups_flavor']
 	if not re.search("/" + flavor + "$", eups_prefix):
 	    eups_prefix = os.path.join(eups_prefix, flavor)
 
@@ -581,7 +596,7 @@ def Declare(self):
             if "undeclare" in COMMAND_LINE_TARGETS or CleanFlagIsSet():
                 if self.has_key('version'):
                     command = "eups undeclare --flavor %s %s %s" % \
-                              (self['eups_flavor'].title(), self['eups_product'], self['version'])
+                              (self['eups_flavor'], self['eups_product'], self['version'])
                     if CleanFlagIsSet():
                         self.Execute(command)
                     else:
@@ -590,7 +605,7 @@ def Declare(self):
                     print >> sys.stderr, "I don't know your version; not undeclaring to eups"
             else:
                 command = "eups declare --force --flavor %s --root %s" % \
-                          (self['eups_flavor'].title(), self['prefix'])
+                          (self['eups_flavor'], self['prefix'])
 
                 if self.has_key('version'):
                     command += " %s %s" % (self['eups_product'], self['version'])
@@ -697,6 +712,18 @@ def PkgConfigEUPS(self, product, function=None, unique=1):
         except OSError:
             #print "pkg %s failed" % product
             raise OSError, "Failed to find config file for %s" % product
+    #
+    # Strip flags that we don't want added
+    #
+    for k in ['CCFLAGS', 'LINKFLAGS']:
+        new = []
+        for flag in self[k]:
+            if isinstance(flag, tuple):
+                print flag, "|", flag[0]
+                if flag[0] == "-arch":
+                    continue
+            new += [flag]    
+        self[k] = new
 
 SConsEnvironment.PkgConfigEUPS = PkgConfigEUPS
 

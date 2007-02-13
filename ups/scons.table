@@ -1,2 +1,2 @@
 setupOptional(sconsDistrib)
-envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
+setupRequired(sconsUtils)
