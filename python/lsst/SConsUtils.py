@@ -766,7 +766,6 @@ def PkgConfigEUPS(self, product, function=None, unique=1):
         new = []
         for flag in self[k]:
             if isinstance(flag, tuple):
-                print flag, "|", flag[0]
                 if flag[0] == "-arch":
                     continue
             new += [flag]    
