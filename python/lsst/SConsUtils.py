@@ -584,34 +584,63 @@ def HelpFlagIsSet():
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-def Declare(self):
-    """Create current and declare targets; we'll add Declare to class Environment"""
+def Declare(self, products=None):
+    """Create current and declare targets for products.  products
+    may be a list of (product, version) tuples.  If product is None
+    it's taken to be self['eups_product']; if version is None it's
+    taken to be self['version'].
+    
+    We'll add Declare to class Environment"""
+
     if \
            "declare" in COMMAND_LINE_TARGETS or \
            "undeclare" in COMMAND_LINE_TARGETS or \
            "current" in COMMAND_LINE_TARGETS:
-        if "EUPS_DIR" in os.environ.keys():
-            self['ENV']['PATH'] += os.pathsep + "%s/bin" % (os.environ["EUPS_DIR"])
-            
-            if "undeclare" in COMMAND_LINE_TARGETS or CleanFlagIsSet():
+        current = []; declare = []; undeclare = []
+
+        for prod in products:
+            if not prod or isinstance(prod, str):   # i.e. no version
+                product = prod
+
                 if self.has_key('version'):
-                    command = "eups undeclare --flavor %s %s %s" % \
-                              (self['eups_flavor'], self['eups_product'], self['version'])
-                    if CleanFlagIsSet():
-                        self.Execute(command)
-                    else:
-                        self.Command("undeclare", "", action=command)
+                    version = self['version']
                 else:
-                    print >> sys.stderr, "I don't know your version; not undeclaring to eups"
+                    version = None
             else:
-                command = "eups declare --force --flavor %s --root %s" % \
-                          (self['eups_flavor'], self['prefix'])
+                product, version = prod
 
-                if self.has_key('version'):
-                    command += " %s %s" % (self['eups_product'], self['version'])
+            if not product:
+                product = self['eups_product']
 
-                self.Command("current", "", action=command + " --current")
-                self.Command("declare", "", action=command)
+            if "EUPS_DIR" in os.environ.keys():
+                self['ENV']['PATH'] += os.pathsep + "%s/bin" % (os.environ["EUPS_DIR"])
+
+                if "undeclare" in COMMAND_LINE_TARGETS or CleanFlagIsSet():
+                    if version:
+                        command = "eups undeclare --flavor %s %s %s" % \
+                                  (self['eups_flavor'], product, version)
+                        if CleanFlagIsSet():
+                            self.Execute(command)
+                        else:
+                            undeclare += [command]
+                    else:
+                        print >> sys.stderr, "I don't know your version; not undeclaring to eups"
+                else:
+                    command = "eups declare --force --flavor %s --root %s" % \
+                              (self['eups_flavor'], self['prefix'])
+
+                    if version:
+                        command += " %s %s" % (product, version)
+
+                    current += [command + " --current"]
+                    declare += [command]
+
+        if current:
+            self.Command("current", "", action=current)
+        if declare:
+            self.Command("declare", "", action=declare)
+        if undeclare:
+            self.Command("undeclare", "", action=undeclare)
                 
 SConsEnvironment.Declare = Declare
 
@@ -669,25 +698,43 @@ def MyInstall(env, dest, files):
                 shutil.rmtree(dir, ignore_errors=True)
         except TypeError:
             pass                        # "files" isn't a string
-
+    
     return _Install(env, dest, files)
 
-SConsEnvironment.Install = MyInstall
+if False:                               # tickles an scons bug
+    SConsEnvironment.Install = MyInstall
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def InstallEups(env, dest, files):
-    """Install a ups directory, setting absolute versions as appropriate"""
+def InstallEups(env, dest, files, presetup=""):
+    """Install a ups directory, setting absolute versions as appropriate
+    if presetup is provided, it's expected to be a dictionary with keys
+    prudoct names and values the version that should be installed into
+    the table files, overriding eups expandtable's usual behaviour. E.g.
+env.InstallEups(env['prefix'] + "/ups",
+                glob.glob("ups/*.table"),
+                dict([("sconsUtils", env['version'])])
+                )    
+    """
 
     if CleanFlagIsSet():
         print >> sys.stderr, "Removing", dest
         shutil.rmtree(dest, ignore_errors=True)
     else:
+        presetupStr = []
+        for p in presetup:
+            presetupStr += ["--product %s=%s" % (p, presetup[p])]
+        presetup = " ".join(presetupStr)
+
         env = env.Clone(ENV = os.environ)
 
         obj = env.Install(dest, files)
         for i in obj:
-            cmd = "eups_expandtable -i %s" % (str(i))
+            cmd = "eups_expandtable -i "
+            if presetup:
+                cmd += presetup + " "
+            cmd += str(i)
+            
             env.AddPostAction(i, Action("%s" %(cmd), cmd, ENV = os.environ))
 
     return dest

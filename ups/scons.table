@@ -1,2 +1,2 @@
-setupOptional(sconsDistrib)
 setupRequired(sconsUtils)
+setupOptional(sconsDistrib)
