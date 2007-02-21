@@ -240,7 +240,13 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                         
                 if libs:
                     conf = env.Clone(LIBPATH = env['LIBPATH'] + [libdir]).Configure()
-                    if conf.CheckLib(libs, symbol) and libdir not in env['LIBPATH']:
+                    try:
+                        libs, lang = libs.split(":")
+                    except ValueError:
+                        lang = "C"
+
+                    if conf.CheckLib(libs, symbol, language=lang) and \
+                           libdir not in env['LIBPATH']:
                         env.Replace(LIBPATH = env['LIBPATH'] + [libdir])
                         Repository(libdir)                        
                     else:
@@ -792,11 +798,16 @@ SConsEnvironment.CheckPython = CheckPython
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-def CheckSwig(self, language="python", ilang="C", swigdir=None):
+def CheckSwig(self, language="python", ilang="C", ignoreWarnings=None,
+              swigdir=None):
     """Adjust the construction environment to allow the use of swig;
     if swigdir is specified it's the path to the swig binary, otherwise
     the calling process' PATH is searched.  Bindings are generated for
-    LANGUAGE (e.g. "python") using implementation language ilang (e.g. "c")"""
+    LANGUAGE (e.g. "python") using implementation language ilang (e.g. "c")
+
+    ignoreWarnings is a list of swig warnings to ignore (e.g. "317,362,389");
+    either a python list, or a space separated string
+    """
     
     if not swigdir:
         for d in os.environ['PATH'].split(os.pathsep):
@@ -820,6 +831,9 @@ def CheckSwig(self, language="python", ilang="C", swigdir=None):
         print >> sys.stderr, "Unknown input language %s" % ilang
         
     self['SWIGFLAGS'] += " -%s" % language
+
+    if ignoreWarnings:
+        self['SWIGFLAGS'] += " -w" + ",".join(Split(ignoreWarnings))    
     #
     # Allow swig to search all directories that the compiler sees
     #
