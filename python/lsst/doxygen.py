@@ -199,7 +199,7 @@ def generate(env):
    )
 
    doxyfile_builder = env.Builder(
-      action = env.Action("cd $${SOURCE.dir} && $${DOXYGEN} $${SOURCE.file}"),
+      action = "cd $${SOURCE.dir} && $${DOXYGEN} $${SOURCE.file}",
       emitter = DoxyEmitter,
       target_factory = env.fs.Entry,
       single_source = True,
@@ -213,6 +213,8 @@ def generate(env):
    env.AppendUnique(
       DOXYGEN = 'doxygen',
    )
+
+   FindDoxygen(env)
 
 def exists(env):
    """

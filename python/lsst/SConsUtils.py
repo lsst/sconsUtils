@@ -67,8 +67,8 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
             )
 
     toolpath = []
-    if os.environ.has_key('SCONS_DIR'):
-        toolpath += ["%s/python/lsst" % os.environ['SCONS_DIR']]
+    if os.environ.has_key('SCONSUTILS_DIR'):
+        toolpath += ["%s/python/lsst" % os.environ['SCONSUTILS_DIR']]
         
     env = Environment(ENV = {'EUPS_DIR' : os.environ['EUPS_DIR'],
                              'EUPS_PATH' : os.environ['EUPS_PATH'],
