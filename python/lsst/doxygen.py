@@ -214,7 +214,10 @@ def generate(env):
       DOXYGEN = 'doxygen',
    )
 
-   FindDoxygen(env)
+   try:
+      FindDoxygen(env)
+   except:
+      pass
 
 def exists(env):
    """
