@@ -190,6 +190,12 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     #
     env.SwigDependencies();
     #
+    # If we're linking to libraries that themselves linked to
+    # shareable libraries we need to do something special.
+    if re.match(r"^(Linux|Linux64)", env["eups_flavor"]):
+        env.Append(LINKFLAGS = "-Wl,-rpath-link -Wl,%s" % \
+                   os.environ["LD_LIBRARY_PATH"])
+    #
     # Process dependencies
     #
     env['CPPPATH'] = []
@@ -247,12 +253,19 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                     except ValueError:
                         lang = "C"
 
-                    if conf.CheckLib(libs, symbol, language=lang) and \
-                           libdir not in env['LIBPATH']:
-                        env.Replace(LIBPATH = env['LIBPATH'] + [libdir])
-                        Repository(libdir)                        
+                    libs = Split(libs)
+                    for lib in libs[:-1]:
+                        if not conf.CheckLib(lib, language=lang):
+                            errors += ["Failed to find %s" % (lib)]
+                            success = False
+                    lib = libs[-1]
+
+                    if conf.CheckLib(lib, symbol, language=lang):
+                        if libdir not in env['LIBPATH']:
+                            env.Replace(LIBPATH = env['LIBPATH'] + [libdir])
+                            Repository(libdir)                        
                     else:
-                        errors += ["Failed to find %s in %s" % (libs, libdir)]
+                        errors += ["Failed to find %s in %s" % (lib, libdir)]
                         success = False
                     conf.Finish()
 
@@ -271,8 +284,9 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
 
                 if libs:
                     conf = env.Configure()
-                    if not conf.CheckLib(libs, symbol):
-                        success = False
+                    for lib in Split(libs):
+                        if not conf.CheckLib(lib, symbol):
+                            success = False
                     conf.Finish()
 
                 if success:

@@ -1,24 +1,4 @@
 Complaints to Robert Lupton: rhl@astro.princeton.edu
 
-To bootstrap scons to use SconsUtils:
-
-Install scons into some directory XXX, e.g.
-	/u/lsst/products/Linux/scons/v0_96_93
-Install scons; see
-	http://www.scons.org/
-The download page is
-	http://sourceforge.net/project/showfiles.php?group_id=30337
-
-Then:
-$ python setup.py install --prefix=XXX
-
-Then in this directory:
-$ XXX/bin/scons prefix=XXX version=YYY install declare
-
-You probably want to declare that version current:
-$ eups declare -c scons YYY
-
-You can then say simply:
-$ scons
-and also
-$ man scons
+For installation instructions, see
+	http://svn.lsstcorp.org:8100/trac/wiki/InstallingScons
