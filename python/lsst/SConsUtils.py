@@ -194,7 +194,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     # shareable libraries we need to do something special.
     if re.match(r"^(Linux|Linux64)", env["eups_flavor"]):
         env.Append(LINKFLAGS = "-Wl,-rpath-link -Wl,%s" % \
-                   os.environ["LD_LIBRARY_PATH"])
+                   os.environ["DYLD_LIBRARY_PATH"])
     #
     # Process dependencies
     #
@@ -689,6 +689,7 @@ def CleanTree(files, dir=".", recurse=True, verbose=False):
 	# don't use xargs --- who knows what needs quoting?
 	#
 	action = "find %s" % dir
+        action += " ! -name .sconf_temp"
 	if not recurse:
 	    action += " ! -name . -prune"
 
