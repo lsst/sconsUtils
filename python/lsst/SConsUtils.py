@@ -192,9 +192,10 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     #
     # If we're linking to libraries that themselves linked to
     # shareable libraries we need to do something special.
-    if re.match(r"^(Linux|Linux64)", env["eups_flavor"]):
+    if (re.match(r"^(Linux|Linux64)", env["eups_flavor"]) and 
+        os.environ.has_key("LD_LIBRARY_PATH")):
         env.Append(LINKFLAGS = "-Wl,-rpath-link -Wl,%s" % \
-                   os.environ["DYLD_LIBRARY_PATH"])
+                   os.environ["LD_LIBRARY_PATH"])
     #
     # Process dependencies
     #
