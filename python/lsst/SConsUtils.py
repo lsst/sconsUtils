@@ -71,10 +71,10 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         toolpath += ["python/lsst"]
     elif os.environ.has_key('SCONSUTILS_DIR'):
         toolpath += ["%s/python/lsst" % os.environ['SCONSUTILS_DIR']]
-        
+
     env = Environment(ENV = {'EUPS_DIR' : os.environ['EUPS_DIR'],
                              'EUPS_PATH' : os.environ['EUPS_PATH'],
-                             'PATH' : os.defpath,
+                             'PATH' : os.environ['PATH']
                              }, options = opts,
 		      tools = ["default", "doxygen"],
 		      toolpath = toolpath
@@ -621,6 +621,9 @@ def Declare(self, products=None):
            "current" in COMMAND_LINE_TARGETS:
         current = []; declare = []; undeclare = []
 
+        if not products:
+            products = [None]
+
         for prod in products:
             if not prod or isinstance(prod, str):   # i.e. no version
                 product = prod
@@ -871,10 +874,12 @@ SWIGScanner = SCons.Scanner.ClassicCPP(
     ".i",
     "CPPPATH",
     '^[ \t]*[%,#][ \t]*(?:include|import)[ \t]*(<|")([^>"]+)(>|")'
-)
+    )
 
 def SwigDependencies(self):
-    self.Append(SCANNERS=[SWIGScanner])
+    # Prepend, as scons has already inserted a [poor] scanner for swig
+    # if swig was found on PATH
+    self.Prepend(SCANNERS=[SWIGScanner])
     
 SConsEnvironment.SwigDependencies = SwigDependencies
 
