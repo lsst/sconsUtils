@@ -1,4 +1,4 @@
 try:
-    import fw                           # set sys.meta_path
+    import lsstimport  # sets sys.meta_path
 except ImportError:
-    pass                                # fw wasn't set up; just running scons
+    pass               # oh well, lsst core wasn't set up; no worries
