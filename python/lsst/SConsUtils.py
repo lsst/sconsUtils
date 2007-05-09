@@ -81,6 +81,8 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
 		      )
     env['eups_product'] = eups_product
     Help(opts.GenerateHelpText(env))
+
+    env.libs = {}
     #
     # SCons gets confused about shareable/static objects if
     # you specify libraries as e.g. "#libwcs.a", but it's OK
@@ -199,6 +201,12 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     #
     # Process dependencies
     #
+    if dependencies:
+        for productProps in dependencies:
+            product = productProps[0]
+            if not env.libs.has_key(product):
+                env.libs[product] = []
+
     env['CPPPATH'] = []
     env['LIBPATH'] = []
     if not CleanFlagIsSet() and not HelpFlagIsSet() and dependencies:
@@ -269,6 +277,8 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                         errors += ["Failed to find %s in %s" % (lib, libdir)]
                         success = False
                     conf.Finish()
+
+                    env.libs[product] += [lib]
 
                 if success:
                     continue
@@ -361,6 +371,18 @@ def CheckHeaderGuessLanguage(self, incdir, incfiles):
     raise RuntimeError, "Failed to find %s in %s" % (incfiles[-1], incdir)
 
 SConsEnvironment.CheckHeaderGuessLanguage = CheckHeaderGuessLanguage
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+def getlibs(env, *libraries):
+
+    libs = []
+    for lib in libraries:
+        libs += env.libs[lib]
+
+    return libs
+
+SConsEnvironment.getlibs = getlibs
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
