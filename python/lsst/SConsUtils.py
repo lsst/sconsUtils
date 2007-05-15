@@ -318,10 +318,10 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         else:
             sys.excepthook(RuntimeError, msg, None)
     #
-    # Include TOPLEVEL/{include,src} while searching for .h files;
+    # Include TOPLEVEL/include while searching for .h files;
     # include TOPLEVEL/lib while searching for libraries
     #
-    for d in ["include", "src"]:
+    for d in ["include"]:
         if os.path.isdir(d):
             env.Append(CPPPATH = Dir(d))
     if os.path.isdir("lib"):
