@@ -882,7 +882,9 @@ def CheckSwig(self, language="python", ilang="C", ignoreWarnings=None,
     #
     for d in self['CPPPATH']:
         if d:
-            self['SWIGFLAGS'] += " -I%s" % Dir(d)
+            d = Dir(d)
+            d = r"\ ".join(re.split(r" ", str(d))) # handle spaces in filenames
+            self['SWIGFLAGS'] += " -I%s" % d
 
 SConsEnvironment.CheckSwig = CheckSwig
 
