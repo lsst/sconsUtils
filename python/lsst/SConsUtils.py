@@ -194,7 +194,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     #
     # If we're linking to libraries that themselves linked to
     # shareable libraries we need to do something special.
-    if (re.match(r"^(Linux|Linux64)$", env["eups_flavor"]) and 
+    if (re.search(r"^(Linux|Linux64)$", env["eups_flavor"]) and 
         os.environ.has_key("LD_LIBRARY_PATH")):
         env.Append(LINKFLAGS = "-Wl,-rpath-link -Wl,%s" % \
                    os.environ["LD_LIBRARY_PATH"])
@@ -268,6 +268,11 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                             errors += ["Failed to find %s" % (lib)]
                             success = False
                     lib = libs[-1]
+
+                    if product == "boost": # Special case boost as it messes with library names. Sigh.
+                        blib = chooseBoostLib(env, libdir, lib)
+                        print "Choosing %s for %s" % (blib, lib)
+                        lib = blib
 
                     if conf.CheckLib(lib, symbol, language=lang):
                         if libdir not in env['LIBPATH']:
@@ -383,6 +388,92 @@ def getlibs(env, *libraries):
     return libs
 
 SConsEnvironment.getlibs = getlibs
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+class ParseBoostLibrary():
+    def __init__(self, shlibprefix, library, shlibsuffix, blib):
+        """Parse a boost library name, given the prefix (often "lib"),
+        the library name (e.g. "boost_regexp"), the suffix (e.g. "so")
+        and the actual name of the library
+
+        Taken from libboost-doc/HTML/more/getting_started.html
+        """
+
+        self.toolset, threading, runtime = None, None, None # parts of boost library name
+        self.libversion = None
+
+        mat = re.search(r"^%s%s-?(.+)%s" % (shlibprefix, library, shlibsuffix), blib)
+        self.libname = library
+        if mat:
+            self.libname += "-" + mat.groups()[0]
+
+            opts = mat.groups()[0].split("-")
+            opts, self.libversion = opts[0:-1], opts[-1]
+
+            if opts:
+                if len(opts) == 2:
+                    if opts[0] == "mt":
+                        threading = opts[0]
+                    else:
+                        self.toolset = opts[0]
+
+                    opts = opts[1:]
+                elif len(opts) == 3:
+                    threading = opts[0]
+                    self.toolset = opts[1]
+
+                    opts = opts[2:]
+
+                runtime = opts[0]
+
+        self.threaded = threading and threading == "mt"
+
+        self.static_runtime =     runtime and re.search("s", runtime)
+        self.debug_runtime =      runtime and re.search("g", runtime)
+        self.debug_python =       runtime and re.search("y", runtime)
+        self.debug_code =         runtime and re.search("d", runtime)
+        self.stlport_runtime =    runtime and re.search("p", runtime)
+        self.stlport_io_runtime = runtime and re.search("n", runtime)
+
+        return
+
+def chooseBoostLib(env, libdir, lib):
+    """Choose the proper boost library; there maybe a number to choose from"""
+    
+    shlibprefix = env['SHLIBPREFIX']
+    if re.search(r"^\$", shlibprefix) and env.has_key(shlibprefix[1:]):
+        shlibprefix = env[shlibprefix[1:]]
+    shlibsuffix = env['SHLIBSUFFIX']
+
+    libs = glob.glob(os.path.join(libdir, shlibprefix + lib + "*" + shlibsuffix))
+
+    blibs = {}
+    for blib in libs:
+        blibs[blib] = ParseBoostLibrary(shlibprefix, lib, shlibsuffix,
+                                        os.path.basename(blib))
+
+    if len(blibs) == 0: # nothing clever to do
+        return lib
+    elif len(blibs) == 1: # only one choice
+        lib = blibs.values()[0].libname
+    else:           # more than one choice
+        if env['debug']:
+            for blib in blibs:
+                if not blibs[blib].debug_code:
+                    del blibs[blib]
+                    break
+
+        if len(blibs) == 1:             # only one choice
+            lib = blibs.values()[0].libname
+        else:                           # How do we choose? Take the shortest
+            lib = None
+            for blib in blibs.values():
+                if not lib or len(blib.libname) < lmin:
+                    lib = blib.libname
+                    lmin = len(lib)
+
+    return lib            
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
