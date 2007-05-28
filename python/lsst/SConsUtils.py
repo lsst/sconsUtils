@@ -74,7 +74,8 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
 
     env = Environment(ENV = {'EUPS_DIR' : os.environ['EUPS_DIR'],
                              'EUPS_PATH' : os.environ['EUPS_PATH'],
-                             'PATH' : os.environ['PATH']
+                             'PATH' : os.environ['PATH'],
+                             'LD_LIBRARY_PATH' : os.environ['LD_LIBRARY_PATH']
                              }, options = opts,
 		      tools = ["default", "doxygen"],
 		      toolpath = toolpath
@@ -271,7 +272,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
 
                     if product == "boost": # Special case boost as it messes with library names. Sigh.
                         blib = chooseBoostLib(env, libdir, lib)
-                        print "Choosing %s for %s" % (blib, lib)
+                        #print "Choosing %s for %s" % (blib, lib)
                         lib = blib
 
                     if conf.CheckLib(lib, symbol, language=lang):
