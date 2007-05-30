@@ -96,6 +96,9 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     # we'll import them under their given names.
     #
     env['LDMODULEPREFIX'] = ""
+
+    if env['PLATFORM'] == 'darwin':
+        env['LDMODULESUFFIX'] = ".so"
     #
     # Remove valid options from the arguments
     #
@@ -552,10 +555,8 @@ def LoadableModuleIncomplete(self, target, source, **keywords):
     """Like LoadableModule, but don't insist that all symbols are resolved"""
 
     myenv = self.Clone()
-
     if myenv['PLATFORM'] == 'darwin':
         myenv['LDMODULEFLAGS'] += " -undefined suppress -flat_namespace"
-        myenv['LDMODULESUFFIX'] = ".so"
 
     return myenv.LoadableModule(target, source, **keywords)
 
