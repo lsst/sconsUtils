@@ -395,7 +395,7 @@ SConsEnvironment.getlibs = getlibs
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-class ParseBoostLibrary():
+class ParseBoostLibrary(object):
     def __init__(self, shlibprefix, library, shlibsuffix, blib):
         """Parse a boost library name, given the prefix (often "lib"),
         the library name (e.g. "boost_regexp"), the suffix (e.g. "so")
