@@ -85,6 +85,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     Help(opts.GenerateHelpText(env))
 
     env.libs = {}
+    env.libs[eups_product] = [eups_product]; # Assume that this product has a library of the same name
     #
     # SCons gets confused about shareable/static objects if
     # you specify libraries as e.g. "#libwcs.a", but it's OK
