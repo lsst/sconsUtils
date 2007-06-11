@@ -75,6 +75,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     env = Environment(ENV = {'EUPS_DIR' : os.environ['EUPS_DIR'],
                              'EUPS_PATH' : os.environ['EUPS_PATH'],
                              'PATH' : os.environ['PATH'],
+                             'DYLD_LIBRARY_PATH' : os.environ['DYLD_LIBRARY_PATH'],
                              'LD_LIBRARY_PATH' : os.environ['LD_LIBRARY_PATH']
                              }, options = opts,
 		      tools = ["default", "doxygen"],
@@ -770,6 +771,9 @@ def Declare(self, products=None):
                     command = "eups declare --force --flavor %s --root %s" % \
                               (self['eups_flavor'], self['prefix'])
 
+                    if self.has_key('eups_path'):
+                        command += " -Z %s" % self['eups_path']
+                        
                     if version:
                         command += " %s %s" % (product, version)
 
