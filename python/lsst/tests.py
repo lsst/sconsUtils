@@ -67,7 +67,7 @@ class Control(object):
                 continue
 
             target = os.path.join(self._tmpDir, f)
-            targets += target
+            targets += [target]
 
             args = []
             for a in self.args(f).split(" "):
@@ -84,7 +84,17 @@ class Control(object):
 
                 args += [a]
 
-            self._env.Command(target, f, "@echo -n running $SOURCES; %s $SOURCES %s > $TARGET 2>&1 || (mv $TARGET ${TARGET}.failed; echo -n ' failed'); echo" % (interpreter, " ".join(args)))
+            self._env.Command(target, f, """
+            @rm -f ${TARGET}.failed;
+            @echo -n 'running ${SOURCES}... ';
+            @if %s $SOURCES %s > $TARGET 2>&1; then \
+               echo passed; \
+            else \
+               mv $TARGET ${TARGET}.failed; \
+               echo failed; \
+            fi;
+            """ % (interpreter, " ".join(args)))
+
             self._env.Clean(target, self._tmpDir)
         
         return targets
