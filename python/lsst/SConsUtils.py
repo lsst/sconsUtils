@@ -72,10 +72,15 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     elif os.environ.has_key('SCONSUTILS_DIR'):
         toolpath += ["%s/python/lsst" % os.environ['SCONSUTILS_DIR']]
 
+    if os.environ.has_key('DYLD_LIBRARY_PATH'):
+        DYLD_LIBRARY_PATH = os.environ['DYLD_LIBRARY_PATH']
+    else:
+        DYLD_LIBRARY_PATH = None
+        
     env = Environment(ENV = {'EUPS_DIR' : os.environ['EUPS_DIR'],
                              'EUPS_PATH' : os.environ['EUPS_PATH'],
                              'PATH' : os.environ['PATH'],
-                             'DYLD_LIBRARY_PATH' : os.environ['DYLD_LIBRARY_PATH'],
+                             'DYLD_LIBRARY_PATH' : DYLD_LIBRARY_PATH,
                              'LD_LIBRARY_PATH' : os.environ['LD_LIBRARY_PATH']
                              }, options = opts,
 		      tools = ["default", "doxygen"],
