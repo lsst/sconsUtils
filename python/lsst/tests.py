@@ -9,12 +9,9 @@ class Control(object):
     def __init__(self, env, ignoreList=None, args=None, tmpDir=".tests", verbose=False):
 
         env.AppendENVPath('PYTHONPATH', os.environ['PYTHONPATH'])
-        #env['ENV']['LD_LIBRARY_PATH'] = os.environ['LD_LIBRARY_PATH']
 
         self._env = env
 
-        if not re.search(r"/$", tmpDir):
-            tmpDir += "/"
         self._tmpDir = tmpDir
         self._cwd = os.path.abspath(os.path.curdir)
 
@@ -29,6 +26,15 @@ class Control(object):
             self._args = args           # arguments for tests
         else:
             self._args = {}
+
+        self.runExamples = True                      # should I run the examples?
+        try:
+            self.runExamples = (os.stat(self._tmpDir).st_mode & 0x5) # file is world read/executable
+        except OSError:
+            pass
+
+        if not self.runExamples:
+            print >> sys.stderr, "Not running examples; \"chmod 755 %s\" to run them again" % self._tmpDir
 
     def args(self, test):
         try:
@@ -54,6 +60,9 @@ class Control(object):
         return ignoreFile
 
     def run(self, fileGlob):
+        if not self.runExamples:
+            return
+        
         targets = []
         for f in glob.glob(fileGlob):
             interpreter = ""            # interpreter to run test, if needed
