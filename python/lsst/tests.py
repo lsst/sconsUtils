@@ -7,7 +7,31 @@ class Control(object):
     _IGNORE = "IGNORE"
     
     def __init__(self, env, ignoreList=None, args=None, tmpDir=".tests", verbose=False):
+        """Create an object to run tests
 
+        env should be an environment from scons;
+
+        ignoreList is a list of tests that should Not be run --- useful in conjunction
+        with glob patterns;
+
+        args is a dictionary with testnames as keys, and argument strings as values.
+        As scons always runs from the top-level directory, tests has to fiddle with
+        paths.  If an argument is a file this is done automatically; if it's e.g.
+        just a basename then you have to tell tests that it's really (part of a)
+        filename by prefixing the name by "file:".
+
+        tmpDir is the location of the test outputs;
+
+        verbose is how chatty you want the test code to be.
+
+        E.g.
+tests = lsst.tests.Control(env,
+                           args=dict([
+    ("MaskIO_1",      "data/871034p_1_MI_msk.fits"),
+    ("MaskedImage_1", "file:data/871034p_1_MI foo"),
+    ]))
+        
+        """
         env.AppendENVPath('PYTHONPATH', os.environ['PYTHONPATH'])
 
         self._env = env
