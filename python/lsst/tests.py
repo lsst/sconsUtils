@@ -117,16 +117,18 @@ tests = lsst.tests.Control(env,
 
                 args += [a]
 
+            expandedArgs = " ".join(args)
             self._env.Command(target, f, """
             @rm -f ${TARGET}.failed;
             @echo -n 'running ${SOURCES}... ';
-            @if %s $SOURCES %s > $TARGET 2>&1; then \
+            @echo $SOURCES %s > $TARGET; echo >> $TARGET;
+            @if %s $SOURCES %s >> $TARGET 2>&1; then \
                echo passed; \
             else \
                mv $TARGET ${TARGET}.failed; \
                echo failed; \
             fi;
-            """ % (interpreter, " ".join(args)))
+            """ % (expandedArgs, interpreter, expandedArgs))
 
             self._env.Clean(target, self._tmpDir)
         
