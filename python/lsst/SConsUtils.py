@@ -813,7 +813,7 @@ def CleanTree(files, dir=".", recurse=True, verbose=False):
 	    if files_expr:
 		files_expr += " -o "
 
-	    files_expr += "-name %s" % file
+            files_expr += "-name %s" % re.sub(r"(^|[^\\])([[*])", r"\1\\\2",file) # quote unquoted * and []
 	#
 	# don't use xargs --- who knows what needs quoting?
 	#
@@ -869,7 +869,7 @@ env.InstallEups(env['prefix'] + "/ups",
                 )    
     """
 
-    if CleanFlagIsSet():
+    if CleanFlagIsSet() and len(filter(lambda t: t == "install", COMMAND_LINE_TARGETS)) > 0:
         print >> sys.stderr, "Removing", dest
         shutil.rmtree(dest, ignore_errors=True)
     else:
