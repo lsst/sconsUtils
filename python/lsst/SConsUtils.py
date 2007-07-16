@@ -3,7 +3,7 @@
 #
 import glob
 import os
-import re; del re.match
+import re
 import shutil
 from SCons.Script import *              # So that this file has the same namespace as SConstruct/SConscript
 from SCons.Script.SConscript import SConsEnvironment
@@ -72,6 +72,11 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     elif os.environ.has_key('SCONSUTILS_DIR'):
         toolpath += ["%s/python/lsst" % os.environ['SCONSUTILS_DIR']]
 
+    if os.environ.has_key('LD_LIBRARY_PATH'):
+        LD_LIBRARY_PATH = os.environ['LD_LIBRARY_PATH']
+    else:
+        LD_LIBRARY_PATH = None
+        
     if os.environ.has_key('DYLD_LIBRARY_PATH'):
         DYLD_LIBRARY_PATH = os.environ['DYLD_LIBRARY_PATH']
     else:
@@ -81,7 +86,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                              'EUPS_PATH' : os.environ['EUPS_PATH'],
                              'PATH' : os.environ['PATH'],
                              'DYLD_LIBRARY_PATH' : DYLD_LIBRARY_PATH,
-                             'LD_LIBRARY_PATH' : os.environ['LD_LIBRARY_PATH']
+                             'LD_LIBRARY_PATH' : LD_LIBRARY_PATH
                              }, options = opts,
 		      tools = ["default", "doxygen"],
 		      toolpath = toolpath
