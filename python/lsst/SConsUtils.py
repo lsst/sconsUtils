@@ -280,16 +280,14 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
 
                     libs = Split(libs)
                     for lib in libs[:-1]:
+                        # Allow for boost messing with library names. Sigh.
+                        lib = mangleLibraryName(env, libdir, lib)
+                        
                         if not conf.CheckLib(lib, language=lang):
                             errors += ["Failed to find %s" % (lib)]
                             success = False
-                    lib = libs[-1]
-
-                    if product == "boost": # Special case boost as it messes with library names. Sigh.
-                        blib = chooseBoostLib(env, libdir, lib)
-                        #print "Choosing %s for %s" % (blib, lib)
-                        lib = blib
-
+                    lib = mangleLibraryName(env, libdir, libs[-1])
+                        
                     if conf.CheckLib(lib, symbol, language=lang):
                         if libdir not in env['LIBPATH']:
                             env.Replace(LIBPATH = env['LIBPATH'] + [libdir])
@@ -317,7 +315,14 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                 if libs:
                     conf = env.Configure()
                     for lib in Split(libs):
-                        if not conf.CheckLib(lib, symbol):
+                        try:
+                            lib, lang = lib.split(":")
+                        except ValueError:
+                            lang = "C"
+
+                        lib = mangleLibraryName(env, libdir, lib)
+
+                        if not conf.CheckLib(lib, symbol, language=lang):
                             success = False
                     conf.Finish()
 
@@ -454,8 +459,14 @@ class ParseBoostLibrary(object):
 
         return
 
-def chooseBoostLib(env, libdir, lib):
-    """Choose the proper boost library; there maybe a number to choose from"""
+def mangleLibraryName(env, libdir, lib):
+    """If lib's a boost library, choose the right one; there may be a number to choose from"""
+
+    if not libdir:       # we don't know libdir, so we can't poke around
+        return lib
+
+    if not re.search(r"^boost", lib):
+        return lib
     
     shlibprefix = env['SHLIBPREFIX']
     if re.search(r"^\$", shlibprefix) and env.has_key(shlibprefix[1:]):
