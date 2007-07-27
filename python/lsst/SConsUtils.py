@@ -57,7 +57,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     products.sort()
 
     for p in products:
-        dir = productDir(p)
+        dir = ProductDir(p)
         opts.AddOptions(
             PathOption(p, "Specify the location of %s" % p, dir),
             PathOption(p + "Include", "Specify the location of %s's include files" % p,
@@ -247,7 +247,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
             #
             # See if pkgconfig knows about us.  ParseConfig sets values in env for us
             #
-            if not productDir(product): # don't override EUPS
+            if not ProductDir(product): # don't override EUPS
                 try:
                     env.PkgConfigEUPS(product)
                     pkgConfig = True
@@ -668,7 +668,7 @@ def installFunc(dest, source, env):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-def productDir(product):
+def ProductDir(product):
     """Return a product's PRODUCT_DIR, or None"""
     product_dir = product.upper() + "_DIR"
 
@@ -676,6 +676,8 @@ def productDir(product):
         return os.environ[product_dir]
     else:
         return None
+
+SConsEnvironment.ProductDir = ProductDir
     
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -922,7 +924,7 @@ def PkgConfigEUPS(self, product, function=None, unique=1):
     except OSError:
         try:
             self.ParseConfig('env PKG_CONFIG_PATH=%s/etc pkg-config %s --cflags --libs 2> /dev/null' % \
-                             (productDir(product), product))
+                             (ProductDir(product), product))
             #print "pkg %s succeeded from EUPS" % product
         except OSError:
             #print "pkg %s failed" % product
@@ -961,7 +963,7 @@ SConsEnvironment.CheckPython = CheckPython
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 def CheckSwig(self, language="python", ilang="C", ignoreWarnings=None,
-              swigdir=None):
+              includedProducts=[], swigdir=None):
     """Adjust the construction environment to allow the use of swig;
     if swigdir is specified it's the path to the swig binary, otherwise
     the calling process' PATH is searched.  Bindings are generated for
@@ -1004,7 +1006,12 @@ def CheckSwig(self, language="python", ilang="C", ignoreWarnings=None,
             d = Dir(d)
             d = r"\ ".join(re.split(r" ", str(d))) # handle spaces in filenames
             self['SWIGFLAGS'] += " -I%s" % d
-
+    #
+    # Also search the python directories of any products in includedProducts
+    #
+    for p in Split(includedProducts):
+        self['SWIGFLAGS'] += " -I%s" % os.path.join(ProductDir(p), "python")
+        
 SConsEnvironment.CheckSwig = CheckSwig
 
 #
