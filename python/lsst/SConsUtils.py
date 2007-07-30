@@ -283,9 +283,13 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                         # Allow for boost messing with library names. Sigh.
                         lib = mangleLibraryName(env, libdir, lib)
                         
-                        if not conf.CheckLib(lib, language=lang):
+                        if conf.CheckLib(lib, language=lang):
+                            env.libs[product] += [lib]
+                        else:
                             errors += ["Failed to find %s" % (lib)]
                             success = False
+
+
                     lib = mangleLibraryName(env, libdir, libs[-1])
                         
                     if conf.CheckLib(lib, symbol, language=lang):
@@ -400,11 +404,27 @@ SConsEnvironment.CheckHeaderGuessLanguage = CheckHeaderGuessLanguage
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-def getlibs(env, *libraries):
-
+def getlibs(env, *products):
+    """Return a list of all the libraries needed by products named in the list;
+    each element may be a string on names ("aa bb cc"). If the name isn't recognised
+    it's taken to be a library name"""
+    
     libs = []
-    for lib in libraries:
-        libs += env.libs[lib]
+    for lib in products:
+        for l in Split(lib):
+            if env.libs.has_key(l):
+                libs += env.libs[l]
+            else:
+                libs += [l]
+
+    if True:                            # make each library apply only once
+        _libdict = {}
+        _libs = libs
+        libs = []
+        for l in _libs:
+            if not _libdict.has_key(l):
+                _libdict[l] = 1
+                libs += [l]
 
     return libs
 
