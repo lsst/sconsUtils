@@ -187,9 +187,12 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         context.Result(result)
         return result
 
-    conf = Configure(env, custom_tests = {'IsGcc' : IsGcc})
-    isGcc = conf.IsGcc()
-    conf.Finish()
+    if env.CleanFlagIsSet():
+        isGcc = False                   # who cares? We're cleaning, not building
+    else:
+        conf = Configure(env, custom_tests = {'IsGcc' : IsGcc})
+        isGcc = conf.IsGcc()
+        conf.Finish()
     #
     # Compiler flags; CCFLAGS => C and C++
     #
@@ -225,7 +228,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
 
     env['CPPPATH'] = []
     env['LIBPATH'] = []
-    if not CleanFlagIsSet() and not HelpFlagIsSet() and dependencies:
+    if not env.CleanFlagIsSet() and not env.HelpFlagIsSet() and dependencies:
         for productProps in dependencies:
             while len(productProps) < 4:     # allow the user to omit values
                 productProps += [""]
@@ -657,35 +660,6 @@ def copytree(src, dst, symlinks=False, ignore = None):
     if errors:
         raise Error, errors
 
-def installFunc(dest, source, env):
-    """Install a source file or directory into a destination by copying,
-    (including copying permission/mode bits)."""
-
-    if env.has_key('IgnoreFiles'):
-        ignore = env['IgnoreFiles']
-    else:
-        ignore = False
-
-    if os.path.isdir(source):
-        if os.path.exists(dest):
-            if not os.path.isdir(dest):
-                raise SCons.Errors.UserError, "cannot overwrite non-directory `%s' with a directory `%s'" % (str(dest), str(source))
-        else:
-            parent = os.path.split(dest)[0]
-            if not os.path.exists(parent):
-                os.makedirs(parent)
-        copytree(source, dest, ignore = ignore)
-    else:
-        if ignore and re.search(ignore, source):
-            #print "Ignoring", source
-            pass
-        else:
-            shutil.copy2(source, dest)
-            st = os.stat(source)
-            os.chmod(dest, stat.S_IMODE(st[stat.ST_MODE]) | stat.S_IWRITE)
-
-    return 0
-
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 def ProductDir(product):
@@ -753,17 +727,32 @@ def setPrefix(env, versionString):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-def CleanFlagIsSet():
+def CleanFlagIsSet(self):
     """Return True iff they're running "scons --clean" """
     return SCons.Script.Main.options.clean
 
-def NoexecFlagIsSet():
+SConsEnvironment.CleanFlagIsSet = CleanFlagIsSet
+
+def HelpFlagIsSet(self):
+    """Return True iff they're running "scons --help" """
+    return SCons.Script.Main.options.help_msg
+
+SConsEnvironment.HelpFlagIsSet = HelpFlagIsSet
+
+def NoexecFlagIsSet(self):
     """Return True iff they're running "scons -n" """
     return SCons.Script.Main.options.noexec
 
-def HelpFlagIsSet():
-    """Return True iff they're running "scons --help" """
-    return SCons.Script.Main.options.help_msg
+SConsEnvironment.NoexecFlagIsSet = NoexecFlagIsSet
+
+def QuietFlagIsSet(self):
+    """Return True iff they're running "scons -Q" """
+    return SCons.Script.Main.options.no_progress
+
+SConsEnvironment.QuietFlagIsSet = QuietFlagIsSet
+
+
+
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -801,11 +790,11 @@ def Declare(self, products=None):
             if "EUPS_DIR" in os.environ.keys():
                 self['ENV']['PATH'] += os.pathsep + "%s/bin" % (os.environ["EUPS_DIR"])
 
-                if "undeclare" in COMMAND_LINE_TARGETS or CleanFlagIsSet():
+                if "undeclare" in COMMAND_LINE_TARGETS or self.CleanFlagIsSet():
                     if version:
                         command = "eups undeclare --flavor %s %s %s" % \
                                   (self['eups_flavor'], product, version)
-                        if CleanFlagIsSet():
+                        if self.CleanFlagIsSet():
                             self.Execute(command)
                         else:
                             undeclare += [command]
@@ -845,7 +834,7 @@ def CleanTree(files, dir=".", recurse=True, verbose=False):
     verbose is True, print each filename after deleting it
     """
     
-    if CleanFlagIsSet() :
+    if CleanFlagIsSet(None) :
 	files_expr = ""
 	for file in Split(files):
 	    if files_expr:
@@ -872,30 +861,6 @@ def CleanTree(files, dir=".", recurse=True, verbose=False):
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-try:
-    type(_Install)
-except:
-    _Install = SConsEnvironment.Install
-
-def MyInstall(env, dest, files):
-    """Like Install, but remove the target when cleaning if files is a directory"""
-
-    if CleanFlagIsSet():
-        try:
-            if os.path.isdir(files):
-                dir = os.path.join(dest, files)
-                print >> sys.stderr, "Removing", dir
-                shutil.rmtree(dir, ignore_errors=True)
-        except TypeError:
-            pass                        # "files" isn't a string
-    
-    return _Install(env, dest, files)
-
-if False:                               # tickles an scons bug
-    SConsEnvironment.Install = MyInstall
-
-#=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
 def InstallEups(env, dest, files, presetup=""):
     """Install a ups directory, setting absolute versions as appropriate
     if presetup is provided, it's expected to be a dictionary with keys
@@ -907,7 +872,7 @@ env.InstallEups(env['prefix'] + "/ups",
                 )    
     """
 
-    if CleanFlagIsSet() and len(filter(lambda t: t == "install", COMMAND_LINE_TARGETS)) > 0:
+    if env.CleanFlagIsSet() and len(filter(lambda t: t == "install", COMMAND_LINE_TARGETS)) > 0:
         print >> sys.stderr, "Removing", dest
         shutil.rmtree(dest, ignore_errors=True)
     else:
@@ -1093,7 +1058,13 @@ def filesToTag(root=".", file_regexp=r"\.(cc|h(pp)?|py)$", ignoreDirs=["examples
     """Return a list of files that need to be scanned for tags, starting at directory root
 
     Files are chosen if they match file_regexp; toplevel directories in list ignoreDirs are ignored
+
+    Unless force is true, this routine won't do anything unless you specified a "TAGS" target
     """
+
+    if len(filter(lambda t: t == "TAGS", COMMAND_LINE_TARGETS)) == 0:
+        return []
+
     files = []
     for dirpath, dirnames, filenames in os.walk(root):
         if dirpath == ".":
@@ -1114,3 +1085,35 @@ def filesToTag(root=".", file_regexp=r"\.(cc|h(pp)?|py)$", ignoreDirs=["examples
         files += [os.path.join(dirpath, f) for f in candidates]
 
     return files
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def InstallDir(self, prefix, dir, ignoreRegexp = r"(~$|\.pyc$|\.os?$)", recursive=True):
+    """
+    Install the directory dir into prefix, (along with all its descendents if recursive is True).
+    Omit files and directories that match ignoreRegexp
+
+    Unless force is true, this routine won't do anything unless you specified an "install" target
+    """
+
+    if len(filter(lambda t: t == "install", COMMAND_LINE_TARGETS)) == 0:
+        return
+
+    targets = []
+    for dirpath, dirnames, filenames in os.walk(dir):
+        if not recursive:
+            dirnames[:] = []
+        else:
+            dirnames[:] = [d for d in dirnames if d != ".svn"] # ignore .svn tree
+        #
+        # List of possible files to install
+        #
+        for f in filenames:
+            if re.search(ignoreRegexp, f):
+                continue
+
+            targets += self.Install(os.path.join(prefix, dirpath), os.path.join(dirpath, f))
+
+    return targets
+
+SConsEnvironment.InstallDir = InstallDir
