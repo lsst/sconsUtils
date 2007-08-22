@@ -111,6 +111,10 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
 
     if env['PLATFORM'] == 'darwin':
         env['LDMODULESUFFIX'] = ".so"
+
+        if not re.search(r"-install_name", str(env['SHLINKFLAGS'])):
+            env.Append(SHLINKFLAGS = "-Wl,-install_name -Wl,${TARGET.file}")
+        
     #
     # Remove valid options from the arguments
     #
@@ -269,7 +273,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
 
                 if incfiles:
                     try:
-                        if env.CheckHeaderGuessLanguage(incdir, incfiles):
+                        if env.CheckHeaderGuessLanguage(incdir, incfiles) and incdir:
                             env.Replace(CPPPATH = env['CPPPATH'] + [incdir])
                     except RuntimeError, msg:
                         errors += [str(msg)]
@@ -313,7 +317,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                 
                 if incfiles:
                     try:
-                        if env.CheckHeaderGuessLanguage(incdir, incfiles):
+                        if env.CheckHeaderGuessLanguage(incdir, incfiles) and incdir:
                             env.Replace(CPPPATH = env['CPPPATH'] + [incdir])
                     except RuntimeError, msg:
                         errors += [str(msg)]
@@ -329,7 +333,9 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
 
                         lib = mangleLibraryName(env, libdir, lib)
 
-                        if not conf.CheckLib(lib, symbol, language=lang):
+                        if conf.CheckLib(lib, symbol, language=lang):
+                            env.libs[product] += [lib]
+                        else:
                             success = False
                     conf.Finish()
 
@@ -671,7 +677,10 @@ def ProductDir(product):
     else:
         return None
 
-SConsEnvironment.ProductDir = ProductDir
+def _ProductDir(self, product):
+    return ProductDir(product)
+
+SConsEnvironment.ProductDir = _ProductDir
     
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
