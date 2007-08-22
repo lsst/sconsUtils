@@ -48,6 +48,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         ('optfile', 'Specify a file to read default options from', None),
         ('prefix', 'Specify the install destination', None),
         EnumOption('opt', 'Set the optimisation level', 0, allowed_values=('0', '1', '2', '3')),
+        EnumOption('profile', 'Compile/link for profiler', 0, allowed_values=('0', '1', 'pg')),
         ('version', 'Specify the current version', None),
         )
 
@@ -204,6 +205,9 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         env.Append(CCFLAGS = '-Wall')
     if env['opt']:
         env.Append(CCFLAGS = '-O%d' % int(env['opt']))
+    if env['profile'] == '1' or env['profile'] == "pg":
+        env.Append(CCFLAGS = '-pg')
+        env.Append(LINKFLAGS = '-pg')
     #
     # Byte order
     #
