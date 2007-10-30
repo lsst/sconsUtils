@@ -304,7 +304,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                         if conf.CheckLib(lib, language=lang):
                             env.libs[product] += [lib]
                         else:
-                            errors += ["Failed to find %s library" % (lib)]
+                            errors += ["Failed to find/use %s library" % (lib)]
                             success = False
 
 
@@ -315,7 +315,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                             env.Replace(LIBPATH = env['LIBPATH'] + [libdir])
                             Repository(libdir)                        
                     else:
-                        errors += ["Failed to find %s library in %s" % (lib, libdir)]
+                        errors += ["Failed to find/use %s library in %s" % (lib, libdir)]
                         success = False
                     conf.Finish()
 
