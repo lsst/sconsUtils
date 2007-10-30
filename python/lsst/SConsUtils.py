@@ -82,12 +82,18 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         DYLD_LIBRARY_PATH = os.environ['DYLD_LIBRARY_PATH']
     else:
         DYLD_LIBRARY_PATH = None
+
+    if os.environ.has_key('SHELL'):     # needed by eups
+        SHELL = os.environ['SHELL']
+    else:
+        SHELL = None
         
     env = Environment(ENV = {'EUPS_DIR' : os.environ['EUPS_DIR'],
                              'EUPS_PATH' : os.environ['EUPS_PATH'],
                              'PATH' : os.environ['PATH'],
                              'DYLD_LIBRARY_PATH' : DYLD_LIBRARY_PATH,
-                             'LD_LIBRARY_PATH' : LD_LIBRARY_PATH
+                             'LD_LIBRARY_PATH' : LD_LIBRARY_PATH,
+                             'SHELL' : SHELL,
                              }, options = opts,
 		      tools = ["default", "doxygen"],
 		      toolpath = toolpath
@@ -281,6 +287,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                             env.Replace(CPPPATH = env['CPPPATH'] + [incdir])
                     except RuntimeError, msg:
                         errors += [str(msg)]
+                        success = False
                         
                 if libs:
                     conf = env.Clone(LIBPATH = env['LIBPATH'] + [libdir]).Configure()
@@ -297,7 +304,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                         if conf.CheckLib(lib, language=lang):
                             env.libs[product] += [lib]
                         else:
-                            errors += ["Failed to find %s" % (lib)]
+                            errors += ["Failed to find %s library" % (lib)]
                             success = False
 
 
@@ -308,7 +315,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                             env.Replace(LIBPATH = env['LIBPATH'] + [libdir])
                             Repository(libdir)                        
                     else:
-                        errors += ["Failed to find %s in %s" % (lib, libdir)]
+                        errors += ["Failed to find %s library in %s" % (lib, libdir)]
                         success = False
                     conf.Finish()
 
@@ -351,8 +358,11 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                 pass                    # what can we do? No PRODUCT_DIR, no product-config,
                                         # no include file to find
 
-            errors += ["Failed to find %s -- do you need to setup %s or specify %s=DIR?" % \
-                       (product, product, product)]
+            if topdir:
+                errors += ["Failed to find a valid version of %s --- check config.log" % (product)]
+            else:
+                errors += ["Failed to find a valid %s --- do you need to setup %s or specify %s=DIR?" % \
+                           (product, product, product)]
         
     if errors:
         msg = "\n".join(errors)
@@ -411,7 +421,10 @@ def CheckHeaderGuessLanguage(self, incdir, incfiles):
             else:
                 return True
 
-    raise RuntimeError, "Failed to find %s in %s" % (incfiles[-1], incdir)
+    if os.path.isfile(os.path.join(incdir, incfiles[-1])):
+        raise RuntimeError, "Failed to compile test program using %s" % os.path.join(incdir, incfiles[-1])
+    else:
+        raise RuntimeError, "Failed to find %s in %s" % (incfiles[-1], incdir)
 
 SConsEnvironment.CheckHeaderGuessLanguage = CheckHeaderGuessLanguage
 
