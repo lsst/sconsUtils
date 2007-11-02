@@ -215,6 +215,12 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         env.Append(CCFLAGS = '-pg')
         env.Append(LINKFLAGS = '-pg')
     #
+    # Is C++'s TR1 available?  If not, use e.g. #include "lsst/tr1/foo.h"
+    #
+    conf = env.Configure()
+    env.Append(CCFLAGS = '-DLSST_HAVE_TR1=%d' % int(conf.CheckHeader("tr1/unordered_map", language="C++")))
+    conf.Finish()
+    #
     # Byte order
     #
     import socket
