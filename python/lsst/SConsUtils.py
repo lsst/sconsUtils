@@ -217,9 +217,10 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     #
     # Is C++'s TR1 available?  If not, use e.g. #include "lsst/tr1/foo.h"
     #
-    conf = env.Configure()
-    env.Append(CCFLAGS = '-DLSST_HAVE_TR1=%d' % int(conf.CheckHeader("tr1/unordered_map", language="C++")))
-    conf.Finish()
+    if not env.CleanFlagIsSet():
+        conf = env.Configure()
+        env.Append(CCFLAGS = '-DLSST_HAVE_TR1=%d' % int(conf.CheckHeader("tr1/unordered_map", language="C++")))
+        conf.Finish()
     #
     # Byte order
     #
@@ -711,6 +712,8 @@ def getVersion(env, versionString):
     """Set a version ID from env, or
     a cvs or svn ID string (dollar name dollar or dollar HeadURL dollar)"""
 
+    version = "unknown"
+
     if env.has_key('version'):
         version = env['version']
     elif not versionString:
@@ -722,11 +725,12 @@ def getVersion(env, versionString):
             version = "cvs"
     elif re.search(r"^[$]HeadURL:\s+", versionString):
         # SVN.  Guess the tagname from the last part of the directory
-        version = re.search(r"/([^/]+)$", os.path.split(versionString)[0]).group(1)
-        if version == "trunk":
-            version = "svn"
-    else:
-        version = "unknown"
+        try:
+            version = re.search(r"/([^/]+)$", os.path.split(versionString)[0]).group(1)
+            if version == "trunk":
+                version = "svn"
+        except AttributeError:
+            pass
 
     env["version"] = version
     return version
