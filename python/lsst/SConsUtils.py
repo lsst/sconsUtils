@@ -3,6 +3,8 @@
 #
 import glob
 import os
+import os.path
+import new
 import re
 import shutil
 from SCons.Script import *              # So that this file has the same namespace as SConstruct/SConscript
@@ -14,6 +16,7 @@ try:
     import eups
 except ImportError:
     pass    
+
 
 def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     """Setup a standard SCons environment, add our dependencies, and fix some os/x problems"""
@@ -95,9 +98,9 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
                              'LD_LIBRARY_PATH' : LD_LIBRARY_PATH,
                              'SHELL' : SHELL,
                              }, options = opts,
-		      tools = ["default", "doxygen"],
-		      toolpath = toolpath
-		      )
+                      tools = ["default", "doxygen"],
+                      toolpath = toolpath
+                      )
     env['eups_product'] = eups_product
     Help(opts.GenerateHelpText(env))
 
@@ -120,8 +123,8 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         env['LDMODULESUFFIX'] = ".so"
 
         if not re.search(r"-install_name", str(env['SHLINKFLAGS'])):
-            env.Append(SHLINKFLAGS = "-Wl,-install_name -Wl,${TARGET.file}")
-        
+            env.Append(SHLINKFLAGS = "-Wl,-install_name -Wl,${TARGET.abspath}"
+
     #
     # Remove valid options from the arguments
     #
@@ -619,23 +622,23 @@ def SharedLibraryIncomplete(self, target, source, **keywords):
     myenv = self.Clone()
 
     if myenv['PLATFORM'] == 'darwin':
-        myenv['SHLINKFLAGS'] += " -undefined suppress -flat_namespace"
+        myenv['SHLINKFLAGS'] += " -undefined dynamic_lookup"
 
     return myenv.SharedLibrary(target, source, **keywords)
 
 SConsEnvironment.SharedLibraryIncomplete = SharedLibraryIncomplete
-
 
 def LoadableModuleIncomplete(self, target, source, **keywords):
     """Like LoadableModule, but don't insist that all symbols are resolved"""
 
     myenv = self.Clone()
     if myenv['PLATFORM'] == 'darwin':
-        myenv['LDMODULEFLAGS'] += " -undefined suppress -flat_namespace"
+        myenv['LDMODULEFLAGS'] += " -undefined dynamic_lookup"
 
     return myenv.LoadableModule(target, source, **keywords)
 
 SConsEnvironment.LoadableModuleIncomplete = LoadableModuleIncomplete
+
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 #
@@ -736,12 +739,12 @@ def setPrefix(env, versionString):
 
     if env.has_key('eups_path') and env['eups_path']:
         eups_prefix = env['eups_path']
-	flavor = env['eups_flavor']
-	if not re.search("/" + flavor + "$", eups_prefix):
-	    eups_prefix = os.path.join(eups_prefix, flavor)
+    flavor = env['eups_flavor']
+    if not re.search("/" + flavor + "$", eups_prefix):
+        eups_prefix = os.path.join(eups_prefix, flavor)
 
         eups_prefix = os.path.join(eups_prefix, env['eups_product'],
-				   getVersion(env, versionString))
+                                   getVersion(env, versionString))
     else:
         eups_prefix = None
 
@@ -892,6 +895,59 @@ def CleanTree(files, dir=".", recurse=True, verbose=False):
 	Execute(Action([action]))
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def _fixInstallNameFunc(target, source, env):
+    """
+    Fix install_name paths in libraries and executables copied from source -
+    assumed to be a relative directory path - to target.
+    """
+    absTargetDir = target[0].abspath
+    if absTargetDir.endswith(source[0].path):
+        end = len(absTargetDir) - len(source[0].path)
+        absTargetDir = absTargetDir[0:end]
+        cwd = os.getcwd()
+        for i in glob.glob(source[0].path + "/*"):
+            fileName      = os.path.basename(i)
+            absSourceFile = os.path.abspath(i)
+            absTargetFile = os.path.join(target[0].abspath, fileName)
+            # Test to see whether or not the file is a Mach-O file, and if so fix any absolute
+            # paths to the build directory (CWD) to reference the install directory
+            cmd = "otool -L %s" % i
+            for line in os.popen(cmd).readlines():
+                args = None
+                if re.search(r"^\s*%s" % absSourceFile, line):
+                    args = ['install_name_tool', '-id', absTargetFile, absTargetFile]
+                else:
+                    pat = re.compile(r"^\s*((%s/)(\S+\.dylib))" % cwd)
+                    m   = pat.search(line)
+                    if m != None and m.group(1) and m.group(3):
+                        args = ['install_name_tool', '-change', m.group(1),
+                                absTargetDir + m.group(3), absTargetFile]
+                if not args is None:
+                    print "Running: %s" % (" ".join(args))
+                    os.spawnvpe(os.P_WAIT, 'install_name_tool', args, os.environ)
+
+
+def _fixInstallNameString(target, source, env):
+    fmt = 'Fixing install_name paths in libraries/binaries copied from "%s" to "%s"...'
+    return fmt % (source[0].path, target[0].path)
+
+
+def InstallBinLib(env, target, source):
+    """
+    Installs binaries and libraries with correct install_name paths on Mac OSX.
+    """
+    if not os.path.isdir(source) or os.path.isabs(source):
+        raise SCons.Errors.UserError, "%s is not a relative directory path" % source
+    obj = env.Install(target, source)
+    if env['PLATFORM'] == 'darwin':
+        for i in obj:
+            env.AddPostAction(i, SCons.Action.Action(_fixInstallNameFunc, _fixInstallNameString))
+    return obj
+
+SConsEnvironment.InstallBinLib = InstallBinLib
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 def InstallEups(env, dest, files, presetup=""):
     """Install a ups directory, setting absolute versions as appropriate
