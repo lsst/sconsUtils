@@ -130,6 +130,8 @@ tests = lsst.tests.Control(env,
             fi;
             """ % (expandedArgs, interpreter, expandedArgs))
 
+            self._env.Alias(os.path.basename(target), target)
+
             self._env.Clean(target, self._tmpDir)
         
         return targets
