@@ -9,7 +9,7 @@ from SCons.Script import *              # So that this file has the same namespa
 from SCons.Script.SConscript import SConsEnvironment
 import stat
 import sys
-import lsst.svn
+import lsst.svn as svn
 
 try:
     import eups
@@ -228,9 +228,10 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     # Is C++'s TR1 available?  If not, use e.g. #include "lsst/tr1/foo.h"
     #
     if not env.CleanFlagIsSet():
-        conf = env.Configure()
-        env.Append(CCFLAGS = '-DLSST_HAVE_TR1=%d' % int(conf.CheckHeader("tr1/unordered_map", language="C++")))
-        conf.Finish()
+        if not env.NoexecFlagIsSet():
+            conf = env.Configure()
+            env.Append(CCFLAGS = '-DLSST_HAVE_TR1=%d' % int(conf.CheckHeader("tr1/unordered_map", language="C++")))
+            conf.Finish()
     #
     # Byte order
     #
@@ -740,14 +741,12 @@ def getVersion(env, versionString):
             if version == "trunk":
                 version = "svn"
                 try:                    # cf. #273
-                    revision = lsst.svn.revision(lastChanged=True)
+                    revision = svn.revision(lastChanged=True)
                     version += revision
                 except IOError:
                     pass
         except AttributeError:
             pass
-
-    print "XXX", version
 
     env["version"] = version
     return version
