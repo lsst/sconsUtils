@@ -5,14 +5,18 @@ from SCons.Script import *              # So that this file has the same namespa
 
 class Control(object):
     _IGNORE = "IGNORE"
+    _EXPECT_FAILURE = "EXPECT_FAILURE"
     
-    def __init__(self, env, ignoreList=None, args=None, tmpDir=".tests", verbose=False):
+    def __init__(self, env, ignoreList=None, expectedFailures=None, args=None, tmpDir=".tests", verbose=False):
         """Create an object to run tests
 
         env should be an environment from scons;
 
         ignoreList is a list of tests that should Not be run --- useful in conjunction
         with glob patterns;
+
+        expectedFalures is a dictionary; the keys are tests that are
+        known to fail; the values are strings to print.
 
         args is a dictionary with testnames as keys, and argument strings as values.
         As scons always runs from the top-level directory, tests has to fiddle with
@@ -26,11 +30,13 @@ class Control(object):
 
         E.g.
 tests = lsst.tests.Control(env,
-                           args=dict([
-    ("MaskIO_1",      "data/871034p_1_MI_msk.fits"),
-    ("MaskedImage_1", "file:data/871034p_1_MI foo"),
-    ]))
-        
+                           args={
+                           "MaskIO_1" :      "data/871034p_1_MI_msk.fits",
+                           "MaskedImage_1" : "file:data/871034p_1_MI foo",
+                           }),
+                           ignoreList=["Measure_1"],
+                           expectedFailures={"BBox_1": "Problem with single-pixel BBox"}
+                           )
         """
         env.AppendENVPath('PYTHONPATH', os.environ['PYTHONPATH'])
 
@@ -44,7 +50,11 @@ tests = lsst.tests.Control(env,
         self._info = {}                 # information about processing targets
         if ignoreList:
             for f in ignoreList:
-                self._info[f] = self._IGNORE
+                self._info[f] = (self._IGNORE, None)
+
+        if expectedFailures:
+            for f in expectedFailures.keys():
+                self._info[f] = (self._EXPECT_FAILURE, expectedFailures[f])
 
         if args:
             self._args = args           # arguments for tests
@@ -76,12 +86,24 @@ tests = lsst.tests.Control(env,
         except OSError:
             return True
 
-        ignoreFile = self._info.has_key(test) and self._info[test] == self._IGNORE
+        ignoreFile = self._info.has_key(test) and self._info[test][0] == self._IGNORE
 
         if self._verbose and ignoreFile:
             print >> sys.stderr, "Skipping", test
 
         return ignoreFile
+
+    def messages(self, test):
+        """Return the messages to be used in case of success/failure; the logicals
+        (note that they are strings) tell whether the test is expected to pass"""
+
+        if self._info.has_key(test) and self._info[test][0] == self._EXPECT_FAILURE:
+            msg = self._info[test][1]
+            return "false", "Passed, but should have failed: %s" % msg, \
+                   "true",  "Failed as expected: %s" % msg
+        else:
+            return "true",  "passed", \
+                   "false", "failed"
 
     def run(self, fileGlob):
         if not self.runExamples:
@@ -117,18 +139,21 @@ tests = lsst.tests.Control(env,
 
                 args += [a]
 
+            (should_pass, passedMsg, should_fail, failedMsg) = self.messages(f)
+
             expandedArgs = " ".join(args)
             self._env.Command(target, f, """
             @rm -f ${TARGET}.failed;
             @echo -n 'running ${SOURCES}... ';
             @echo $SOURCES %s > $TARGET; echo >> $TARGET;
             @if %s $SOURCES %s >> $TARGET 2>&1; then \
-               echo passed; \
+               if ! %s; then mv $TARGET ${TARGET}.failed; fi; \
+               echo "%s"; \
             else \
-               mv $TARGET ${TARGET}.failed; \
-               echo failed; \
+               if ! %s; then mv $TARGET ${TARGET}.failed; fi; \
+               echo "%s"; \
             fi;
-            """ % (expandedArgs, interpreter, expandedArgs))
+            """ % (expandedArgs, interpreter, expandedArgs, should_pass, passedMsg, should_fail, failedMsg))
 
             self._env.Alias(os.path.basename(target), target)
 

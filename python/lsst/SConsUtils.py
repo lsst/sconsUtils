@@ -9,6 +9,7 @@ from SCons.Script import *              # So that this file has the same namespa
 from SCons.Script.SConscript import SConsEnvironment
 import stat
 import sys
+import lsst.svn
 
 try:
     import eups
@@ -42,13 +43,14 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
         opts = Options()
         
     opts.AddOptions(
-        BoolOption('debug', 'Set to enable debugging flags', 1),
+        BoolOption('debug', 'Set to enable debugging flags', True),
         ('eupsdb', 'Specify which element of EUPS_PATH should be used', None),
         ('flavor', 'Set the build flavor', None),
         ('optfile', 'Specify a file to read default options from', None),
         ('prefix', 'Specify the install destination', None),
         EnumOption('opt', 'Set the optimisation level', 0, allowed_values=('0', '1', '2', '3')),
         EnumOption('profile', 'Compile/link for profiler', 0, allowed_values=('0', '1', 'pg')),
+        BoolOption('setenv', 'Treat arguments such as Foo=bar as defining construction variables', False),
         ('version', 'Specify the current version', None),
         )
 
@@ -170,14 +172,22 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     except KeyError:
         pass
     #
-    # Check for unprocessed arguments
+    # Check arguments
     #
     errors = []
     errorStr = ""
-    for key in ARGUMENTS.keys():
-        errorStr += " %s=%s" % (key, ARGUMENTS[key])
-    if errorStr:
-        errors += ["Unprocessed arguments:%s" % errorStr]
+    #
+    # Process otherwise unknown arguments.  If setenv is true,
+    # set construction variables; otherwise generate an error
+    #
+    if env['setenv']:
+        for key in ARGUMENTS.keys():
+            env[key] = ARGUMENTS[key]
+    else:
+        for key in ARGUMENTS.keys():
+            errorStr += " %s=%s" % (key, ARGUMENTS[key])
+        if errorStr:
+            errors += ["Unprocessed arguments:%s" % errorStr]
     #
     # We need a binary name, not just "Posix"
     #
@@ -729,8 +739,15 @@ def getVersion(env, versionString):
             version = re.search(r"/([^/]+)$", os.path.split(versionString)[0]).group(1)
             if version == "trunk":
                 version = "svn"
+                try:                    # cf. #273
+                    revision = lsst.svn.revision(lastChanged=True)
+                    version += revision
+                except IOError:
+                    pass
         except AttributeError:
             pass
+
+    print "XXX", version
 
     env["version"] = version
     return version
@@ -899,8 +916,11 @@ def CleanTree(files, dir=".", recurse=True, verbose=False):
 
 def InstallEups(env, dest, files, presetup=""):
     """Install a ups directory, setting absolute versions as appropriate
-    if presetup is provided, it's expected to be a dictionary with keys
-    prudoct names and values the version that should be installed into
+    (unless you're installing from the trunk, in which case no versions
+    are expanded).
+    
+    If presetup is provided, it's expected to be a dictionary with keys
+    product names and values the version that should be installed into
     the table files, overriding eups expandtable's usual behaviour. E.g.
 env.InstallEups(env['prefix'] + "/ups",
                 glob.glob("ups/*.table"),
@@ -920,13 +940,15 @@ env.InstallEups(env['prefix'] + "/ups",
         env = env.Clone(ENV = os.environ)
 
         obj = env.Install(dest, files)
-        for i in obj:
-            cmd = "eups_expandtable -i "
-            if presetup:
-                cmd += presetup + " "
-            cmd += str(i)
-            
-            env.AddPostAction(i, Action("%s" %(cmd), cmd, ENV = os.environ))
+
+        if not svn.isTrunk():
+            for i in obj:
+                cmd = "eups_expandtable -i "
+                if presetup:
+                    cmd += presetup + " "
+                cmd += str(i)
+
+                env.AddPostAction(i, Action("%s" %(cmd), cmd, ENV = os.environ))
 
     return dest
 
@@ -1090,7 +1112,7 @@ if False:
     
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def filesToTag(root=".", file_regexp=r"\.(cc|h(pp)?|py)$", ignoreDirs=["examples", "tests"]):
+def filesToTag(root=".", file_regexp=r"^[a-zA-Z0-9_].*\.(cc|h(pp)?|py)$", ignoreDirs=["examples", "tests"]):
     """Return a list of files that need to be scanned for tags, starting at directory root
 
     Files are chosen if they match file_regexp; toplevel directories in list ignoreDirs are ignored
