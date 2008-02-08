@@ -9,6 +9,7 @@ from SCons.Script import *              # So that this file has the same namespa
 from SCons.Script.SConscript import SConsEnvironment
 import stat
 import sys
+from types import *
 import lsst.svn as svn
 
 try:
@@ -16,8 +17,149 @@ try:
 except ImportError:
     pass    
 
-def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
-    """Setup a standard SCons environment, add our dependencies, and fix some os/x problems"""
+def MakeEnv(eups_product, versionString=None, dependencies=[],
+            eups_product_path=None, options=None, traceback=False):
+    """
+    Setup a standard SCons environment, add our dependencies, and fix some
+    os/x problems
+    
+    This function should be called early in a SConstruct file to initialize
+    the build environment for the product being built.
+
+    Identifying the Product
+
+    The eups_product, versionString, and eups_product_path arguments are
+    used to identify the product being built.  eups_product is the name that
+    EUPS will know the product as; that is, this is the name one would provide
+    to the EUPS setup command to load the product into the user's environment.
+    Certain assumptions are made about the product based on this name and
+    LSST conventions.  In particular,
+    - if the product builds a linkable library, that library will be
+      named after the product name.  For example, if eups_product='foo',
+      the static library will be called libfoo.a.
+    - Unless the eups_product_path is specified, it will be assumed that
+      the default location for installing the product will be
+      root/flavor/eups_product/version where root is the first directory 
+      listed in $EUPS_PATH, flavor is the platform flavor name (e.g. Linux), 
+      and version is the actual version of the product release (see below).
+
+    This function will attempt to determine the version of the product being
+    built from the value of the versionString.  This is a string that is
+    generated automatically by the code repository/revisioning system; 
+    currently supported systems are CVS and Subversion (SVN).  When the 
+    SConstruct file is first created by the product developer, the 
+    versionString argument is set to r'$HeadURL$' (for SVN) or r'$Name$' (for 
+    CVS).  When the SConstruct file is subsequently checked out, the code
+    repository system converts this into a value that encodes the release
+    version of the product.  This function will automatically decode the
+    versionString into a real version number.
+
+    The eups_product_path argument is the path to the default directory for
+    installing the product relative.  The value can be parameterized with
+    with printf-like directives.  For example, when eups_product_path is
+    not set, the install path is equivalent to:
+    @verbatim
+        "%P/%f/%p/%v"
+    @endverbatim
+    where the %-sequences are replaced as follows:
+    @verbatim
+        %P     the first directory in the EUPS_PATH environment variable
+        %f     the platform flavor (e.g. Linux, Darwin, etc.)
+        %p     the product name (e.g. fw, mwi)
+        %v     the product version
+        %c     the current working directory
+    @endverbatim
+    Of course, the path can be explicitly specified without using any
+    %-sequences.  The most common use, however is to insert additional
+    directories into the path; for example:
+    @verbatim
+        "%P/%f/deploy/%p/%v"
+    @endverbatim
+    
+    Describing Dependencies
+
+    The dependencies argument allows you to describe how this product depends
+    on other products.  Our SCons scripts will use this information to actually
+    check that the required components are visible to the build process before
+    actually proceeding with the build.  The dependencies argument is a list
+    of lists.  That is, it is a list in which each element describes a
+    dependency on another product; that dependency is described with a list of
+    up to 4 elements:
+
+    @verbatim
+      0.  the EUPS name of the dependent product.  It is assumed that 
+      
+      1.  the name of one or more required include files, the last of which
+          being one that the product should provide.
+          If more than one file is given, they can be provided either as a 
+          Python list or a space-delimited string.  As part of its verification,
+          SCons will attempt use the last include file listed in a test
+          compilation.  The preceding include files in the list are assumed
+          to be required to successfully compile the last one.  If file
+          successfully compiles, it is assumed that all other include files
+          needed from the product will also be available.
+          
+      2.  the name of one or more required libraries, the last of which being
+          one that the product should provide.
+          If more than one file is given, they can be provided either as a 
+          Python list or a space-delimited string.  As part of its verification,
+          SCons will attempt to link against the last library in a test
+          compilation.  Sometimes it is necessary to indicate the language
+          support required; if so, the last library should by appended with
+          ':lang' where lang is the language (e.g. C++, C); the default
+          language is C.  
+
+      3.  the name of a symbol (e.g. a function name) from the required library
+          given in the element 2.  The test compilation and link will test to
+          make sure that this symbol can be found during the linking stage.  If
+          this is successful, it is assumed that all other symbols from all
+          required libraries from the product will be available.
+    @endverbatim
+
+    The latter elements of a dependency description are optional.  If less
+    information is provided, less is done in terms of verification.  Generally,
+    a symbol will need to be provided to verify that a required library is
+    usable.  Note, however, that for certain special products, specific checks
+    are carried out to ensure that the product is in a useable state; thus,
+    providing a library name without a symbol is often still useful. 
+    
+    @param eups_product   the name of this product (as it is to be known as
+                             by EUPS) that is being built.  See "Identifying
+                             the Product" above for a discussion of how this
+                             is used.  
+    @param versionString  a string provided by the code repository identifying
+                             the version of the product being built.  When 
+                             using Subversion (SVN), this is initially set to
+                             r"$HeadURL$"; when the SConstruct file is checked
+                             out of SVN, this value will be changed to a string
+                             encoding the release version of the product.  If
+                             not provided, the release version will be set to
+                             unknown.  See "Identifying the Product" above for 
+                             more details.
+    @param dependencies   a description of dependencies on other products
+                             needed to build this product that should be
+                             verified.  The value is a list with each element 
+                             describing the dependency on another product.
+                             Each dependency is described with a list of up to
+                             four elements.  See "Describing Dependencies"
+                             above for an explanation of the dependency
+                             description.
+    @param eups_product_path  the relative path to the default installation
+                             directory as format string.  Use this if the
+                             product should be installed in a subdirectory
+                             relative to $EUPS_PATH.  See "Identifying the
+                             Product" above for more details.
+    @param options        an Options object to use to define command-line
+                             options custom to the current build script.
+                             If provided, this should have been created with
+                             LsstOptions()
+    @param traceback      a boolean switch indicating whether any uncaught 
+                             Python exceptions raised during the build process
+                             should result in a standard Python traceback
+                             message to be displayed.  The default, False,
+                             causes tracebacks not to be printed; only the
+                             error message will be printed.
+    """
     #
     # We don't usually want a traceback at the interactive prompt
     # XXX This hook appears to be ignored by scons. Why?
@@ -30,17 +172,9 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     #
     # Argument handling
     #
-    if ARGUMENTS.has_key("optfile"):
-        configfile = ARGUMENTS["optfile"]
-        if not os.path.isfile(configfile):
-            print >> sys.stderr, "Ignoring optfile=%s as file %s doesn't exist" % (configfile, configfile)
-    else:
-        configfile = "buildOpts.py"
-        
-    if os.path.isfile(configfile):
-        opts = Options(configfile)
-    else:
-        opts = Options()
+    opts = options
+    if opts is None:
+        opts = LsstOptions()
         
     opts.AddOptions(
         BoolOption('debug', 'Set to enable debugging flags', True),
@@ -199,6 +333,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
             env['eups_flavor'] = os.uname()[0].title()
         else:
             env['eups_flavor'] = env['PLATFORM'].title()
+
     #
     # Is the C compiler really gcc/g++?
     #
@@ -400,7 +535,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     #
     # Where to install
     #
-    prefix = setPrefix(env, versionString)
+    prefix = setPrefix(env, versionString, eups_product_path)
     env['prefix'] = prefix
     
     env["libDir"] = "%s/lib" % prefix
@@ -411,6 +546,95 @@ def MakeEnv(eups_product, versionString=None, dependencies=[], traceback=False):
     return env
 
 makeEnv = MakeEnv                       # backwards compatibility
+
+#=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def LsstOptions(files=None):
+    """@brief Create an Options object using LSST conventions.
+
+    The SCons Options object is used in the LSST build system to define
+    variables that can be used on the command line or loaded in from a file.
+    These variables given as "name=value" arguments on the scons command line or
+    listed, one per line, in a separate file.  An options file can be specified
+    on the scons command line with the "optfile" variable (e.g.
+    "optfile=myoptions.py").  If optfile is not specified, scons will look for
+    a file called "buildOpts.py" by default.  (You can specify additional
+    option files to load via the "files" argument to this constructor.)  If the
+    user provides any command-line variable options that has not been defined
+    via an Options instance, scons will exit with an error, complaining about
+    an unused argument.  
+
+    To define your custom variable options, you should create an Options object
+    with this constructor function \e prior to the use of scons.makeEnv.
+    Then you can use the standard Options member functions (Add() or 
+    AddOptions()) to define your variable options (see the
+    @link http://www.scons.org/doc/0.97/HTML/scons-man.html the SCons Man
+    page for details).  For example,
+    @code
+       opts = scons.LsstOptions()
+       opts.Add('pkgsurl', 'the base url for the software server',
+                'http://dev.lsstcorp.org/pkgs')
+    @endcode
+    In this example, we defined a new options called "pkgsurl" with a default
+    value of "http://dev.lsstcorp.org/pkgs".  The second argument is a help
+    string.
+
+    To actually use these options, you must load them into the environment
+    by passing it to the scons.makeEnv() function via its options argument:
+    @code
+       env = scons.makeEnv("mypackage", "$HeadURL$", options=opts)
+    @endcode
+    scons.makeEnv() will automatically look for these options on the command
+    line as well as any option files.  The values found their will be loaded
+    into the environment's dictionary (i.e. accessible via evn[optionname]).
+
+    Note that makeEnv() will internally add additional options to the Options
+    object you pass it, overriding your definitions where you have used the
+    same name.  These standard options include:
+    @verbatim
+        debug     Set to > 1 to enable debugging flag (default: 0)
+        eupsdb    Specify which element of EUPS_PATH should be used (default:
+                    the value of $EUPS_PATH)
+        flavor    the desired build flavor (default is auto-detected)
+        optfile   a file to read default options from (default:
+                    buildOpts.py)
+        prefix    the install destination directory (default is auto-detected
+                    from the EUPS environment).
+        opt       the optimization level, an integer between 0 and 3, inclusive
+                    (default: 0)
+        version   Specify the current version (default is auto-detected)
+    @endverbatim    
+    
+    This constructor should be preferred over the standard SCons Options
+    constructor because it defines various LSST conventions.  In particular,
+    it defines the default name an options file to look for.  It will also
+    print a warning message if any specified options file (other than the
+    default) cannot be found.
+
+    @param files    one or more names of option files to look for.  Multiple
+                       names must be given as a python list.
+    """
+    if files is None:
+        files = []
+    elif type(files) is not ListType:
+        files = [files]
+
+    if ARGUMENTS.has_key("optfile"):
+        configfile = ARGUMENTS["optfile"]
+        if configfile not in files:
+            files.append(configfile)
+
+    for file in files:
+        if not os.path.isfile(file):
+            print >> sys.stderr, \
+                     "Warning: Will ignore non-existent options file, %s" \
+                     % file
+
+    if not ARGUMENTS.has_key("optfile"):
+        files.append("buildOpts.py")
+
+    return Options(files)
+    
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -712,10 +936,32 @@ def ProductDir(product):
     else:
         return None
 
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
 def _ProductDir(self, product):
     return ProductDir(product)
 
 SConsEnvironment.ProductDir = _ProductDir
+    
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+def makeProductPath(pathFormat, env):
+    """return a path to use as the installation directory for a product
+    @param pathFormat     the format string to process 
+    @param env            the scons environment
+    @param versionString  the versionString passed to MakeEnv
+    """
+    pathFormat = re.sub(r"%(\w)", r"%(\1)s", pathFormat)
+    
+    eups_path = os.environ['PWD']
+    if env.has_key('eups_product') and env['eups_path']:
+        eups_path = env['eups_path']
+
+    return pathFormat % { "P": eups_path,
+                          "f": env['eups_flavor'],
+                          "p": env['eups_product'],
+                          "v": env['version'],
+                          "c": os.environ['PWD'] }
     
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -751,16 +997,24 @@ def getVersion(env, versionString):
     env["version"] = version
     return version
 
-def setPrefix(env, versionString):
+def setPrefix(env, versionString, eups_product_path=None):
     """Set a prefix based on the EUPS_PATH, the product name, and a versionString from cvs or svn"""
 
-    if env.has_key('eups_path') and env['eups_path']:
+    if eups_product_path:
+        getVersion(env, versionString)
+        eups_prefix = makeProductPath(eups_product_path, env)
+        
+    elif env.has_key('eups_path') and env['eups_path']:
         eups_prefix = env['eups_path']
 	flavor = env['eups_flavor']
 	if not re.search("/" + flavor + "$", eups_prefix):
 	    eups_prefix = os.path.join(eups_prefix, flavor)
 
-        eups_prefix = os.path.join(eups_prefix, env['eups_product'],
+        prodpath = env['eups_product']
+        if env.has_key('eups_product_path') and env['eups_product_path']:
+            prodpath = env['eups_product_path']
+
+        eups_prefix = os.path.join(eups_prefix, prodpath,
 				   getVersion(env, versionString))
     else:
         eups_prefix = None
