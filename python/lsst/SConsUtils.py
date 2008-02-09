@@ -87,7 +87,11 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     up to 4 elements:
 
     @verbatim
-      0.  the EUPS name of the dependent product.  It is assumed that 
+      0.  the EUPS name of the dependent product.  It is assumed that the
+          user has already loaded the product into the environment via the
+          EUPS setup command (i.e. "setup product") so that there is an
+          environment variable, product_DIR, that provides the directory where
+          the product is installed. 
       
       1.  the name of one or more required include files, the last of which
           being one that the product should provide.
@@ -1194,7 +1198,7 @@ env.InstallEups(env['prefix'] + "/ups",
 
         obj = env.Install(dest, files)
 
-        if not svn.isTrunk():
+        if not svn.isSvnFile('.') or not svn.isTrunk():
             for i in obj:
                 cmd = "eups_expandtable -i "
                 if presetup:
