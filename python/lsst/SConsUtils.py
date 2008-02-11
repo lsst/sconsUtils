@@ -228,13 +228,20 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     else:
         SHELL = None
         
-    env = Environment(ENV = {'EUPS_DIR' : os.environ['EUPS_DIR'],
-                             'EUPS_PATH' : os.environ['EUPS_PATH'],
-                             'PATH' : os.environ['PATH'],
-                             'DYLD_LIBRARY_PATH' : DYLD_LIBRARY_PATH,
-                             'LD_LIBRARY_PATH' : LD_LIBRARY_PATH,
-                             'SHELL' : SHELL,
-                             }, options = opts,
+    ourEnv = {'EUPS_DIR' : os.environ['EUPS_DIR'],
+              'EUPS_PATH' : os.environ['EUPS_PATH'],
+              'PATH' : os.environ['PATH'],
+              'DYLD_LIBRARY_PATH' : DYLD_LIBRARY_PATH,
+              'LD_LIBRARY_PATH' : LD_LIBRARY_PATH,
+              'SHELL' : SHELL,
+              }
+    # Add all EUPS directories
+    for k in filter(lambda x: re.search(r"_DIR$", x), os.environ.keys()):
+        p = re.search(r"^(.*)_DIR$", k).groups()[0]
+        if os.environ.has_key("SETUP_" + p):
+            ourEnv[k] = os.environ[k]
+
+    env = Environment(ENV = ourEnv, options = opts,
 		      tools = ["default", "doxygen"],
 		      toolpath = toolpath
 		      )
