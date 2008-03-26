@@ -50,6 +50,8 @@ tests = lsst.tests.Control(env,
         self._info = {}                 # information about processing targets
         if ignoreList:
             for f in ignoreList:
+                if not os.path.exists(f):
+                    print >> sys.stderr, "You're ignoring a non-existent file, %s" % f
                 self._info[f] = (self._IGNORE, None)
 
         if expectedFailures:
