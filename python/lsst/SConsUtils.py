@@ -492,7 +492,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                 
                 if incfiles:
                     try:
-                        if env.CheckHeaderGuessLanguage(incdir, incfiles) and incdir:
+                        if incdir and env.CheckHeaderGuessLanguage(incdir, incfiles):
                             env.Replace(CPPPATH = env['CPPPATH'] + [incdir])
                     except RuntimeError, msg:
                         errors += [str(msg)]
