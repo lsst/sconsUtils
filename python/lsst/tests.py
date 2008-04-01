@@ -108,10 +108,10 @@ tests = lsst.tests.Control(env,
                    "false", "failed"
 
     def run(self, fileGlob):
-        if not self.runExamples:
-            return
-        
         targets = []
+        if not self.runExamples:
+            return targets
+        
         for f in glob.glob(fileGlob):
             interpreter = ""            # interpreter to run test, if needed
 
