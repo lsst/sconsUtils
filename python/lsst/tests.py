@@ -65,7 +65,7 @@ tests = lsst.tests.Control(env,
 
         self.runExamples = True                      # should I run the examples?
         try:
-            self.runExamples = (os.stat(self._tmpDir).st_mode & 0x5) # file is world read/executable
+            self.runExamples = (os.stat(self._tmpDir).st_mode & 0700) != 0 # file is user read/write/executable
         except OSError:
             pass
 
@@ -79,13 +79,9 @@ tests = lsst.tests.Control(env,
             return ""
 
     def ignore(self, test):
-        try:
-            if not (
-                re.search(r"\.py$", test) or
-                (os.stat(test).st_mode & 01) # file exists and is executable
-                ):
-                return True
-        except OSError:
+        if \
+               not re.search(r"\.py$", test) and \
+               len(self._env.Glob(test)) == 0: # we don't know how to build it
             return True
 
         ignoreFile = self._info.has_key(test) and self._info[test][0] == self._IGNORE
@@ -111,7 +107,7 @@ tests = lsst.tests.Control(env,
         targets = []
         if not self.runExamples:
             return targets
-        
+
         for f in glob.glob(fileGlob):
             interpreter = ""            # interpreter to run test, if needed
 
