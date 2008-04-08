@@ -553,6 +553,15 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     env["pythonDir"] = "%s/python" % prefix
 
     Export('env')
+    #
+    # env.Glob is an scons >= 0.98 way of asking if a target (will) exist
+    #
+    try:
+        env.Glob                        # >= 0.98
+    except AttributeError, e:
+        def _Glob(*args):
+            return ["dummy"]
+        env.Glob = _Glob
 
     return env
 
@@ -1002,7 +1011,7 @@ def getVersion(env, versionString):
                     version += revision
                 except IOError:
                     pass
-        except AttributeError:
+        except RuntimeError:
             pass
 
     env["version"] = version
@@ -1046,19 +1055,28 @@ def setPrefix(env, versionString, eups_product_path=None):
 
 def CleanFlagIsSet(self):
     """Return True iff they're running "scons --clean" """
-    return SCons.Script.Main.options.clean
+    try:
+        return SCons.Script.Main.options.clean
+    except AttributeError:              # probably 0.98 or later
+        return SCons.SConf.build_type == "clean"
 
 SConsEnvironment.CleanFlagIsSet = CleanFlagIsSet
 
 def HelpFlagIsSet(self):
     """Return True iff they're running "scons --help" """
-    return SCons.Script.Main.options.help_msg
+    try:
+        return SCons.Script.Main.options.help_msg
+    except AttributeError:              # probably 0.98 or later
+        return SCons.SConf.build_type == "help"
 
 SConsEnvironment.HelpFlagIsSet = HelpFlagIsSet
 
 def NoexecFlagIsSet(self):
     """Return True iff they're running "scons -n" """
-    return SCons.Script.Main.options.noexec
+    try:
+        return SCons.Script.Main.options.noexec
+    except AttributeError:              # probably 0.98 or later
+        return SCons.SConf.dryrun
 
 SConsEnvironment.NoexecFlagIsSet = NoexecFlagIsSet
 
@@ -1068,10 +1086,7 @@ def QuietFlagIsSet(self):
 
 SConsEnvironment.QuietFlagIsSet = QuietFlagIsSet
 
-
-
-
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 def Declare(self, products=None):
     """Create current and declare targets for products.  products
@@ -1203,11 +1218,22 @@ env.InstallEups(env['prefix'] + "/ups",
 
         env = env.Clone(ENV = os.environ)
 
-        obj = env.Install(dest, files)
+        buildFiles = filter(lambda f: re.search(r"\.build$", f), files)
+        build_obj = env.Install(dest, buildFiles)
+        
+        tableFiles = filter(lambda f: re.search(r"\.table$", f), files)
+        table_obj = env.Install(dest, tableFiles)
+
+        miscFiles = filter(lambda f: not re.search(r"\.(build|table)$", f), files)
+        misc_obj = env.Install(dest, miscFiles)
+
+        for i in build_obj:
+            cmd = "eups expandbuild -i --version %s %s" % (env['version'], str(i))
+            env.AddPostAction(i, Action("%s" %(cmd), cmd, ENV = os.environ))
 
         if not svn.isSvnFile('.') or not svn.isTrunk():
-            for i in obj:
-                cmd = "eups_expandtable -i "
+            for i in table_obj:
+                cmd = "eups expandtable -i "
                 if presetup:
                     cmd += presetup + " "
                 cmd += str(i)
@@ -1259,11 +1285,48 @@ def CheckPython(self):
 
     if not self.has_key('CPPPATH'):
         self['CPPPATH'] = []
-    self.Replace(CPPPATH = self['CPPPATH'] + [distutils.sysconfig.get_python_inc()])
 
-    if not self.has_key('LIBPATH'):
-        self['LIBPATH'] = []
-    self.Replace(LIBPATH = self['LIBPATH'] + [distutils.sysconfig.get_python_lib()])
+    cpppath = []
+    for d in (self['CPPPATH'] + distutils.sysconfig.get_python_inc().split()):
+        if not cpppath.count(d):
+            cpppath += [d]
+        
+    self.Replace(CPPPATH = cpppath)
+
+    if self.has_key('LIBPATH'):
+        libpath = self['LIBPATH']
+    else:
+        libpath = []
+    pylibs = []
+
+    dir = distutils.sysconfig.get_config_var("LIBPL")
+    if not libpath.count(dir):
+        libpath += [dir]
+    pylibrary = distutils.sysconfig.get_config_var("LIBRARY")
+    mat = re.search("(python.*)\.(a|so|dylib)$", pylibrary)
+    if mat:
+        pylibs += [mat.group(1)]
+        
+    for w in (" ".join([distutils.sysconfig.get_config_var("MODLIBS"),
+                        distutils.sysconfig.get_config_var("SHLIBS")])).split():
+        mat = re.search(r"^-([Ll])(.*)", w)
+        if mat:
+            lL = mat.group(1)
+            arg = mat.group(2)
+            if lL == "l":
+                if not pylibs.count(arg):
+                    pylibs += [arg]
+            else:
+                if os.path.isdir(arg) and not libpath.count(arg):
+                    libpath += [arg]
+
+    self.Replace(LIBPATH = libpath)
+    try:
+        type(self.libs)
+    except AttributeError:
+        self.libs = {}
+        
+    self.libs["python"] = pylibs
 
 SConsEnvironment.CheckPython = CheckPython
 
@@ -1290,7 +1353,7 @@ def CheckSwig(self, language="python", ilang="C", ignoreWarnings=None,
         raise RuntimeError, "Failed to find swig executable"
 
     if swigdir not in self['ENV']['PATH'].split(os.pathsep):
-        self['ENV']['PATH'] += os.pathsep + swigdir
+        self['ENV']['PATH'] = swigdir + os.pathsep + self['ENV']['PATH']
 
     swigTool = Tool('swig'); swigTool(self)
     self['SWIGFLAGS'] = ""
