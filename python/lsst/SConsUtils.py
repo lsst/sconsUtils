@@ -7,6 +7,7 @@ import re
 import shutil
 from SCons.Script import *              # So that this file has the same namespace as SConstruct/SConscript
 from SCons.Script.SConscript import SConsEnvironment
+SCons.progress_display = SCons.Script.Main.progress_display
 import stat
 import sys
 from types import *
@@ -346,6 +347,17 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
             env['eups_flavor'] = env['PLATFORM'].title()
 
     #
+    # Where to install
+    #
+    prefix = setPrefix(env, versionString, eups_product_path)
+    env['prefix'] = prefix
+    
+    env["libDir"] = "%s/lib" % prefix
+    env["pythonDir"] = "%s/python" % prefix
+
+    if filter(lambda t: t == "install", BUILD_TARGETS):
+        SCons.progress_display("Installing into %s" % (prefix))
+    #
     # Is the C compiler really gcc/g++?
     #
     def IsGcc(context):
@@ -453,7 +465,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                         errors += [str(msg)]
                         success = False
                         
-                if libs:
+                if not env.NoexecFlagIsSet() and libs:
                     conf = env.Clone(LIBPATH = env['LIBPATH'] + [libdir]).Configure()
                     try:
                         libs, lang = libs.split(":")
@@ -470,7 +482,6 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                         else:
                             errors += ["Failed to find/use %s library" % (lib)]
                             success = False
-
 
                     lib = mangleLibraryName(env, libdir, libs[-1])
                         
@@ -544,14 +555,6 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     if os.path.isdir("lib"):
 	env.Append(LIBPATH = Dir("lib"))
     #
-    # Where to install
-    #
-    prefix = setPrefix(env, versionString, eups_product_path)
-    env['prefix'] = prefix
-    
-    env["libDir"] = "%s/lib" % prefix
-    env["pythonDir"] = "%s/python" % prefix
-
     Export('env')
     #
     # env.Glob is an scons >= 0.98 way of asking if a target (will) exist
@@ -672,6 +675,9 @@ def CheckHeaderGuessLanguage(self, incdir, incfiles):
     else:
         raise RuntimeError, "Unknown header file suffix for file %s" % (incfiles[-1])
 
+    if self.NoexecFlagIsSet():
+        return False
+    
     for lang in languages:
         conf = self.Clone(CPPPATH = self['CPPPATH'] + [incdir]).Configure()
         foundHeader = conf.CheckHeader(incfiles, language=lang)
@@ -1082,8 +1088,11 @@ SConsEnvironment.NoexecFlagIsSet = NoexecFlagIsSet
 
 def QuietFlagIsSet(self):
     """Return True iff they're running "scons -Q" """
-    return SCons.Script.Main.options.no_progress
-
+    try:
+        return SCons.Script.Main.options.no_progress
+    except AttributeError:              # probably 0.98 or later
+        return SCons.Script.Main.progress_display.__call__ == SCons.Script.Main.progress_display.dont_print
+    
 SConsEnvironment.QuietFlagIsSet = QuietFlagIsSet
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -1193,18 +1202,16 @@ def CleanTree(files, dir=".", recurse=True, verbose=False):
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def InstallEups(env, dest, files, presetup=""):
+def InstallEups(env, dest, files=[], presetup=""):
     """Install a ups directory, setting absolute versions as appropriate
     (unless you're installing from the trunk, in which case no versions
-    are expanded).
+    are expanded).  Any build/table files present in "./ups" are automatically
+    added to files.
     
     If presetup is provided, it's expected to be a dictionary with keys
     product names and values the version that should be installed into
     the table files, overriding eups expandtable's usual behaviour. E.g.
-env.InstallEups(env['prefix'] + "/ups",
-                glob.glob("ups/*.table"),
-                dict([("sconsUtils", env['version'])])
-                )    
+env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env['version']})
     """
 
     if env.CleanFlagIsSet() and len(filter(lambda t: t == "install", COMMAND_LINE_TARGETS)) > 0:
@@ -1217,6 +1224,11 @@ env.InstallEups(env['prefix'] + "/ups",
         presetup = " ".join(presetupStr)
 
         env = env.Clone(ENV = os.environ)
+        #
+        # Add any build/table files to the desired files
+        #
+        files += glob.glob(os.path.join("ups", "*.build")) + glob.glob(os.path.join("ups","*.table"))
+        files = list(set(files))        # remove duplicates
 
         buildFiles = filter(lambda f: re.search(r"\.build$", f), files)
         build_obj = env.Install(dest, buildFiles)
@@ -1231,14 +1243,13 @@ env.InstallEups(env['prefix'] + "/ups",
             cmd = "eups expandbuild -i --version %s %s" % (env['version'], str(i))
             env.AddPostAction(i, Action("%s" %(cmd), cmd, ENV = os.environ))
 
-        if not svn.isSvnFile('.') or not svn.isTrunk():
-            for i in table_obj:
-                cmd = "eups expandtable -i "
-                if presetup:
-                    cmd += presetup + " "
-                cmd += str(i)
+        for i in table_obj:
+            cmd = "eups expandtable -i "
+            if presetup:
+                cmd += presetup + " "
+            cmd += str(i)
 
-                env.AddPostAction(i, Action("%s" %(cmd), cmd, ENV = os.environ))
+            env.AddPostAction(i, Action("%s" %(cmd), cmd, ENV = os.environ))
 
     return dest
 
