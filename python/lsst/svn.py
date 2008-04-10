@@ -35,12 +35,34 @@ def isTrunk(file="."):
 
     return re.search(r"/trunk($|/)", info["URL"]) != None
 
-def revision(file=".", lastChanged=False):
-    """Return file's Revision as a string"""
+def revision(file=None, lastChanged=False):
+    """Return file's Revision as a string; if file is None return
+    a tuple (oldestRevision, youngestRevision, flags) as reported
+    by svnversion; e.g. (4123, 4168, ("M", "S")) (oldestRevision
+    and youngestRevision may be equal)
+    """
 
-    info = getInfo(file)
+    if file:
+        info = getInfo(file)
+
+        if lastChanged:
+            return info["Last Changed Rev"]
+        else:
+            return info["Revision"]
 
     if lastChanged:
-        return info["Last Changed Rev"]
-    else:
-        return info["Revision"]
+        raise RuntimeError, "lastChanged makes no sense if file is None"
+
+    res = os.popen("svnversion 2>&1").readline()
+
+    if res == "exported\n":
+        raise RuntimeError, "No svn revision information is available"
+
+    mat = re.search(r"^(?P<oldest>\d+)(:(?P<youngest>\d+))?(?P<flags>[MS]*)", res)
+    if mat:
+        matches = mat.groupdict()
+        if not matches["youngest"]:
+            matches["youngest"] = matches["oldest"]
+        return matches["oldest"], matches["youngest"], tuple(matches["flags"])
+
+    raise RuntimeError, ("svnversion returned unexpected result \"%s\"" % res[:-1])

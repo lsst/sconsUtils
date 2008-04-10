@@ -1,4 +1,0 @@
-svn co @SVNROOT@/DMS/devenv/sconsUtils/tags/@VERSION@ @PRODUCT@-@VERSION@ &&
-cd @PRODUCT@-@VERSION@ &&
-setup -r . sconsUtils &&
-scons opt=3 install
