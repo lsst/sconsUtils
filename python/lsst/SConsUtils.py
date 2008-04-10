@@ -185,6 +185,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         BoolOption('debug', 'Set to enable debugging flags', True),
         ('eupsdb', 'Specify which element of EUPS_PATH should be used', None),
         ('flavor', 'Set the build flavor', None),
+        BoolOption('force', 'Set to force possibly dangerous behaviours', False),
         ('optfile', 'Specify a file to read default options from', None),
         ('prefix', 'Specify the install destination', None),
         EnumOption('opt', 'Set the optimisation level', 0, allowed_values=('0', '1', '2', '3')),
@@ -349,13 +350,15 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     #
     # Where to install
     #
+    env.installing = filter(lambda t: t == "install", BUILD_TARGETS)# are we installing?
+
     prefix = setPrefix(env, versionString, eups_product_path)
     env['prefix'] = prefix
     
     env["libDir"] = "%s/lib" % prefix
     env["pythonDir"] = "%s/python" % prefix
 
-    if filter(lambda t: t == "install", BUILD_TARGETS):
+    if env.installing:
         SCons.progress_display("Installing into %s" % (prefix))
     #
     # Is the C compiler really gcc/g++?
@@ -1010,11 +1013,28 @@ def getVersion(env, versionString):
         # SVN.  Guess the tagname from the last part of the directory
         try:
             version = re.search(r"/([^/]+)$", os.path.split(versionString)[0]).group(1)
+
             if version == "trunk":
                 version = "svn"
                 try:                    # cf. #273
-                    revision = svn.revision(lastChanged=True)
-                    version += revision
+                    (oldest, youngest, flags) = svn.revision()
+                    if env.installing:
+                        okVersion = True
+                        if "M" in flags:
+                            print >> sys.stderr, "You are installing, but have unchecked in files"
+                            okVersion = False
+                        if "S" in flags:
+                            print >> sys.stderr, "You are installing, but have switched SVN URLs"
+                            okVersion = False
+                        if oldest != youngest:
+                            print >> sys.stderr, "You have a range of revisions in your tree (%s:%s); adopting %s" %\
+                                  (oldest, youngest, youngest)
+                            okVersion = False
+
+                        if not okVersion and not env['force']:
+                            print >> sys.stderr, "Found problem with svn revision number; specify force=True to proceed"
+                            sys.exit(1)
+                    version += youngest
                 except IOError:
                     pass
         except RuntimeError:
@@ -1214,7 +1234,7 @@ def InstallEups(env, dest, files=[], presetup=""):
 env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env['version']})
     """
 
-    if env.CleanFlagIsSet() and len(filter(lambda t: t == "install", COMMAND_LINE_TARGETS)) > 0:
+    if env.CleanFlagIsSet() and env.installing:
         print >> sys.stderr, "Removing", dest
         shutil.rmtree(dest, ignore_errors=True)
     else:
@@ -1299,7 +1319,7 @@ def CheckPython(self):
 
     cpppath = []
     for d in (self['CPPPATH'] + distutils.sysconfig.get_python_inc().split()):
-        if not cpppath.count(d):
+        if not d in cpppath:
             cpppath += [d]
         
     self.Replace(CPPPATH = cpppath)
@@ -1311,7 +1331,7 @@ def CheckPython(self):
     pylibs = []
 
     dir = distutils.sysconfig.get_config_var("LIBPL")
-    if not libpath.count(dir):
+    if not dir in libpath:
         libpath += [dir]
     pylibrary = distutils.sysconfig.get_config_var("LIBRARY")
     mat = re.search("(python.*)\.(a|so|dylib)$", pylibrary)
@@ -1325,10 +1345,10 @@ def CheckPython(self):
             lL = mat.group(1)
             arg = mat.group(2)
             if lL == "l":
-                if not pylibs.count(arg):
+                if not arg in pylibs:
                     pylibs += [arg]
             else:
-                if os.path.isdir(arg) and not libpath.count(arg):
+                if os.path.isdir(arg) and not arg in libpath:
                     libpath += [arg]
 
     self.Replace(LIBPATH = libpath)
@@ -1492,7 +1512,7 @@ def InstallDir(self, prefix, dir, ignoreRegexp = r"(~$|\.pyc$|\.os?$)", recursiv
     Unless force is true, this routine won't do anything unless you specified an "install" target
     """
 
-    if len(filter(lambda t: t == "install", COMMAND_LINE_TARGETS)) == 0:
+    if not self.installing:
         return
 
     targets = []
