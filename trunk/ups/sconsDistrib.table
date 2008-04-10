@@ -1,0 +1,3 @@
+envAppend(PATH, ${PRODUCT_DIR}/bin)
+envAppend(MANPATH, ${PRODUCT_DIR}/man)
+envAppend(PYTHONPATH, ${PRODUCT_DIR}/lib/scons)
