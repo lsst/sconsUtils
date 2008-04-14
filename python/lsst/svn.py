@@ -53,7 +53,7 @@ def revision(file=None, lastChanged=False):
     if lastChanged:
         raise RuntimeError, "lastChanged makes no sense if file is None"
 
-    res = os.popen("svnversion 2>&1").readline()
+    res = os.popen("svnversion . 2>&1").readline()
 
     if res == "exported\n":
         raise RuntimeError, "No svn revision information is available"
