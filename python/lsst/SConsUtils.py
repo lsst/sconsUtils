@@ -1032,7 +1032,7 @@ def getVersion(env, versionString):
                             okVersion = False
 
                         if not okVersion and not env['force']:
-                            print >> sys.stderr, "Found problem with svn revision number; specify force=True to proceed"
+                            print >> sys.stderr, "Found problem with svn revision number; update or specify force=True to proceed"
                             sys.exit(1)
                     version += youngest
                 except IOError:
