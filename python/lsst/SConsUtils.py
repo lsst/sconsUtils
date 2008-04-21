@@ -369,7 +369,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         context.Result(result)
         return result
 
-    if env.CleanFlagIsSet():
+    if env.GetOption("clean"):
         isGcc = False                   # who cares? We're cleaning, not building
     else:
         conf = Configure(env, custom_tests = {'IsGcc' : IsGcc})
@@ -388,8 +388,8 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     #
     # Is C++'s TR1 available?  If not, use e.g. #include "lsst/tr1/foo.h"
     #
-    if not env.CleanFlagIsSet():
-        if not env.NoexecFlagIsSet():
+    if not env.GetOption("clean"):
+        if not env.GetOption("no_exec"):
             conf = env.Configure()
             env.Append(CCFLAGS = '-DLSST_HAVE_TR1=%d' % int(conf.CheckHeader("tr1/unordered_map", language="C++")))
             conf.Finish()
@@ -421,7 +421,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
 
     env['CPPPATH'] = []
     env['LIBPATH'] = []
-    if not env.CleanFlagIsSet() and not env.HelpFlagIsSet() and dependencies:
+    if not env.GetOption("clean") and not env.GetOption("help") and dependencies:
         for productProps in dependencies:
             while len(productProps) < 4:     # allow the user to omit values
                 productProps += [""]
@@ -468,7 +468,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                         errors += [str(msg)]
                         success = False
                         
-                if not env.NoexecFlagIsSet() and libs:
+                if not env.GetOption("no_exec") and libs:
                     conf = env.Clone(LIBPATH = env['LIBPATH'] + [libdir]).Configure()
                     try:
                         libs, lang = libs.split(":")
@@ -678,7 +678,7 @@ def CheckHeaderGuessLanguage(self, incdir, incfiles):
     else:
         raise RuntimeError, "Unknown header file suffix for file %s" % (incfiles[-1])
 
-    if self.NoexecFlagIsSet():
+    if self.GetOption("no_exec"):
         return False
     
     for lang in languages:
@@ -1078,40 +1078,34 @@ def setPrefix(env, versionString, eups_product_path=None):
     return prefix
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-
+#
+# Don't use these in new code --- they date from before RHL learnt about GetOption()
+#
 def CleanFlagIsSet(self):
     """Return True iff they're running "scons --clean" """
-    try:
-        return SCons.Script.Main.options.clean
-    except AttributeError:              # probably 0.98 or later
-        return SCons.SConf.build_type == "clean"
+
+    return self.GetOption("clean")
 
 SConsEnvironment.CleanFlagIsSet = CleanFlagIsSet
 
 def HelpFlagIsSet(self):
     """Return True iff they're running "scons --help" """
-    try:
-        return SCons.Script.Main.options.help_msg
-    except AttributeError:              # probably 0.98 or later
-        return SCons.SConf.build_type == "help"
+
+    return self.GetOption("help")
 
 SConsEnvironment.HelpFlagIsSet = HelpFlagIsSet
 
 def NoexecFlagIsSet(self):
     """Return True iff they're running "scons -n" """
-    try:
-        return SCons.Script.Main.options.noexec
-    except AttributeError:              # probably 0.98 or later
-        return SCons.SConf.dryrun
+
+    return self.GetOption("no_exec")
 
 SConsEnvironment.NoexecFlagIsSet = NoexecFlagIsSet
 
 def QuietFlagIsSet(self):
     """Return True iff they're running "scons -Q" """
-    try:
-        return SCons.Script.Main.options.no_progress
-    except AttributeError:              # probably 0.98 or later
-        return SCons.Script.Main.progress_display.__call__ == SCons.Script.Main.progress_display.dont_print
+
+    return self.GetOption("silent")
     
 SConsEnvironment.QuietFlagIsSet = QuietFlagIsSet
 
@@ -1151,11 +1145,11 @@ def Declare(self, products=None):
             if "EUPS_DIR" in os.environ.keys():
                 self['ENV']['PATH'] += os.pathsep + "%s/bin" % (os.environ["EUPS_DIR"])
 
-                if "undeclare" in COMMAND_LINE_TARGETS or self.CleanFlagIsSet():
+                if "undeclare" in COMMAND_LINE_TARGETS or self.GetOption("clean"):
                     if version:
                         command = "eups undeclare --flavor %s %s %s" % \
                                   (self['eups_flavor'], product, version)
-                        if self.CleanFlagIsSet():
+                        if self.GetOption("clean"):
                             self.Execute(command)
                         else:
                             undeclare += [command]
@@ -1195,7 +1189,7 @@ def CleanTree(files, dir=".", recurse=True, verbose=False):
     verbose is True, print each filename after deleting it
     """
     
-    if CleanFlagIsSet(None) :
+    if GetOption("clean") :
 	files_expr = ""
 	for file in Split(files):
 	    if files_expr:
@@ -1234,7 +1228,7 @@ def InstallEups(env, dest, files=[], presetup=""):
 env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env['version']})
     """
 
-    if env.CleanFlagIsSet() and env.installing:
+    if env.GetOption("clean") and env.installing:
         print >> sys.stderr, "Removing", dest
         shutil.rmtree(dest, ignore_errors=True)
     else:
