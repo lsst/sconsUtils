@@ -1227,7 +1227,7 @@ def CleanTree(files, dir=".", recurse=True, verbose=False):
     #
     if "clean" in COMMAND_LINE_TARGETS:
         Command("clean", "", action=action)
-    elif not COMMAND_LINE_TARGETS:
+    elif not COMMAND_LINE_TARGETS and GetOption("clean"):
         Execute(Action([action]))
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
