@@ -1119,9 +1119,13 @@ def Declare(self, products=None):
     
     We'll add Declare to class Environment"""
 
+    if "undeclare" in COMMAND_LINE_TARGETS and not self.GetOption("silent"):
+        print >> sys.stderr, "'scons undeclare' is deprecated; please use 'scons declare -c' instead"
+
     if \
            "declare" in COMMAND_LINE_TARGETS or \
            "undeclare" in COMMAND_LINE_TARGETS or \
+           ("install" in COMMAND_LINE_TARGETS and self.GetOption("clean")) or \
            "current" in COMMAND_LINE_TARGETS:
         current = []; declare = []; undeclare = []
 
@@ -1149,6 +1153,9 @@ def Declare(self, products=None):
                     if version:
                         command = "eups undeclare --flavor %s %s %s" % \
                                   (self['eups_flavor'], product, version)
+                        if "current" in COMMAND_LINE_TARGETS and not "declare" in COMMAND_LINE_TARGETS:
+                            command += " --current"
+                            
                         if self.GetOption("clean"):
                             self.Execute(command)
                         else:
@@ -1171,7 +1178,10 @@ def Declare(self, products=None):
         if current:
             self.Command("current", "", action=current)
         if declare:
-            self.Command("declare", "", action=declare)
+            if "current" in COMMAND_LINE_TARGETS:
+                self.Command("declare", "", action="") # current will declare it for us
+            else:
+                self.Command("declare", "", action=declare)
         if undeclare:
             self.Command("undeclare", "", action=undeclare)
                 
@@ -1181,38 +1191,44 @@ SConsEnvironment.Declare = Declare
 
 def CleanTree(files, dir=".", recurse=True, verbose=False):
     """Remove files matching the argument list starting at dir
-    when scons is invoked with -c/--clean
+    when scons is invoked with -c/--clean and no explicit targets are listed
     
     E.g. CleanTree(r"*~ core")
 
     If recurse is True, recursively descend the file system; if
     verbose is True, print each filename after deleting it
     """
-    
-    if GetOption("clean") :
-	files_expr = ""
-	for file in Split(files):
-	    if files_expr:
-		files_expr += " -o "
+    #
+    # Generate command that we may want to execute
+    #
+    files_expr = ""
+    for file in Split(files):
+        if files_expr:
+            files_expr += " -o "
 
-            files_expr += "-name %s" % re.sub(r"(^|[^\\])([[*])", r"\1\\\2",file) # quote unquoted * and []
-	#
-	# don't use xargs --- who knows what needs quoting?
-	#
-	action = "find %s" % dir
-        action += r" \( -name .sconf_temp -prune -o -name .svn -prune -o -name \* \) "
-	if not recurse:
-	    action += " ! -name . -prune"
+        files_expr += "-name %s" % re.sub(r"(^|[^\\])([[*])", r"\1\\\2",file) # quote unquoted * and []
+    #
+    # don't use xargs --- who knows what needs quoting?
+    #
+    action = "find %s" % dir
+    action += r" \( -name .sconf_temp -prune -o -name .svn -prune -o -name \* \) "
+    if not recurse:
+        action += " ! -name . -prune"
 
-	file_action = "rm -f"
+    file_action = "rm -f"
 
-	action += r" \( %s \) -exec %s {} \;" % \
-	    (files_expr, file_action)
-	
-	if verbose:
-	    action += " -print"
-	
-	Execute(Action([action]))
+    action += r" \( %s \) -exec %s {} \;" % \
+        (files_expr, file_action)
+
+    if verbose:
+        action += " -print"
+    #
+    # Do we actually want to clean up?  We don't if the command is e.g. "scons -c install"
+    #
+    if "clean" in COMMAND_LINE_TARGETS:
+        Command("clean", "", action=action)
+    elif not COMMAND_LINE_TARGETS:
+        Execute(Action([action]))
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -1254,10 +1270,14 @@ env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env
         misc_obj = env.Install(dest, miscFiles)
 
         for i in build_obj:
+            env.AlwaysBuild(i)
+
             cmd = "eups expandbuild -i --version %s %s" % (env['version'], str(i))
             env.AddPostAction(i, Action("%s" %(cmd), cmd, ENV = os.environ))
 
         for i in table_obj:
+            env.AlwaysBuild(i)
+
             cmd = "eups expandtable -i "
             if presetup:
                 cmd += presetup + " "
@@ -1527,3 +1547,22 @@ def InstallDir(self, prefix, dir, ignoreRegexp = r"(~$|\.pyc$|\.os?$)", recursiv
     return targets
 
 SConsEnvironment.InstallDir = InstallDir
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def InstallLSST(self, prefix, dirs):
+    """Install directories in the usual LSST way, handling "doc" and "ups" specially"""
+    
+    for d in dirs:
+        if d == "doc":
+            t = self.InstallAs(os.path.join(prefix, "doc", "doxygen"), os.path.join("doc", "htmlDir"))
+        elif d == "ups":
+            t = self.InstallEups(os.path.join(prefix, "ups"))
+        else:
+            t = self.InstallDir(prefix, d)
+
+        self.Alias("install", t)
+            
+    self.Clean("install", prefix)
+
+SConsEnvironment.InstallLSST = InstallLSST
