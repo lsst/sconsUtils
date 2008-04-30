@@ -386,6 +386,15 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         env.Append(CCFLAGS = '-pg')
         env.Append(LINKFLAGS = '-pg')
     #
+    # scons 0.97 doesn't support these. Sigh
+    #
+    try:
+        env.GetOption("silent")
+    except SCons.Errors.UserError:      # 0.97
+        SCons.Script.Main.ssoptions.settable["no_exec"] = SCons.Script.Main.options.noexec
+        SCons.Script.Main.ssoptions.settable["help"] = SCons.Script.Main.options.help_msg
+        SCons.Script.Main.ssoptions.settable["silent"] = SCons.Script.Main.options.no_progress
+    #
     # Is C++'s TR1 available?  If not, use e.g. #include "lsst/tr1/foo.h"
     #
     if not env.GetOption("clean"):
