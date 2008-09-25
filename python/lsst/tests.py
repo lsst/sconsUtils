@@ -104,6 +104,9 @@ tests = lsst.tests.Control(env,
                    "false", "failed"
 
     def run(self, fileGlob):
+        if not isinstance(fileGlob, str): # env.Glob() returns an instance, but isinstance(fileGlob, 'instance') fails
+            fileGlob = str(fileGlob)
+
         targets = []
         if not self.runExamples:
             return targets
@@ -142,7 +145,7 @@ tests = lsst.tests.Control(env,
             expandedArgs = " ".join(args)
             self._env.Command(target, f, """
             @rm -f ${TARGET}.failed;
-            @echo -n 'running ${SOURCES}... ';
+            @printf "%%s" 'running ${SOURCES}... ';
             @echo $SOURCES %s > $TARGET; echo >> $TARGET;
             @if %s $SOURCES %s >> $TARGET 2>&1; then \
                if ! %s; then mv $TARGET ${TARGET}.failed; fi; \
