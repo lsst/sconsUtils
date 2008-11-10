@@ -4,7 +4,7 @@
 # If ever we want to do anything clever, we should use one of
 # the supported svn/python packages
 #
-import os, re
+import os, re, sys
 
 def isSvnFile(file):
     """Is file under svn control?"""
@@ -66,3 +66,63 @@ def revision(file=None, lastChanged=False):
         return matches["oldest"], matches["youngest"], tuple(matches["flags"])
 
     raise RuntimeError, ("svnversion returned unexpected result \"%s\"" % res[:-1])
+
+#
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+#
+def guessVersionName(HeadURL):
+    """Guess a version name given a HeadURL"""
+
+    if re.search(r"/trunk$", HeadURL):
+        versionName = ""
+    elif re.search(r"/tickets/(\d+)$", HeadURL):
+        versionName = "ticket%s+" % re.search(r"/tickets/(\d+)$", HeadURL).group(1)
+    elif re.search(r"/branches/(.+)$", HeadURL):
+        versionName = "branch%s+" % re.search(r"/branches/(.+)$", HeadURL).group(1).capitalize()
+    else:
+        print >> sys.stderr, "Unable to guess versionName name from %s" % HeadURL
+        versionName = "unknown+"
+
+    try:                    # Try to lookup the svn versionName
+        (oldest, youngest, flags) = revision()
+
+        okVersion = True
+        if "M" in flags:
+            msg = "You are installing, but have unchecked in files"
+            okVersion = False
+        if "S" in flags:
+            msg = "You are installing, but have switched SVN URLs"
+            okVersion = False
+        if oldest != youngest:
+            msg = "You have a range of revisions in your tree (%s:%s); adopting %s" % \
+                  (oldest, youngest, youngest)
+            okVersion = False
+
+        if not okVersion:
+            raise RuntimeError, ("Problem with determining svn revision: %s" % msg)
+
+        versionName += "svn" + youngest
+    except IOError:
+        return "unknown"
+
+    return versionName
+
+def parseVersionName(versionName):
+    """A callback that knows about the LSST concention that a tagname such as
+       ticket_374
+   means the top of ticket 374, and
+      ticket_374+svn6021
+   means revision 6021 on ticket 374.  You may replace "ticket" with "branch" if you wish"""
+
+    RE = r"/(branch|ticket)_(\d+)(?:\+svn(\d+))?$"
+    mat = re.search(RE, versionName)
+    if mat:
+        type = mat.group(1)
+        ticket = mat.group(2)
+        revision = mat.group(3)
+
+        return (type, ticket, revision)
+
+    return (None, None, None)
+
+                                 
