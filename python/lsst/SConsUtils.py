@@ -240,7 +240,9 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     # Add all EUPS directories
     for k in filter(lambda x: re.search(r"_DIR$", x), os.environ.keys()):
         p = re.search(r"^(.*)_DIR$", k).groups()[0]
-        if os.environ.has_key("SETUP_" + p):
+        varname = eups.Product(None, p, noInit=True).envarSetupName()
+        if os.environ.has_key(varname):
+            ourEnv[varname] = os.environ[varname]
             ourEnv[k] = os.environ[k]
 
     env = Environment(ENV = ourEnv, options = opts,
@@ -1020,34 +1022,18 @@ def getVersion(env, versionString):
             version = "cvs"
     elif re.search(r"^[$]HeadURL:\s+", versionString):
         # SVN.  Guess the tagname from the last part of the directory
-        try:
-            version = re.search(r"/([^/]+)$", os.path.split(versionString)[0]).group(1)
-
-            if version == "trunk":
-                version = "svn"
-                try:                    # cf. #273
-                    (oldest, youngest, flags) = svn.revision()
-                    if env.installing:
-                        okVersion = True
-                        if "M" in flags:
-                            print >> sys.stderr, "You are installing, but have unchecked in files"
-                            okVersion = False
-                        if "S" in flags:
-                            print >> sys.stderr, "You are installing, but have switched SVN URLs"
-                            okVersion = False
-                        if oldest != youngest:
-                            print >> sys.stderr, "You have a range of revisions in your tree (%s:%s); adopting %s" %\
-                                  (oldest, youngest, youngest)
-                            okVersion = False
-
-                        if not okVersion and not env['force']:
-                            print >> sys.stderr, "Found problem with svn revision number; update or specify force=True to proceed"
-                            sys.exit(1)
-                    version += youngest
-                except IOError:
-                    pass
-        except RuntimeError:
-            pass
+        HeadURL = re.search(r"^[$]HeadURL:\s+(.*)", versionString).group(1)
+        HeadURL = os.path.split(HeadURL)[0]
+        if env.installing:
+            try:
+                version = svn.guessVersionName(HeadURL)
+            except RuntimeError, e:
+                if env['force']:
+                    version = "unknown"
+                else:
+                    print >> sys.stderr, \
+                          "%s\nFound problem with svn revision number; update or specify force=True to proceed" %e
+                    sys.exit(1)
 
     env["version"] = version
     return version
@@ -1434,7 +1420,11 @@ def CheckSwig(self, language="python", ilang="C", ignoreWarnings=None,
     # Also search the python directories of any products in includedProducts
     #
     for p in Split(includedProducts):
-        self['SWIGFLAGS'] += " -I%s" % os.path.join(ProductDir(p), "python")
+        pd = ProductDir(p)
+        if pd:
+            self['SWIGFLAGS'] += " -I%s" % os.path.join(pd, "python")
+        else:
+            print >> sys.stderr, "Product %s is not setup" % p
         
 SConsEnvironment.CheckSwig = CheckSwig
 
