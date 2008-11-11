@@ -76,9 +76,9 @@ def guessVersionName(HeadURL):
     if re.search(r"/trunk$", HeadURL):
         versionName = ""
     elif re.search(r"/tickets/(\d+)$", HeadURL):
-        versionName = "ticket%s+" % re.search(r"/tickets/(\d+)$", HeadURL).group(1)
+        versionName = "ticket_%s+" % re.search(r"/tickets/(\d+)$", HeadURL).group(1)
     elif re.search(r"/branches/(.+)$", HeadURL):
-        versionName = "branch%s+" % re.search(r"/branches/(.+)$", HeadURL).group(1).capitalize()
+        versionName = "branch_%s+" % re.search(r"/branches/(.+)$", HeadURL).group(1)
     else:
         print >> sys.stderr, "Unable to guess versionName name from %s" % HeadURL
         versionName = "unknown+"
