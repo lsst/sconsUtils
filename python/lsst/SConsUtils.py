@@ -1239,7 +1239,10 @@ def InstallEups(env, dest, files=[], presetup=""):
 env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env['version']})
     """
 
-    if env.GetOption("clean") and env.installing:
+    if not env.installing:
+        return
+
+    if env.GetOption("clean"):
         print >> sys.stderr, "Removing", dest
         shutil.rmtree(dest, ignore_errors=True)
     else:
