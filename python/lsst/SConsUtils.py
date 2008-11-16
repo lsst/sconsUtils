@@ -1206,7 +1206,7 @@ def CleanTree(files, dir=".", recurse=True, verbose=False):
     # don't use xargs --- who knows what needs quoting?
     #
     action = "find %s" % dir
-    action += r" \( -name .sconf_temp -prune -o -name .svn -prune -o -name \* \) "
+    action += r" \( -name .svn -prune -o -name \* \) "
     if not recurse:
         action += " ! -name . -prune"
 
