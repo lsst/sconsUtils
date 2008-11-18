@@ -77,7 +77,7 @@ def guessVersionName(HeadURL):
         versionName = ""
     elif re.search(r"/branches/(.+)$", HeadURL):
         versionName = "branch_%s+" % re.search(r"/branches/(.+)$", HeadURL).group(1)
-    elif re.search(r"/tags/(\d+(\.\d+)*)$", HeadURL):
+    elif re.search(r"/tags/(\d+(\.\d+)*)([-+][_a-zA-Z0-9]+)$", HeadURL):
         versionName = "%s" % re.search(r"/tags/(.*)$", HeadURL).group(1)
 
         return versionName              # no need for a "+svnXXXX"
@@ -112,21 +112,25 @@ def guessVersionName(HeadURL):
     return versionName
 
 def parseVersionName(versionName):
-    """A callback that knows about the LSST concention that a tagname such as
+    """A callback that knows about the LSST convention that a tagname such as
        ticket_374
    means the top of ticket 374, and
       ticket_374+svn6021
-   means revision 6021 on ticket 374.  You may replace "ticket" with "branch" if you wish"""
+   means revision 6021 on ticket 374.  You may replace "ticket" with "branch" if you wish
 
-    RE = r"/(branch|ticket)_(\d+)(?:\+svn(\d+))?$"
-    mat = re.search(RE, versionName)
+   The "versionName" may actually be the directory part of a URL, and ".../tags/tagname" is
+   also supported
+   """
+
+    mat = re.search(r"/(tag)s/(\d+(?:\.\d+)*)(?:([-+])((svn)?(\d+)))?$", versionName)
+    if not mat:
+        mat = re.search(r"/(branch|ticket)_(\d+)(?:([-+])svn(\d+))?$", versionName)
     if mat:
         type = mat.group(1)
         ticket = mat.group(2)
-        revision = mat.group(3)
+        pm = mat.group(3)               # + or -
+        revision = re.sub("^svn", "", mat.group(4))
 
-        return (type, ticket, revision)
+        return (type, ticket, revision, pm)
 
-    return (None, None, None)
-
-                                 
+    return (None, None, None, None)
