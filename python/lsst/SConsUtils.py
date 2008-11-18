@@ -1218,6 +1218,10 @@ def CleanTree(files, dir=".", recurse=True, verbose=False):
     if verbose:
         action += " -print"
     #
+    # Clean up scons files --- users want to be able to say scons -c and get a clean copy
+    #
+    action += " ; rm -rf .sconf_temp .sconsign.dblite"
+    #
     # Do we actually want to clean up?  We don't if the command is e.g. "scons -c install"
     #
     if "clean" in COMMAND_LINE_TARGETS:
