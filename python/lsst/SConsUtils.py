@@ -353,6 +353,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     # Where to install
     #
     env.installing = filter(lambda t: t == "install", BUILD_TARGETS)# are we installing?
+    env.declaring = filter(lambda t: t == "declare" or t == "current", BUILD_TARGETS)# are we declaring?
 
     prefix = setPrefix(env, versionString, eups_product_path)
     env['prefix'] = prefix
@@ -1024,7 +1025,7 @@ def getVersion(env, versionString):
         # SVN.  Guess the tagname from the last part of the directory
         HeadURL = re.search(r"^[$]HeadURL:\s+(.*)", versionString).group(1)
         HeadURL = os.path.split(HeadURL)[0]
-        if env.installing:
+        if env.installing or env.declaring:
             try:
                 version = svn.guessVersionName(HeadURL)
             except RuntimeError, e:
