@@ -77,7 +77,7 @@ def guessVersionName(HeadURL):
         versionName = ""
     elif re.search(r"/branches/(.+)$", HeadURL):
         versionName = "branch_%s+" % re.search(r"/branches/(.+)$", HeadURL).group(1)
-    elif re.search(r"/tags/(\d+(\.\d+)*)([-+][_a-zA-Z0-9]+)$", HeadURL):
+    elif re.search(r"/tags/(\d+(\.\d+)*)([-+][_a-zA-Z0-9]+)?$", HeadURL):
         versionName = "%s" % re.search(r"/tags/(.*)$", HeadURL).group(1)
 
         return versionName              # no need for a "+svnXXXX"
