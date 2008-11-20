@@ -1,2 +1,2 @@
->merge: sconsDistrib
->self
+>merge pkg=scons
+
