@@ -1281,7 +1281,7 @@ env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env
         for i in table_obj:
             env.AlwaysBuild(i)
 
-            cmd = "eups expandtable -i "
+            cmd = "eups expandtable -i -W '^(?!LOCAL:)' " # version doesn't start "LOCAL:"
             if presetup:
                 cmd += presetup + " "
             cmd += str(i)
