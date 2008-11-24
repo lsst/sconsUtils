@@ -129,7 +129,9 @@ def parseVersionName(versionName):
         type = mat.group(1)
         ticket = mat.group(2)
         pm = mat.group(3)               # + or -
-        revision = re.sub("^svn", "", mat.group(4))
+        revision = mat.group(4)
+        if revision:
+            revision = re.sub("^svn", "", revision)
 
         return (type, ticket, revision, pm)
 
