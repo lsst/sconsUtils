@@ -331,7 +331,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     #
     if env['setenv']:
         for key in ARGUMENTS.keys():
-            env[key] = [ARGUMENTS[key]]
+            env[key] = [Split(ARGUMENTS[key])]
     else:
         for key in ARGUMENTS.keys():
             errorStr += " %s=%s" % (key, ARGUMENTS[key])
