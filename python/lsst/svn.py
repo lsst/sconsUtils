@@ -58,11 +58,20 @@ def revision(file=None, lastChanged=False):
     if res == "exported\n":
         raise RuntimeError, "No svn revision information is available"
 
-    mat = re.search(r"^(?P<oldest>\d+)(:(?P<youngest>\d+))?(?P<flags>[MS]*)", res)
+    versionRe = r"^(?P<oldest>\d+)(:(?P<youngest>\d+))?(?P<flags>[MS]*)"
+    mat = re.search(versionRe, res)
     if mat:
         matches = mat.groupdict()
         if not matches["youngest"]:
             matches["youngest"] = matches["oldest"]
+            # OK, we have only one revision present.  Find the newest revision
+            # that actually changed anything in this product and ignore "oldest" (#522)
+            res = os.popen("svnversion --committed . 2>&1").readline()
+            mat = re.search(versionRe, res)
+            if mat:
+                matches = mat.groupdict()
+                return matches["youngest"], matches["youngest"], tuple(matches["flags"])
+            
         return matches["oldest"], matches["youngest"], tuple(matches["flags"])
 
     raise RuntimeError, ("svnversion returned unexpected result \"%s\"" % res[:-1])
