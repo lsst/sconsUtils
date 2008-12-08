@@ -372,9 +372,9 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         context.Result(result)
         return result
 
-    if env.GetOption("clean"):
-        isGcc = False                   # who cares? We're cleaning, not building
-    elif not env.GetOption("no_exec"):
+    if env.GetOption("clean") or env.GetOption("no_exec"):
+        isGcc = False                   # who cares? We're cleaning/not execing, not building
+    else:
         conf = Configure(env, custom_tests = {'IsGcc' : IsGcc})
         isGcc = conf.IsGcc()
         conf.Finish()
