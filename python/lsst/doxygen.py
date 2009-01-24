@@ -127,6 +127,15 @@ def DoxySourceScan(node, env, path):
    #
    conf_dir = os.path.dirname(str(node))
 
+   exclude_paths = []
+   for node in data.get("EXCLUDE", []):
+      if not os.path.isabs(node):
+         node = os.path.normpath(os.path.join(conf_dir, node))
+      exclude_paths.append(node)
+
+   def fnprefix(filename, path):
+      return os.path.normpath(filename).startswith(path)
+
    for node in data.get("INPUT", []):
       if not os.path.isabs(node):
          node = os.path.join(conf_dir, node)
@@ -140,9 +149,10 @@ def DoxySourceScan(node, env, path):
                   filename = os.path.join(root, f)
 
                   pattern_check = reduce(lambda x, y: x or bool(fnmatch(filename, y)), file_patterns, False)
-                  exclude_check = reduce(lambda x, y: x and fnmatch(filename, y), exclude_patterns, True)
+                  exclude_check = reduce(lambda x, y: x or bool(fnmatch(filename, y)), exclude_patterns, False)
+                  exclude_path_check = reduce(lambda x, y: x or fnprefix(filename, y), exclude_paths, False)
 
-                  if pattern_check and not exclude_check:
+                  if pattern_check and not exclude_check and not exclude_path_check:
                      sources.append(filename)
          else:
             for pattern in file_patterns:
