@@ -71,6 +71,12 @@ tests = lsst.tests.Control(env,
 
         if not self.runExamples:
             print >> sys.stderr, "Not running examples; \"chmod 755 %s\" to run them again" % self._tmpDir
+        self._grouperNode = File(os.path.join(self._tmpDir, ".grouper"))
+        env.Command(self._grouperNode, [], "@touch $TARGET")
+        # Try to avoid doxygen launching in the midst of unit tests (make grouper depend on top-level doc dir)
+        doc = Entry("#doc")
+        if os.path.exists(str(doc)):
+            self._env.Depends(self._grouperNode, doc)
 
     def args(self, test):
         try:
@@ -143,7 +149,8 @@ tests = lsst.tests.Control(env,
             (should_pass, passedMsg, should_fail, failedMsg) = self.messages(f)
 
             expandedArgs = " ".join(args)
-            self._env.Command(target, f, """
+            fnode = Entry(f)
+            self._env.Command(target, fnode, """
             @rm -f ${TARGET}.failed;
             @printf "%%s" 'running ${SOURCES}... ';
             @echo $SOURCES %s > $TARGET; echo >> $TARGET;
@@ -157,7 +164,7 @@ tests = lsst.tests.Control(env,
             """ % (expandedArgs, interpreter, expandedArgs, should_pass, passedMsg, should_fail, failedMsg))
 
             self._env.Alias(os.path.basename(target), target)
+            self._env.Depends(target, self._grouperNode)
+            self._env.Depends(self._grouperNode, fnode)
 
-            self._env.Clean(target, self._tmpDir)
-        
         return targets
