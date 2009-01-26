@@ -122,20 +122,22 @@ def guessVersionName(HeadURL):
 
 def parseVersionName(versionName):
     """A callback that knows about the LSST convention that a tagname such as
-       ticket_374
-   means the top of ticket 374, and
-      ticket_374+svn6021
-   means revision 6021 on ticket 374.  You may replace "ticket" with "branch" if you wish
+    ticket_374
+    means the top of ticket 374, and
+    ticket_374+svn6021
+    means revision 6021 on ticket 374.  You may replace "ticket" with "branch" if you wish
+    
+    The "versionName" may actually be the directory part of a URL, and ".../(branches|tags|tickets)/tagname"
+    is also supported
+    """
 
-   The "versionName" may actually be the directory part of a URL, and ".../tags/tagname" is
-   also supported
-   """
-
-    mat = re.search(r"/(tag)s/(\d+(?:\.\d+)*)(?:([-+])((svn)?(\d+)))?$", versionName)
+    mat = re.search(r"/(branche|tag|ticket)s/(\d+(?:\.\d+)*)(?:([-+])((svn)?(\d+)))?$", versionName)
     if not mat:
         mat = re.search(r"/(branch|ticket)_(\d+)(?:([-+])svn(\d+))?$", versionName)
     if mat:
         type = mat.group(1)
+        if type == "branches":
+            type = "branch"
         ticket = mat.group(2)
         pm = mat.group(3)               # + or -
         revision = mat.group(4)
