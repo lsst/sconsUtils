@@ -73,10 +73,13 @@ tests = lsst.tests.Control(env,
             print >> sys.stderr, "Not running examples; \"chmod 755 %s\" to run them again" % self._tmpDir
         self._grouperNode = File(os.path.join(self._tmpDir, ".grouper"))
         env.Command(self._grouperNode, [], "@touch $TARGET")
-        # Try to avoid doxygen launching in the midst of unit tests (make grouper depend on top-level doc dir)
-        doc = Entry("#doc")
-        if os.path.exists(str(doc)):
-            self._env.Depends(self._grouperNode, doc)
+        # One can avoid doxygen launching in the middle of unit testing with the code below.
+        # Unfortunately, this can result in dependency cycles when the doxyfile scanner
+        # picks up test/example code (in particular, when the top-level tests/examples
+        # directories aren't EXCLUDEed). The code is left commented out for now.
+        #doc = Entry("#doc")
+        #if os.path.exists(str(doc)):
+        #    self._env.Depends(self._grouperNode, doc)
 
     def args(self, test):
         try:
