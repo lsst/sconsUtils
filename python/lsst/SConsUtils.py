@@ -809,7 +809,7 @@ def mangleLibraryName(env, libdir, lib):
     elif len(blibs) == 1: # only one choice
         lib = blibs.values()[0].libname
     else:           # more than one choice
-        if env['debug']:
+        if env['debug'] and filter(lambda key: blibs[key].debug_code, blibs.keys()):
             for blib in blibs:
                 if not blibs[blib].debug_code:
                     del blibs[blib]
