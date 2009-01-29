@@ -285,7 +285,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     # Process those arguments
     #
     if env['debug']:
-        env.Append(CCFLAGS = '-g')
+        env.Append(CCFLAGS = ['-g'])
 
     eups_path = None
     try:
@@ -331,7 +331,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     #
     if env['setenv']:
         for key in ARGUMENTS.keys():
-            env[key] = [Split(ARGUMENTS[key])]
+            env[key] = Split(ARGUMENTS[key])
     else:
         for key in ARGUMENTS.keys():
             errorStr += " %s=%s" % (key, ARGUMENTS[key])
@@ -368,11 +368,11 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     #
     def IsGcc(context):
         context.Message("Checking if  CC is really gcc...")
-        result = context.TryAction(["%s --help | grep gcc" % env['CC']])[0]
+        result = context.TryAction(["$CC --help | grep gcc"])[0]
         context.Result(result)
         return result
 
-    if env.GetOption("clean") or env.GetOption("no_exec"):
+    if env.GetOption("clean") or env.GetOption("no_exec") or env.GetOption("help") :
         isGcc = False                   # who cares? We're cleaning/not execing, not building
     else:
         conf = Configure(env, custom_tests = {'IsGcc' : IsGcc})
@@ -382,12 +382,12 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     # Compiler flags; CCFLAGS => C and C++
     #
     if isGcc:
-        env.Append(CCFLAGS = '-Wall')
+        env.Append(CCFLAGS = ['-Wall'])
     if env['opt']:
-        env.Append(CCFLAGS = '-O%d' % int(env['opt']))
+        env.Append(CCFLAGS = ['-O%d' % int(env['opt'])])
     if env['profile'] == '1' or env['profile'] == "pg":
-        env.Append(CCFLAGS = '-pg')
-        env.Append(LINKFLAGS = '-pg')
+        env.Append(CCFLAGS = ['-pg'])
+        env.Append(LINKFLAGS = ['-pg'])
     #
     # scons 0.97 doesn't support these. Sigh
     #
@@ -400,17 +400,17 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     #
     # Is C++'s TR1 available?  If not, use e.g. #include "lsst/tr1/foo.h"
     #
-    if not env.GetOption("clean"):
+    if not (env.GetOption("clean") or env.GetOption("help")):
         if not env.GetOption("no_exec"):
             conf = env.Configure()
-            env.Append(CCFLAGS = '-DLSST_HAVE_TR1=%d' % int(conf.CheckHeader("tr1/unordered_map", language="C++")))
+            env.Append(CCFLAGS = ['-DLSST_HAVE_TR1=%d' % int(conf.CheckHeader("tr1/unordered_map", language="C++"))])
             conf.Finish()
     #
     # Byte order
     #
     import socket
     if socket.htons(1) != 1:
-        env.Append(CCFLAGS = '-DLSST_LITTLE_ENDIAN=1')
+        env.Append(CCFLAGS = ['-DLSST_LITTLE_ENDIAN=1'])
     #
     # Check for dependencies in swig input files
     #
@@ -420,8 +420,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     # shareable libraries we need to do something special.
     if (re.search(r"^(Linux|Linux64)$", env["eups_flavor"]) and 
         os.environ.has_key("LD_LIBRARY_PATH")):
-        env.Append(LINKFLAGS = "-Wl,-rpath-link -Wl,%s" % \
-                   os.environ["LD_LIBRARY_PATH"])
+        env.Append(LINKFLAGS = ["-Wl,-rpath-link -Wl,%s" % os.environ["LD_LIBRARY_PATH"]])
     #
     # Process dependencies
     #
@@ -480,7 +479,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                         errors += [str(msg)]
                         success = False
                         
-                if not env.GetOption("no_exec") and libs:
+                if not (env.GetOption("no_exec") or env.GetOption("help")) and libs:
                     conf = env.Clone(LIBPATH = env['LIBPATH'] + [libdir]).Configure()
                     try:
                         libs, lang = libs.split(":")
@@ -744,7 +743,7 @@ SConsEnvironment.getlibs = getlibs
 class ParseBoostLibrary(object):
     def __init__(self, shlibprefix, library, shlibsuffix, blib):
         """Parse a boost library name, given the prefix (often "lib"),
-        the library name (e.g. "boost_regexp"), the suffix (e.g. "so")
+        the library name (e.g. "boost_regexp"), the suffix (e.g. ".so")
         and the actual name of the library
 
         Taken from libboost-doc/HTML/more/getting_started.html
@@ -756,26 +755,22 @@ class ParseBoostLibrary(object):
         mat = re.search(r"^%s%s-?(.+)%s" % (shlibprefix, library, shlibsuffix), blib)
         self.libname = library
         if mat:
-            self.libname += "-" + mat.groups()[0]
+            self.libname += "-" + mat.group(1)
 
-            opts = mat.groups()[0].split("-")
-            opts, self.libversion = opts[0:-1], opts[-1]
+            opts = mat.group(1).split("-")
 
             if opts:
-                if len(opts) == 2:
-                    if opts[0] == "mt":
-                        threading = opts[0]
-                    else:
-                        self.toolset = opts[0]
+                self.libversion = opts.pop()
 
-                    opts = opts[1:]
-                elif len(opts) == 3:
-                    threading = opts[0]
-                    self.toolset = opts[1]
+            if opts:
+                self.toolset = opts.pop(0)
 
-                    opts = opts[2:]
+            if opts:
+                if opts[0] == "mt":
+                    threading = opts.pop(0)
 
-                runtime = opts[0]
+            if opts:
+                runtime = opts.pop(0)
 
         self.threaded = threading and threading == "mt"
 
