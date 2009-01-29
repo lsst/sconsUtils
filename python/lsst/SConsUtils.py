@@ -191,6 +191,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         EnumOption('opt', 'Set the optimisation level', 0, allowed_values=('0', '1', '2', '3')),
         EnumOption('profile', 'Compile/link for profiler', 0, allowed_values=('0', '1', 'pg')),
         BoolOption('setenv', 'Treat arguments such as Foo=bar as defining construction variables', False),
+        ('tag', 'Specify a tag for the eups declaration', None),
         ('version', 'Specify the current version', None),
         )
 
@@ -210,33 +211,34 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
             )
 
     toolpath = []
-    if os.path.exists("python/lsst/SConsUtils.py"): # boostrapping sconsUtils
-        toolpath += ["python/lsst"]
+    if os.path.exists(os.path.join("python", "lsst", "SConsUtils.py")): # boostrapping sconsUtils
+        sconsUtils_pythonDir = "python"
     elif os.environ.has_key('SCONSUTILS_DIR'):
-        toolpath += ["%s/python/lsst" % os.environ['SCONSUTILS_DIR']]
+        sconsUtils_pythonDir = os.path.join(os.environ['SCONSUTILS_DIR'], "python")
+    else:
+        sconsUtils_pythonDir = None
 
-    if os.environ.has_key('LD_LIBRARY_PATH'):
-        LD_LIBRARY_PATH = os.environ['LD_LIBRARY_PATH']
-    else:
-        LD_LIBRARY_PATH = None
-        
-    if os.environ.has_key('DYLD_LIBRARY_PATH'):
-        DYLD_LIBRARY_PATH = os.environ['DYLD_LIBRARY_PATH']
-    else:
-        DYLD_LIBRARY_PATH = None
-
-    if os.environ.has_key('SHELL'):     # needed by eups
-        SHELL = os.environ['SHELL']
-    else:
-        SHELL = None
+    if sconsUtils_pythonDir:
+        toolpath += [os.path.join(sconsUtils_pythonDir, "lsst")]
         
     ourEnv = {'EUPS_DIR' : os.environ['EUPS_DIR'],
               'EUPS_PATH' : os.environ['EUPS_PATH'],
               'PATH' : os.environ['PATH'],
-              'DYLD_LIBRARY_PATH' : DYLD_LIBRARY_PATH,
-              'LD_LIBRARY_PATH' : LD_LIBRARY_PATH,
-              'SHELL' : SHELL,
               }
+
+    for k in (
+        'DYLD_LIBRARY_PATH',
+        'EUPS_STARTUP',
+        'LD_LIBRARY_PATH',
+        'SHELL',                        # needed by eups
+        'SVNROOT',                      # needed by "eups expandbuild"
+        ) :
+        if os.environ.has_key(k):
+            ourEnv[k] = os.environ[k]
+
+    if sconsUtils_pythonDir:            # we need this for e.g. "import lsst.svn" to work
+        ourEnv["PYTHONPATH"] = sconsUtils_pythonDir
+    
     # Add all EUPS directories
     for k in filter(lambda x: re.search(r"_DIR$", x), os.environ.keys()):
         p = re.search(r"^(.*)_DIR$", k).groups()[0]
@@ -580,6 +582,11 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         def _Glob(*args):
             return ["dummy"]
         env.Glob = _Glob
+    #
+    # Hack hack.  We need env['force'] in Declare which isn't passed env
+    #
+    global _force
+    _force = env['force']
 
     return env
 
@@ -1108,74 +1115,97 @@ def Declare(self, products=None):
     may be a list of (product, version) tuples.  If product is None
     it's taken to be self['eups_product']; if version is None it's
     taken to be self['version'].
+
+    If you specify current or tag=XXX the version will be (un)declared with that tag
     
     We'll add Declare to class Environment"""
 
-    if "undeclare" in COMMAND_LINE_TARGETS and not self.GetOption("silent"):
+    doDeclare = "declare" in COMMAND_LINE_TARGETS
+    doUndeclare = "undeclare" in COMMAND_LINE_TARGETS
+    doInstall = "install" in COMMAND_LINE_TARGETS
+    doCurrent = "current" in COMMAND_LINE_TARGETS
+
+    tag = self.get("tag", None)
+    if doCurrent:
+        if tag and tag != "current":
+            print >> sys.stderr, "You may not ask for current and tag=%s; ignoring tag" % tag
+        tag = "current"
+
+    if doUndeclare and not self.GetOption("silent"):
         print >> sys.stderr, "'scons undeclare' is deprecated; please use 'scons declare -c' instead"
 
-    if \
-           "declare" in COMMAND_LINE_TARGETS or \
-           "undeclare" in COMMAND_LINE_TARGETS or \
-           ("install" in COMMAND_LINE_TARGETS and self.GetOption("clean")) or \
-           "current" in COMMAND_LINE_TARGETS:
-        current = []; declare = []; undeclare = []
+    if not (doDeclare or doUndeclare or doInstall or tag):
+        return
+    
+    current = []; declare = []; undeclare = []
 
-        if not products:
-            products = [None]
+    if not products:
+        products = [None]
 
-        for prod in products:
-            if not prod or isinstance(prod, str):   # i.e. no version
-                product = prod
+    for prod in products:
+        if not prod or isinstance(prod, str):   # i.e. no version
+            product = prod
 
-                if self.has_key('version'):
-                    version = self['version']
-                else:
-                    version = None
+            if self.has_key('version'):
+                version = self['version']
             else:
-                product, version = prod
+                version = None
+        else:
+            product, version = prod
 
-            if not product:
-                product = self['eups_product']
+        if not product:
+            product = self['eups_product']
 
-            if "EUPS_DIR" in os.environ.keys():
-                self['ENV']['PATH'] += os.pathsep + "%s/bin" % (os.environ["EUPS_DIR"])
+        if "EUPS_DIR" in os.environ.keys():
+            self['ENV']['PATH'] += os.pathsep + "%s/bin" % (os.environ["EUPS_DIR"])
 
-                if "undeclare" in COMMAND_LINE_TARGETS or self.GetOption("clean"):
-                    if version:
-                        command = "eups undeclare --flavor %s %s %s" % \
-                                  (self['eups_flavor'], product, version)
-                        if "current" in COMMAND_LINE_TARGETS and not "declare" in COMMAND_LINE_TARGETS:
-                            command += " --current"
-                            
-                        if self.GetOption("clean"):
-                            self.Execute(command)
-                        else:
-                            undeclare += [command]
+            doRemove = (doInstall and self.GetOption("clean"))
+            if doUndeclare or doRemove:
+                if version:
+                    if doRemove:
+                        cmd = "remove"
                     else:
-                        print >> sys.stderr, "I don't know your version; not undeclaring to eups"
+                        cmd = "undeclare"
+
+                    command = "eups %s --flavor %s %s %s" % (cmd, self['eups_flavor'], product, version)
+                    if tag and not doDeclare and not doRemove:
+                        command += " --tag=%s" % tag
+
+                    if _force:      # == env['force'], but env isn't available
+                        command += " --force"
+
+                    if self.GetOption("clean"):
+                        if self.Execute(command):
+                            Exit(1)
+                    else:
+                        undeclare += [command]
                 else:
-                    command = "eups declare --force --flavor %s --root %s" % \
-                              (self['eups_flavor'], self['prefix'])
-
-                    if self.has_key('eups_path'):
-                        command += " -Z %s" % self['eups_path']
-                        
-                    if version:
-                        command += " %s %s" % (product, version)
-
-                    current += [command + " --current"]
-                    declare += [command]
-
-        if current:
-            self.Command("current", "", action=current)
-        if declare:
-            if "current" in COMMAND_LINE_TARGETS:
-                self.Command("declare", "", action="") # current will declare it for us
+                    print >> sys.stderr, "I don't know your version; not undeclaring to eups"
             else:
-                self.Command("declare", "", action=declare)
-        if undeclare:
-            self.Command("undeclare", "", action=undeclare)
+                command = "eups declare --force --flavor %s --root %s" % \
+                          (self['eups_flavor'], self['prefix'])
+
+                if self.has_key('eups_path'):
+                    command += " -Z %s" % self['eups_path']
+
+                if version:
+                    command += " %s %s" % (product, version)
+
+                if tag:
+                    current += [command + (" --tag=%s" % tag)]
+                declare += [command]
+
+    if current:
+        self.Command("current", "", action=current)
+    if declare:
+        if current:
+            declare = current           # current will declare it for us
+        
+        self.Command("declare", "", action=declare)
+    if undeclare:
+        self.Command("undeclare", "", action=undeclare)
+
+    return declare
                 
 SConsEnvironment.Declare = Declare
 
@@ -1241,18 +1271,20 @@ env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env
     """
 
     if not env.installing:
-        return
+        return None
 
     if env.GetOption("clean"):
         print >> sys.stderr, "Removing", dest
+
         shutil.rmtree(dest, ignore_errors=True)
+
+        return None
     else:
         presetupStr = []
         for p in presetup:
             presetupStr += ["--product %s=%s" % (p, presetup[p])]
         presetup = " ".join(presetupStr)
 
-        env = env.Clone(ENV = os.environ)
         #
         # Add any build/table files to the desired files
         #
@@ -1284,7 +1316,9 @@ env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env
 
             env.AddPostAction(i, Action("%s" %(cmd), cmd, ENV = os.environ))
 
-    return dest
+        env.AddPostAction(table_obj, env.Declare())
+
+        return dest
 
 SConsEnvironment.InstallEups = InstallEups
 
