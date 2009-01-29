@@ -373,15 +373,15 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         return result
 
     if env.GetOption("clean") or env.GetOption("no_exec") or env.GetOption("help") :
-        isGcc = False                   # who cares? We're cleaning/not execing, not building
+        env.isGcc = False                   # who cares? We're cleaning/not execing, not building
     else:
         conf = Configure(env, custom_tests = {'IsGcc' : IsGcc})
-        isGcc = conf.IsGcc()
+        env.isGcc = conf.IsGcc()
         conf.Finish()
     #
     # Compiler flags; CCFLAGS => C and C++
     #
-    if isGcc:
+    if env.isGcc:
         env.Append(CCFLAGS = ['-Wall'])
     if env['opt']:
         env.Append(CCFLAGS = ['-O%d' % int(env['opt'])])
@@ -898,17 +898,23 @@ def SharedLibraryIncomplete(self, target, source, **keywords):
 
 SConsEnvironment.SharedLibraryIncomplete = SharedLibraryIncomplete
 
-
 def LoadableModuleIncomplete(self, target, source, **keywords):
     """Like LoadableModule, but don't insist that all symbols are resolved"""
 
     myenv = self.Clone()
     if myenv['PLATFORM'] == 'darwin':
-        myenv['LDMODULEFLAGS'] += " -undefined suppress -flat_namespace"
+        myenv.Append(LDMODULEFLAGS ="-undefined suppress -flat_namespace")
+    #
+    # Swig-generated .cc files cast pointers to long longs and back,
+    # which is illegal.  This flag tells g++ about the sin
+    #
+    if myenv.isGcc:
+        myenv.Append(CCFLAGS = "-fno-strict-aliasing")
 
     return myenv.LoadableModule(target, source, **keywords)
 
 SConsEnvironment.LoadableModuleIncomplete = LoadableModuleIncomplete
+SConsEnvironment.SwigLoadableModule = LoadableModuleIncomplete
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 #
