@@ -192,6 +192,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         EnumOption('profile', 'Compile/link for profiler', 0, allowed_values=('0', '1', 'pg')),
         BoolOption('setenv', 'Treat arguments such as Foo=bar as defining construction variables', False),
         ('version', 'Specify the current version', None),
+        ('baseversion', 'Specify the current base version', None),
         )
 
     products = []
@@ -1037,6 +1038,8 @@ def getVersion(env, versionString):
                     print >> sys.stderr, \
                           "%s\nFound problem with svn revision number; update or specify force=True to proceed" %e
                     sys.exit(1)
+            if env.has_key('baseversion'):
+                version = env['baseversion'] + "+" + version
 
     env["version"] = version
     return version
