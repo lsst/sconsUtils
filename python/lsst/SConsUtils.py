@@ -1017,7 +1017,8 @@ def getVersion(env, versionString):
 
     if env.has_key('version'):
         version = env['version']
-        if env.has_key('baseversion') and version.find(env['baseversion']) != 0:
+        if env.has_key('baseversion') and \
+                not version.startswith(env['baseversion']):
             print >> sys.stderr, \
                   "Warning: explicit version %s is incompatible with baseversion %s" % (version, env['baseversion'])
     elif not versionString:
