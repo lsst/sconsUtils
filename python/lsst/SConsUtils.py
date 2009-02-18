@@ -686,7 +686,7 @@ def CheckHeaderGuessLanguage(self, incdir, incfiles):
 	# put C++ first; if the first language fails then the scons
 	# cache seems to have trouble.  Besides, most C++ will compile as C
         languages = ["C++", "C"]
-    elif re.search(r"\.hpp$", incfiles[-1]):
+    elif re.search(r"(\.hpp|(^|/)[^./]+)$", incfiles[-1]):
         languages = ["C++"]
     else:
         raise RuntimeError, "Unknown header file suffix for file %s" % (incfiles[-1])
