@@ -1269,6 +1269,7 @@ env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env
         #
         # Add any build/table files to the desired files
         #
+        files = [str(f) for f in files] # in case the user used Glob not glob.glob
         files += glob.glob(os.path.join("ups", "*.build")) + glob.glob(os.path.join("ups","*.table"))
         files = list(set(files))        # remove duplicates
 
