@@ -241,7 +241,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     # Add all EUPS directories
     for k in filter(lambda x: re.search(r"_DIR$", x), os.environ.keys()):
         p = re.search(r"^(.*)_DIR$", k).groups()[0]
-        varname = eups.Product(None, p, noInit=True).envarSetupName()
+        varname = eups.setupEnvNameFor(p)
         if os.environ.has_key(varname):
             ourEnv[varname] = os.environ[varname]
             ourEnv[k] = os.environ[k]
