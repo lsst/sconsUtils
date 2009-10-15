@@ -1181,14 +1181,14 @@ def Declare(self, products=None):
                     declare += [command]
 
         if current:
-            self.Command("current", "", action=current)
+            self.Command("current", "", action=current, ENV = os.environ)
         if declare:
             if "current" in COMMAND_LINE_TARGETS:
                 self.Command("declare", "", action="") # current will declare it for us
             else:
-                self.Command("declare", "", action=declare)
+                self.Command("declare", "", action=declare, ENV = os.environ)
         if undeclare:
-            self.Command("undeclare", "", action=undeclare)
+            self.Command("undeclare", "", action=undeclare, ENV = os.environ)
                 
 SConsEnvironment.Declare = Declare
 
