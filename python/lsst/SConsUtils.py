@@ -193,6 +193,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         BoolOption('setenv', 'Treat arguments such as Foo=bar as defining construction variables', False),
         ('version', 'Specify the current version', None),
         ('baseversion', 'Specify the current base version', None),
+        ('svnroot', 'Specify the SVN repository root URL', None)
         )
 
     products = []
@@ -361,6 +362,12 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     
     env["libDir"] = "%s/lib" % prefix
     env["pythonDir"] = "%s/python" % prefix
+
+    if not env.has_key('svnroot') or not env['svnroot']:
+        if os.environ.has_key("SVNROOT"):
+            env['svnroot'] = os.environ["SVNROOT"]
+        else:
+            env['svnroot'] = 'http://svn.lsstcorp.org'
 
     if env.installing:
         SCons.progress_display("Installing into %s" % (prefix))
@@ -1285,7 +1292,7 @@ env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env
         for i in build_obj:
             env.AlwaysBuild(i)
 
-            cmd = "eups expandbuild -i --version %s %s" % (env['version'], str(i))
+            cmd = "eups expandbuild -i --version %s %s --svnroot %s" % (env['version'], str(i), env['svnroot'])
             env.AddPostAction(i, Action("%s" %(cmd), cmd, ENV = os.environ))
 
         for i in table_obj:
