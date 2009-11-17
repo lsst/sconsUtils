@@ -180,7 +180,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     opts = options
     if opts is None:
         opts = LsstOptions()
-        
+
     opts.AddOptions(
         BoolOption('debug', 'Set to enable debugging flags', True),
         ('eupsdb', 'Specify which element of EUPS_PATH should be used', None),
@@ -202,6 +202,9 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
 
     for p in products:
         dir = ProductDir(p)
+        if not dir:
+            continue
+
         opts.AddOptions(
             PathOption(p, "Specify the location of %s" % p, dir),
             PathOption(p + "Include", "Specify the location of %s's include files" % p,
@@ -272,7 +275,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         env['LDMODULESUFFIX'] = ".so"
 
         if not re.search(r"-install_name", str(env['SHLINKFLAGS'])):
-            env.Append(SHLINKFLAGS = "-Wl,-install_name -Wl,${TARGET.file}")
+            env.Append(SHLINKFLAGS = ["-Wl,-install_name", "-Wl,${TARGET.file}"])
         
     #
     # Remove valid options from the arguments
@@ -904,13 +907,16 @@ def LoadableModuleIncomplete(self, target, source, **keywords):
 
     myenv = self.Clone()
     if myenv['PLATFORM'] == 'darwin':
-        myenv.Append(LDMODULEFLAGS ="-undefined suppress -flat_namespace")
+        myenv.Append(LDMODULEFLAGS = ["-undefined", "suppress", "-flat_namespace",])
     #
     # Swig-generated .cc files cast pointers to long longs and back,
     # which is illegal.  This flag tells g++ about the sin
     #
-    if myenv.isGcc:
-        myenv.Append(CCFLAGS = "-fno-strict-aliasing")
+    try:
+        if myenv.isGcc:
+            myenv.Append(CCFLAGS = ["-fno-strict-aliasing",])
+    except AttributeError:
+        pass
 
     return myenv.LoadableModule(target, source, **keywords)
 
@@ -1429,11 +1435,12 @@ def CheckSwig(self, language="python", ilang="C", ignoreWarnings=None,
     #
     # Allow swig to search all directories that the compiler sees
     #
-    for d in self['CPPPATH']:
-        if d:
-            d = Dir(d)
-            d = r"\ ".join(re.split(r" ", str(d))) # handle spaces in filenames
-            self['SWIGFLAGS'] += " -I%s" % d
+    if self.has_key('CPPPATH'):
+        for d in self['CPPPATH']:
+            if d:
+                d = Dir(d)
+                d = r"\ ".join(re.split(r" ", str(d))) # handle spaces in filenames
+                self['SWIGFLAGS'] += " -I%s" % d
     #
     # Also search the python directories of any products in includedProducts
     #
@@ -1443,6 +1450,11 @@ def CheckSwig(self, language="python", ilang="C", ignoreWarnings=None,
             self['SWIGFLAGS'] += " -I%s" % os.path.join(pd, "python")
         else:
             print >> sys.stderr, "Product %s is not setup" % p
+    #
+    # If our target is python, check for the python include files/libraries
+    #
+    if language == "python":
+        self.CheckPython()
         
 SConsEnvironment.CheckSwig = CheckSwig
 
