@@ -1,0 +1,24 @@
+# sconsUtils cannot use the default "simplescons" build function as
+# the latter checks to ensure that scons (which is what were
+# installng) is setup. 
+#
+# Note: if the PYTHONPATH has . in it, it turns out that scons will
+# use the sconsUtils code from this version being installed to install
+# itself.  This should be okay; however, a bug in this sconsUtils
+# being installed could cause the installation to fail--perhaps a happy
+# side effect.  Bug #474 demonstrated this.  
+#
+fetch sconsUtils/$version/sconsUtils-${version}.tar.gz
+unpack_tar_and_enter sconsUtils-${version}.tar.gz
+
+if [ -z "$SCONSDISTRIB_DIR" ]; then
+   echo "scons (distrib) is not setup via eups"
+   exit 4
+fi
+echo scons install declare
+scons install declare >> $buildlog 2>&1 || {
+    echo "scons (Distrib) ..."
+    tail -20 $buildlog
+    echo "$prog: scons install failed; see $PWD/$buildlog for details"
+    exit 1
+}

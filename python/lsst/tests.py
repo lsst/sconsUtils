@@ -13,7 +13,8 @@ class Control(object):
         env should be an environment from scons;
 
         ignoreList is a list of tests that should Not be run --- useful in conjunction
-        with glob patterns;
+        with glob patterns.  If a file is listed as "@fileName", the @ is stripped and
+        we don't bother to check if fileName exists (useful for machine-generated files)
 
         expectedFalures is a dictionary; the keys are tests that are
         known to fail; the values are strings to print.
@@ -50,8 +51,11 @@ tests = lsst.tests.Control(env,
         self._info = {}                 # information about processing targets
         if ignoreList:
             for f in ignoreList:
-                if not os.path.exists(f):
-                    print >> sys.stderr, "You're ignoring a non-existent file, %s" % f
+                if re.search(r"^@", f):    # @dfilename => don't complain if filename doesn't exist
+                    f = f[1:]
+                else:
+                    if not os.path.exists(f):
+                        print >> sys.stderr, "You're ignoring a non-existent file, %s" % f
                 self._info[f] = (self._IGNORE, None)
 
         if expectedFailures:

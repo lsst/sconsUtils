@@ -180,7 +180,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     opts = options
     if opts is None:
         opts = LsstOptions()
-        
+
     opts.AddOptions(
         BoolOption('debug', 'Set to enable debugging flags', True),
         ('eupsdb', 'Specify which element of EUPS_PATH should be used', None),
@@ -192,6 +192,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         EnumOption('profile', 'Compile/link for profiler', 0, allowed_values=('0', '1', 'pg', 'gcov')),
         BoolOption('setenv', 'Treat arguments such as Foo=bar as defining construction variables', False),
         ('version', 'Specify the current version', None),
+        ('baseversion', 'Specify the current base version', None),
         )
 
     products = []
@@ -201,6 +202,9 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
 
     for p in products:
         dir = ProductDir(p)
+        if not dir:
+            continue
+
         opts.AddOptions(
             PathOption(p, "Specify the location of %s" % p, dir),
             PathOption(p + "Include", "Specify the location of %s's include files" % p,
@@ -240,7 +244,9 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     # Add all EUPS directories
     for k in filter(lambda x: re.search(r"_DIR$", x), os.environ.keys()):
         p = re.search(r"^(.*)_DIR$", k).groups()[0]
-        if os.environ.has_key("SETUP_" + p):
+        varname = eups.Product(None, p, noInit=True).envarSetupName()
+        if os.environ.has_key(varname):
+            ourEnv[varname] = os.environ[varname]
             ourEnv[k] = os.environ[k]
 
     env = Environment(ENV = ourEnv, options = opts,
@@ -269,7 +275,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         env['LDMODULESUFFIX'] = ".so"
 
         if not re.search(r"-install_name", str(env['SHLINKFLAGS'])):
-            env.Append(SHLINKFLAGS = "-Wl,-install_name -Wl,${TARGET.file}")
+            env.Append(SHLINKFLAGS = ["-Wl,-install_name", "-Wl,${TARGET.file}"])
         
     #
     # Remove valid options from the arguments
@@ -283,7 +289,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     # Process those arguments
     #
     if env['debug']:
-        env.Append(CCFLAGS = '-g')
+        env.Append(CCFLAGS = ['-g'])
 
     eups_path = None
     try:
@@ -329,7 +335,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     #
     if env['setenv']:
         for key in ARGUMENTS.keys():
-            env[key] = ARGUMENTS[key]
+            env[key] = Split(ARGUMENTS[key])
     else:
         for key in ARGUMENTS.keys():
             errorStr += " %s=%s" % (key, ARGUMENTS[key])
@@ -351,6 +357,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     # Where to install
     #
     env.installing = filter(lambda t: t == "install", BUILD_TARGETS)# are we installing?
+    env.declaring = filter(lambda t: t == "declare" or t == "current", BUILD_TARGETS)# are we declaring?
 
     prefix = setPrefix(env, versionString, eups_product_path)
     env['prefix'] = prefix
@@ -365,26 +372,26 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     #
     def IsGcc(context):
         context.Message("Checking if  CC is really gcc...")
-        result = context.TryAction(["%s --help | grep gcc" % env['CC']])[0]
+        result = context.TryAction(["$CC --help | grep gcc"])[0]
         context.Result(result)
         return result
 
-    if env.GetOption("clean"):
-        isGcc = False                   # who cares? We're cleaning, not building
+    if env.GetOption("clean") or env.GetOption("no_exec") or env.GetOption("help") :
+        env.isGcc = False                   # who cares? We're cleaning/not execing, not building
     else:
         conf = Configure(env, custom_tests = {'IsGcc' : IsGcc})
-        isGcc = conf.IsGcc()
+        env.isGcc = conf.IsGcc()
         conf.Finish()
     #
     # Compiler flags; CCFLAGS => C and C++
     #
-    if isGcc:
-        env.Append(CCFLAGS = '-Wall')
+    if env.isGcc:
+        env.Append(CCFLAGS = ['-Wall'])
     if env['opt']:
-        env.Append(CCFLAGS = '-O%d' % int(env['opt']))
+        env.Append(CCFLAGS = ['-O%d' % int(env['opt'])])
     if env['profile'] == '1' or env['profile'] == "pg":
-        env.Append(CCFLAGS = '-pg')
-        env.Append(LINKFLAGS = '-pg')
+        env.Append(CCFLAGS = ['-pg'])
+        env.Append(LINKFLAGS = ['-pg'])
     elif env['profile'] == 'gcov':
         env.Append(CCFLAGS = '--coverage')
         env.Append(LINKFLAGS = '--coverage')
@@ -401,17 +408,17 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     #
     # Is C++'s TR1 available?  If not, use e.g. #include "lsst/tr1/foo.h"
     #
-    if not env.GetOption("clean"):
+    if not (env.GetOption("clean") or env.GetOption("help")):
         if not env.GetOption("no_exec"):
             conf = env.Configure()
-            env.Append(CCFLAGS = '-DLSST_HAVE_TR1=%d' % int(conf.CheckHeader("tr1/unordered_map", language="C++")))
+            env.Append(CCFLAGS = ['-DLSST_HAVE_TR1=%d' % int(conf.CheckHeader("tr1/unordered_map", language="C++"))])
             conf.Finish()
     #
     # Byte order
     #
     import socket
     if socket.htons(1) != 1:
-        env.Append(CCFLAGS = '-DLSST_LITTLE_ENDIAN=1')
+        env.Append(CCFLAGS = ['-DLSST_LITTLE_ENDIAN=1'])
     #
     # Check for dependencies in swig input files
     #
@@ -421,8 +428,8 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     # shareable libraries we need to do something special.
     if (re.search(r"^(Linux|Linux64)$", env["eups_flavor"]) and 
         os.environ.has_key("LD_LIBRARY_PATH")):
-        env.Append(LINKFLAGS = "-Wl,-rpath-link -Wl,%s" % \
-                   os.environ["LD_LIBRARY_PATH"])
+        env.Append(LINKFLAGS = ["-Wl,-rpath-link"])
+        env.Append(LINKFLAGS = ["-Wl,%s" % os.environ["LD_LIBRARY_PATH"]])
     #
     # Process dependencies
     #
@@ -481,7 +488,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                         errors += [str(msg)]
                         success = False
                         
-                if not env.GetOption("no_exec") and libs:
+                if not (env.GetOption("no_exec") or env.GetOption("help")) and libs:
                     conf = env.Clone(LIBPATH = env['LIBPATH'] + [libdir]).Configure()
                     try:
                         libs, lang = libs.split(":")
@@ -686,7 +693,7 @@ def CheckHeaderGuessLanguage(self, incdir, incfiles):
 	# put C++ first; if the first language fails then the scons
 	# cache seems to have trouble.  Besides, most C++ will compile as C
         languages = ["C++", "C"]
-    elif re.search(r"\.hpp$", incfiles[-1]):
+    elif re.search(r"(\.hpp|(^|/)[^./]+)$", incfiles[-1]):
         languages = ["C++"]
     else:
         raise RuntimeError, "Unknown header file suffix for file %s" % (incfiles[-1])
@@ -745,7 +752,7 @@ SConsEnvironment.getlibs = getlibs
 class ParseBoostLibrary(object):
     def __init__(self, shlibprefix, library, shlibsuffix, blib):
         """Parse a boost library name, given the prefix (often "lib"),
-        the library name (e.g. "boost_regexp"), the suffix (e.g. "so")
+        the library name (e.g. "boost_regexp"), the suffix (e.g. ".so")
         and the actual name of the library
 
         Taken from libboost-doc/HTML/more/getting_started.html
@@ -757,26 +764,22 @@ class ParseBoostLibrary(object):
         mat = re.search(r"^%s%s-?(.+)%s" % (shlibprefix, library, shlibsuffix), blib)
         self.libname = library
         if mat:
-            self.libname += "-" + mat.groups()[0]
+            self.libname += "-" + mat.group(1)
 
-            opts = mat.groups()[0].split("-")
-            opts, self.libversion = opts[0:-1], opts[-1]
+            opts = mat.group(1).split("-")
 
             if opts:
-                if len(opts) == 2:
-                    if opts[0] == "mt":
-                        threading = opts[0]
-                    else:
-                        self.toolset = opts[0]
+                self.libversion = opts.pop()
 
-                    opts = opts[1:]
-                elif len(opts) == 3:
-                    threading = opts[0]
-                    self.toolset = opts[1]
+            if opts:
+                self.toolset = opts.pop(0)
 
-                    opts = opts[2:]
+            if opts:
+                if opts[0] == "mt":
+                    threading = opts.pop(0)
 
-                runtime = opts[0]
+            if opts:
+                runtime = opts.pop(0)
 
         self.threaded = threading and threading == "mt"
 
@@ -815,7 +818,7 @@ def mangleLibraryName(env, libdir, lib):
     elif len(blibs) == 1: # only one choice
         lib = blibs.values()[0].libname
     else:           # more than one choice
-        if env['debug']:
+        if env['debug'] and filter(lambda key: blibs[key].debug_code, blibs.keys()):
             for blib in blibs:
                 if not blibs[blib].debug_code:
                     del blibs[blib]
@@ -903,17 +906,26 @@ def SharedLibraryIncomplete(self, target, source, **keywords):
 
 SConsEnvironment.SharedLibraryIncomplete = SharedLibraryIncomplete
 
-
 def LoadableModuleIncomplete(self, target, source, **keywords):
     """Like LoadableModule, but don't insist that all symbols are resolved"""
 
     myenv = self.Clone()
     if myenv['PLATFORM'] == 'darwin':
-        myenv['LDMODULEFLAGS'] += " -undefined suppress -flat_namespace"
+        myenv.Append(LDMODULEFLAGS = ["-undefined", "suppress", "-flat_namespace",])
+    #
+    # Swig-generated .cc files cast pointers to long longs and back,
+    # which is illegal.  This flag tells g++ about the sin
+    #
+    try:
+        if myenv.isGcc:
+            myenv.Append(CCFLAGS = ["-fno-strict-aliasing",])
+    except AttributeError:
+        pass
 
     return myenv.LoadableModule(target, source, **keywords)
 
 SConsEnvironment.LoadableModuleIncomplete = LoadableModuleIncomplete
+SConsEnvironment.SwigLoadableModule = LoadableModuleIncomplete
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 #
@@ -1015,6 +1027,10 @@ def getVersion(env, versionString):
 
     if env.has_key('version'):
         version = env['version']
+        if env.has_key('baseversion') and \
+                not version.startswith(env['baseversion']):
+            print >> sys.stderr, \
+                  "Warning: explicit version %s is incompatible with baseversion %s" % (version, env['baseversion'])
     elif not versionString:
         version = "unknown"
     elif re.search(r"^[$]Name:\s+", versionString):
@@ -1024,34 +1040,20 @@ def getVersion(env, versionString):
             version = "cvs"
     elif re.search(r"^[$]HeadURL:\s+", versionString):
         # SVN.  Guess the tagname from the last part of the directory
-        try:
-            version = re.search(r"/([^/]+)$", os.path.split(versionString)[0]).group(1)
-
-            if version == "trunk":
-                version = "svn"
-                try:                    # cf. #273
-                    (oldest, youngest, flags) = svn.revision()
-                    if env.installing:
-                        okVersion = True
-                        if "M" in flags:
-                            print >> sys.stderr, "You are installing, but have unchecked in files"
-                            okVersion = False
-                        if "S" in flags:
-                            print >> sys.stderr, "You are installing, but have switched SVN URLs"
-                            okVersion = False
-                        if oldest != youngest:
-                            print >> sys.stderr, "You have a range of revisions in your tree (%s:%s); adopting %s" %\
-                                  (oldest, youngest, youngest)
-                            okVersion = False
-
-                        if not okVersion and not env['force']:
-                            print >> sys.stderr, "Found problem with svn revision number; update or specify force=True to proceed"
-                            sys.exit(1)
-                    version += youngest
-                except IOError:
-                    pass
-        except RuntimeError:
-            pass
+        HeadURL = re.search(r"^[$]HeadURL:\s+(.*)", versionString).group(1)
+        HeadURL = os.path.split(HeadURL)[0]
+        if env.installing or env.declaring:
+            try:
+                version = svn.guessVersionName(HeadURL)
+            except RuntimeError, e:
+                if env['force']:
+                    version = "unknown"
+                else:
+                    print >> sys.stderr, \
+                          "%s\nFound problem with svn revision number; update or specify force=True to proceed" %e
+                    sys.exit(1)
+            if env.has_key('baseversion'):
+                version = env['baseversion'] + "+" + version
 
     env["version"] = version
     return version
@@ -1224,7 +1226,7 @@ def CleanTree(files, dir=".", recurse=True, verbose=False):
     # don't use xargs --- who knows what needs quoting?
     #
     action = "find %s" % dir
-    action += r" \( -name .sconf_temp -prune -o -name .svn -prune -o -name \* \) "
+    action += r" \( -name .svn -prune -o -name \* \) "
     if not recurse:
         action += " ! -name . -prune"
 
@@ -1235,6 +1237,10 @@ def CleanTree(files, dir=".", recurse=True, verbose=False):
 
     if verbose:
         action += " -print"
+    #
+    # Clean up scons files --- users want to be able to say scons -c and get a clean copy
+    #
+    action += " ; rm -rf .sconf_temp .sconsign.dblite"
     #
     # Do we actually want to clean up?  We don't if the command is e.g. "scons -c install"
     #
@@ -1257,7 +1263,10 @@ def InstallEups(env, dest, files=[], presetup=""):
 env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env['version']})
     """
 
-    if env.GetOption("clean") and env.installing:
+    if not env.installing:
+        return
+
+    if env.GetOption("clean"):
         print >> sys.stderr, "Removing", dest
         shutil.rmtree(dest, ignore_errors=True)
     else:
@@ -1270,6 +1279,7 @@ env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env
         #
         # Add any build/table files to the desired files
         #
+        files = [str(f) for f in files] # in case the user used Glob not glob.glob
         files += glob.glob(os.path.join("ups", "*.build")) + glob.glob(os.path.join("ups","*.table"))
         files = list(set(files))        # remove duplicates
 
@@ -1291,7 +1301,7 @@ env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env
         for i in table_obj:
             env.AlwaysBuild(i)
 
-            cmd = "eups expandtable -i "
+            cmd = "eups expandtable -i -W '^(?!LOCAL:)' " # version doesn't start "LOCAL:"
             if presetup:
                 cmd += presetup + " "
             cmd += str(i)
@@ -1429,16 +1439,26 @@ def CheckSwig(self, language="python", ilang="C", ignoreWarnings=None,
     #
     # Allow swig to search all directories that the compiler sees
     #
-    for d in self['CPPPATH']:
-        if d:
-            d = Dir(d)
-            d = r"\ ".join(re.split(r" ", str(d))) # handle spaces in filenames
-            self['SWIGFLAGS'] += " -I%s" % d
+    if self.has_key('CPPPATH'):
+        for d in self['CPPPATH']:
+            if d:
+                d = Dir(d)
+                d = r"\ ".join(re.split(r" ", str(d))) # handle spaces in filenames
+                self['SWIGFLAGS'] += " -I%s" % d
     #
     # Also search the python directories of any products in includedProducts
     #
     for p in Split(includedProducts):
-        self['SWIGFLAGS'] += " -I%s" % os.path.join(ProductDir(p), "python")
+        pd = ProductDir(p)
+        if pd:
+            self['SWIGFLAGS'] += " -I%s" % os.path.join(pd, "python")
+        else:
+            print >> sys.stderr, "Product %s is not setup" % p
+    #
+    # If our target is python, check for the python include files/libraries
+    #
+    if language == "python":
+        self.CheckPython()
         
 SConsEnvironment.CheckSwig = CheckSwig
 
