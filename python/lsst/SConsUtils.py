@@ -189,7 +189,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         ('optfile', 'Specify a file to read default options from', None),
         ('prefix', 'Specify the install destination', None),
         EnumOption('opt', 'Set the optimisation level', 0, allowed_values=('0', '1', '2', '3')),
-        EnumOption('profile', 'Compile/link for profiler', 0, allowed_values=('0', '1', 'pg')),
+        EnumOption('profile', 'Compile/link for profiler', 0, allowed_values=('0', '1', 'pg', 'gcov')),
         BoolOption('setenv', 'Treat arguments such as Foo=bar as defining construction variables', False),
         ('version', 'Specify the current version', None),
         )
@@ -388,6 +388,10 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     if env['profile'] == '1' or env['profile'] == "pg":
         env.Append(CCFLAGS = ['-pg'])
         env.Append(LINKFLAGS = ['-pg'])
+    elif env['profile'] == 'gcov':
+        env.Append(CCFLAGS = '--coverage')
+        env.Append(LINKFLAGS = '--coverage')
+
     #
     # scons 0.97 doesn't support these. Sigh
     #
