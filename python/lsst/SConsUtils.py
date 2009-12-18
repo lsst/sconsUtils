@@ -182,6 +182,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         opts = LsstOptions()
 
     opts.AddOptions(
+        EnumOption('cc', 'Choose the compiler to use', '', allowed_values=('', 'gcc', 'icc')),
         BoolOption('debug', 'Set to enable debugging flags', True),
         ('eupsdb', 'Specify which element of EUPS_PATH should be used', None),
         ('flavor', 'Set the build flavor', None),
@@ -201,16 +202,16 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     products.sort()
 
     for p in products:
-        dir = ProductDir(p)
-        if not dir:
+        pdir = ProductDir(p)
+        if not pdir:
             continue
 
         opts.AddOptions(
-            PathOption(p, "Specify the location of %s" % p, dir),
+            PathOption(p, "Specify the location of %s" % p, pdir),
             PathOption(p + "Include", "Specify the location of %s's include files" % p,
-                       dir and os.path.isdir(dir + "/include") and dir + "/include" or None),
+                       pdir and os.path.isdir(pdir + "/include") and pdir + "/include" or None),
             PathOption(p + "Lib", "Specify the location of %s's libraries" % p,
-                       dir and os.path.isdir(dir + "/lib") and dir + "/lib" or None),
+                       pdir and os.path.isdir(pdir + "/lib") and pdir + "/lib" or None),
             )
 
     toolpath = []
@@ -253,6 +254,8 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
 		      tools = ["default", "doxygen"],
 		      toolpath = toolpath
 		      )
+    env0 = env.Clone()
+    
     env['eups_product'] = eups_product
     Help(opts.GenerateHelpText(env))
 
@@ -379,6 +382,23 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     if env.GetOption("clean") or env.GetOption("no_exec") or env.GetOption("help") :
         env.isGcc = False                   # who cares? We're cleaning/not execing, not building
     else:
+        if env['cc'] != '':
+            CC = CXX = None
+
+            if env['cc'] == 'gcc':
+                CC = 'gcc'
+                CXX = 'g++'
+            elif env['cc'] == 'icc':
+                CC = 'icc'
+                CXX = 'icpc'
+            else:
+                errors += ["Unrecognised compiler:%s" % env['cc']]
+
+            if CC and env['CC'] == env0['CC']:
+                env['CC'] = CC
+            if CC and env['CXX'] == env0['CXX']:
+                env['CXX'] = CXX
+
         conf = Configure(env, custom_tests = {'IsGcc' : IsGcc})
         env.isGcc = conf.IsGcc()
         conf.Finish()
