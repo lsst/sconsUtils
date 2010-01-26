@@ -245,7 +245,10 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     # Add all EUPS directories
     for k in filter(lambda x: re.search(r"_DIR$", x), os.environ.keys()):
         p = re.search(r"^(.*)_DIR$", k).groups()[0]
-        varname = eups.utils.setupEnvNameFor(p)
+        try:
+            varname = eups.utils.setupEnvNameFor(p)
+        except AttributeError:
+            varname = "SETUP_" + p      # We're running an old (<= 1.2) version of eups
         if os.environ.has_key(varname):
             ourEnv[varname] = os.environ[varname]
             ourEnv[k] = os.environ[k]
@@ -538,7 +541,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
             if topdir:
                 success = True          # they said they knew what was going on.  If they didn't
                                         # specify incfiles/libs, we'll have to trust them
-                if product == "pycore":
+                if product == "numpy" or product == "pycore":
                     import numpy
                     incdir = numpy.get_include()
 
