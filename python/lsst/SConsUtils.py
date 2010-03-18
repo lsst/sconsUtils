@@ -19,7 +19,7 @@ except ImportError:
     pass    
 
 def MakeEnv(eups_product, versionString=None, dependencies=[],
-            eups_product_path=None, options=None, traceback=False):
+            eups_product_path=None, variables=None, traceback=False):
     """
     Setup a standard SCons environment, add our dependencies, and fix some
     os/x problems
@@ -154,10 +154,10 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                              product should be installed in a subdirectory
                              relative to $EUPS_PATH.  See "Identifying the
                              Product" above for more details.
-    @param options        an Options object to use to define command-line
+    @param variables       a Variables object to use to define command-line
                              options custom to the current build script.
                              If provided, this should have been created with
-                             LsstOptions()
+                             LsstVariables()
     @param traceback      a boolean switch indicating whether any uncaught 
                              Python exceptions raised during the build process
                              should result in a standard Python traceback
@@ -177,21 +177,21 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     #
     # Argument handling
     #
-    opts = options
+    opts = variables
     if opts is None:
-        opts = LsstOptions()
+        opts = LsstVariables()
 
-    opts.AddOptions(
-        EnumOption('cc', 'Choose the compiler to use', '', allowed_values=('', 'gcc', 'icc')),
-        BoolOption('debug', 'Set to enable debugging flags', True),
+    opts.AddVariables(
+        EnumVariable('cc', 'Choose the compiler to use', '', allowed_values=('', 'gcc', 'icc')),
+        BoolVariable('debug', 'Set to enable debugging flags', True),
         ('eupsdb', 'Specify which element of EUPS_PATH should be used', None),
         ('flavor', 'Set the build flavor', None),
-        BoolOption('force', 'Set to force possibly dangerous behaviours', False),
+        BoolVariable('force', 'Set to force possibly dangerous behaviours', False),
         ('optfile', 'Specify a file to read default options from', None),
         ('prefix', 'Specify the install destination', None),
-        EnumOption('opt', 'Set the optimisation level', 0, allowed_values=('0', '1', '2', '3')),
-        EnumOption('profile', 'Compile/link for profiler', 0, allowed_values=('0', '1', 'pg', 'gcov')),
-        BoolOption('setenv', 'Treat arguments such as Foo=bar as defining construction variables', False),
+        EnumVariable('opt', 'Set the optimisation level', 0, allowed_values=('0', '1', '2', '3')),
+        EnumVariable('profile', 'Compile/link for profiler', 0, allowed_values=('0', '1', 'pg', 'gcov')),
+        BoolVariable('setenv', 'Treat arguments such as Foo=bar as defining construction variables', False),
         ('version', 'Specify the current version', None),
         ('baseversion', 'Specify the current base version', None),
         )
@@ -206,11 +206,11 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         if not pdir:
             continue
 
-        opts.AddOptions(
-            PathOption(p, "Specify the location of %s" % p, pdir),
-            PathOption(p + "Include", "Specify the location of %s's include files" % p,
+        opts.AddVariables(
+            PathVariable(p, "Specify the location of %s" % p, pdir),
+            PathVariable(p + "Include", "Specify the location of %s's include files" % p,
                        pdir and os.path.isdir(pdir + "/include") and pdir + "/include" or None),
-            PathOption(p + "Lib", "Specify the location of %s's libraries" % p,
+            PathVariable(p + "Lib", "Specify the location of %s's libraries" % p,
                        pdir and os.path.isdir(pdir + "/lib") and pdir + "/lib" or None),
             )
 
@@ -253,7 +253,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
             ourEnv[varname] = os.environ[varname]
             ourEnv[k] = os.environ[k]
 
-    env = Environment(ENV = ourEnv, options = opts,
+    env = Environment(ENV = ourEnv, variables=opts,
 		      tools = ["default", "doxygen"],
 		      toolpath = toolpath
 		      )
@@ -372,7 +372,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     env["pythonDir"] = "%s/python" % prefix
 
     if env.installing:
-        SCons.progress_display("Installing into %s" % (prefix))
+        SCons.progress_display("Installing into %s" % prefix)
     #
     # Is the C compiler really gcc/g++?
     #
@@ -425,32 +425,25 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
             print >> sys.stderr, "Turning warnings OFF"
 
         ignoreWarnings = {
-            21 : 'type qualifiers are meaningless in this declaration',
-            68 : 'integer conversion resulted in a change of sign',
-            111 : 'statement is unreachable',
-            #177 : 'handler parameter "e" was declared but never referenced',
-            191 : 'type qualifier is meaningless on cast type',
+            #68 : 'integer conversion resulted in a change of sign',
+            #111 : 'statement is unreachable',
+            #191 : 'type qualifier is meaningless on cast type',
             193 : 'zero used for undefined preprocessing identifier "SYMB"',
-            279 : 'controlling expression is constant',
-            304 : 'access control not specified ("public" by default)', # comes from boost
+            #279 : 'controlling expression is constant',
+            #304 : 'access control not specified ("public" by default)', # comes from boost
             383 : 'value copied to temporary, reference to temporary used',
-            424 : 'Extra ";" ignored',
-            444 : 'destructor for base class "CLASS" is not virtual',
-            522 : 'function "FUNC" redeclared "inline" after being called',
-            593 : 'variable "arg1" was set but never used', # Generated by *_wrap.cc
-            #654 : 'overloaded virtual function "FUNC" is only partially overridden in class template "TEMP"',
-            858 : 'type qualifier on return type is meaningless',
+            #424 : 'Extra ";" ignored',
+            #444 : 'destructor for base class "CLASS" is not virtual',
             981 : 'operands are evaluated in unspecified order',
-            1125 : 'function "FUNC" is hidden by "OFUNC" -- virtual function override intended?',
             1418 : 'external function definition with no prior declaration',
-            1572 : 'floating-point equality and inequality comparisons are unreliable',
-            1599 : 'declaration hides variable "VAR"', # Generated by *_wrap.cc
-            1720 : 'function "FUNC" has no corresponding member operator delete (to be called if an exception is thrown during initialization of an allocated object)',
+            1419 : 'external declaration in primary source file',
+            #1572 : 'floating-point equality and inequality comparisons are unreliable',
+            #1720 : 'function "FUNC" has no corresponding member operator delete (to be called if an exception is thrown during initialization of an allocated object)',
             2259 : 'non-pointer conversion from "int" to "float" may lose significant bits',
             }
-        if False:
-            env.Append(CCFLAGS = ["-wd%s" % (",".join([str(k) for k in ignoreWarnings.keys()]))])
-        #env.Append(LINKFLAGS = ["-Xlinker", "-no_compact_unwind"])
+        env.Append(CCFLAGS = ["-wd%s" % (",".join([str(k) for k in ignoreWarnings.keys()]))])
+        # Workaround intel bug; cf. RHL's intel bug report 580167
+        env.Append(LINKFLAGS = ["-Wl,-no_compact_unwind", "-wd,11015"])
         
     if env['opt']:
         env.Append(CCFLAGS = ['-O%d' % int(env['opt'])])
@@ -461,15 +454,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         env.Append(CCFLAGS = '--coverage')
         env.Append(LINKFLAGS = '--coverage')
 
-    #
-    # scons 0.97 doesn't support these. Sigh
-    #
-    try:
-        env.GetOption("silent")
-    except SCons.Errors.UserError:      # 0.97
-        SCons.Script.Main.ssoptions.settable["no_exec"] = SCons.Script.Main.options.noexec
-        SCons.Script.Main.ssoptions.settable["help"] = SCons.Script.Main.options.help_msg
-        SCons.Script.Main.ssoptions.settable["silent"] = SCons.Script.Main.options.no_progress
+    env.GetOption("silent")
     #
     # Is C++'s TR1 available?  If not, use e.g. #include "lsst/tr1/foo.h"
     #
@@ -660,29 +645,29 @@ makeEnv = MakeEnv                       # backwards compatibility
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def LsstOptions(files=None):
-    """@brief Create an Options object using LSST conventions.
+def LsstVariables(files=None):
+    """@brief Create a Variables object using LSST conventions.
 
-    The SCons Options object is used in the LSST build system to define
+    The SCons Variables object is used in the LSST build system to define
     variables that can be used on the command line or loaded in from a file.
     These variables given as "name=value" arguments on the scons command line or
-    listed, one per line, in a separate file.  An options file can be specified
-    on the scons command line with the "optfile" variable (e.g.
-    "optfile=myoptions.py").  If optfile is not specified, scons will look for
+    listed, one per line, in a separate file.  An variables file can be specified
+    on the scons command line with the "optfile" variable (e.g. "optfile=myoptions.py";
+    "variables" used to be called "options").  If optfile is not specified, scons will look for
     a file called "buildOpts.py" by default.  (You can specify additional
     option files to load via the "files" argument to this constructor.)  If the
     user provides any command-line variable options that has not been defined
-    via an Options instance, scons will exit with an error, complaining about
+    via an Variables instance, scons will exit with an error, complaining about
     an unused argument.  
 
-    To define your custom variable options, you should create an Options object
+    To define your custom variable options, you should create an Variables object
     with this constructor function \e prior to the use of scons.makeEnv.
-    Then you can use the standard Options member functions (Add() or 
-    AddOptions()) to define your variable options (see the
-    @link http://www.scons.org/doc/0.97/HTML/scons-man.html the SCons Man
+    Then you can use the standard Variables member functions (Add() or 
+    AddVariables()) to define your variable options (see
+    @link http://www.scons.org/doc/HTML/scons-man.html the SCons Man
     page for details).  For example,
     @code
-       opts = scons.LsstOptions()
+       opts = scons.LsstVariables()
        opts.Add('pkgsurl', 'the base url for the software server',
                 'http://dev.lsstcorp.org/pkgs')
     @endcode
@@ -691,15 +676,15 @@ def LsstOptions(files=None):
     string.
 
     To actually use these options, you must load them into the environment
-    by passing it to the scons.makeEnv() function via its options argument:
+    by passing it to the scons.makeEnv() function via its variables argument:
     @code
-       env = scons.makeEnv("mypackage", "$HeadURL$", options=opts)
+       env = scons.makeEnv("mypackage", "$HeadURL$", variables=opts)
     @endcode
     scons.makeEnv() will automatically look for these options on the command
     line as well as any option files.  The values found their will be loaded
-    into the environment's dictionary (i.e. accessible via evn[optionname]).
+    into the environment's dictionary (i.e. accessible via env[optionname]).
 
-    Note that makeEnv() will internally add additional options to the Options
+    Note that makeEnv() will internally add additional options to the Variables
     object you pass it, overriding your definitions where you have used the
     same name.  These standard options include:
     @verbatim
@@ -716,7 +701,7 @@ def LsstOptions(files=None):
         version   Specify the current version (default is auto-detected)
     @endverbatim    
     
-    This constructor should be preferred over the standard SCons Options
+    This constructor should be preferred over the standard SCons Variables
     constructor because it defines various LSST conventions.  In particular,
     it defines the default name an options file to look for.  It will also
     print a warning message if any specified options file (other than the
@@ -744,8 +729,7 @@ def LsstOptions(files=None):
     if not ARGUMENTS.has_key("optfile"):
         files.append("buildOpts.py")
 
-    return Options(files)
-    
+    return Variables(files)
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -1149,7 +1133,7 @@ def setPrefix(env, versionString, eups_product_path=None):
         if eups_prefix:
             print >> sys.stderr, "Ignoring prefix %s from EUPS_PATH" % eups_prefix
 
-        return env['prefix']
+        return makeProductPath(env['prefix'], env)
     elif env.has_key('eups_path') and env['eups_path']:
         prefix = eups_prefix
     else:
@@ -1568,7 +1552,7 @@ if False:
 
 # See if a program supports a given flag
 if False:
-    def CheckOption(context, prog, flag):
+    def CheckVariable(context, prog, flag):
         context.Message('Checking for option %s to %s... ' % (flag, prog))
         result = context.TryAction(["%s %s" % (prog, flag)])[0]
         context.Result(result)
@@ -1576,7 +1560,7 @@ if False:
 
     env = Environment()
     conf = Configure(env, custom_tests = {'CheckOption' : CheckOption})
-    if not conf.CheckOption("gcc", "-Wall"):
+    if not conf.CheckVariable("gcc", "-Wall"):
         print "Can't find flag"
     env = conf.Finish()
     
