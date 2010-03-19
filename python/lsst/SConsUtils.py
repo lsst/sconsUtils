@@ -194,6 +194,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         BoolVariable('setenv', 'Treat arguments such as Foo=bar as defining construction variables', False),
         ('version', 'Specify the current version', None),
         ('baseversion', 'Specify the current base version', None),
+        ('noOptFiles', "Specify a list of files that should NOT be optimized", None)
         )
 
     products = []
@@ -264,13 +265,6 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
 
     env.libs = {}
     env.libs[eups_product] = [eups_product]; # Assume that this product has a library of the same name
-    #
-    # SCons gets confused about shareable/static objects if
-    # you specify libraries as e.g. "#libwcs.a", but it's OK
-    # if you say LIBS = ["wcs"].
-    #
-    if False:
-        env['STATIC_AND_SHARED_OBJECTS_ARE_THE_SAME'] = True
     #
     # We don't want "lib" inserted at the beginning of loadable module names;
     # we'll import them under their given names.
@@ -1529,6 +1523,40 @@ def SwigDependencies(self):
     self.Prepend(SCANNERS=[SWIGScanner])
     
 SConsEnvironment.SwigDependencies = SwigDependencies
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def SourcesForSharedLibrary(self, files):
+    """Prepare the list of files to be passed to a SharedLibrary constructor
+
+In particular, ensure that any files listed in env.NoOptFiles (set by the command line option
+noOptFile="file1 file2") are built without optimisation.
+
+The usage pattern in an SConscript file is:
+   ccFiles = env.SourcesForSharedLibrary(glob.glob("../src/*/*.cc"))
+   env.SharedLibrary('afw', ccFiles, LIBS=filter(lambda x: x != "afw", env.getlibs("afw")))
+"""
+
+    if not self["noOptFiles"]:
+        return files
+
+    noOptFiles = Split(self["noOptFiles"])
+
+    noOptFilesRe = "/(%s)$" % "|".join(noOptFiles) # we don't bother to escape "."; this should be OK
+
+    CCFLAGS_NOOPT = re.sub(r"-O\d\s*", "", str(self["CCFLAGS"])) # remove -O flags from CCFLAGS
+
+    sources = []
+    for ccFile in files:
+        if re.search(noOptFilesRe, ccFile):
+            self.SharedObject(ccFile, CCFLAGS=CCFLAGS_NOOPT)
+            ccFile = os.path.splitext(ccFile)[0] + self["SHOBJSUFFIX"]
+
+        sources.append(ccFile)
+
+    return sources
+
+SConsEnvironment.SourcesForSharedLibrary = SourcesForSharedLibrary
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
