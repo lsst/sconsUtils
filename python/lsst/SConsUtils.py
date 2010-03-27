@@ -185,6 +185,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         EnumVariable('cc', 'Choose the compiler to use', '', allowed_values=('', 'gcc', 'icc')),
         BoolVariable('debug', 'Set to enable debugging flags', True),
         ('eupsdb', 'Specify which element of EUPS_PATH should be used', None),
+        BoolVariable('filterWarn', 'Filter out a class of warnings deemed irrelevant', True),
         ('flavor', 'Set the build flavor', None),
         BoolVariable('force', 'Set to force possibly dangerous behaviours', False),
         ('optfile', 'Specify a file to read default options from', None),
@@ -377,11 +378,21 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                           }
 
         context.Message("Checking who built the CC compiler...")
-        action = r"$CC --version | perl -ne 'chomp; " + r"print if(s/.*(%s).*/\1/)' > $TARGET" \
-                 % "|".join(versionStrings.keys())
-        result = context.TryAction([action])
-        context.Result(result[1])
-        return versionStrings.get(result[1], "unknown")
+        if False:                           # fails with scons 1.2.d20100306.r4691 (1.3 release candidate)
+            action = r"$CC --version | perl -ne 'chomp; " + r"print if(s/.*(%s).*/\1/)' > $TARGET" \
+                     % "|".join(versionStrings.keys())
+            result = context.TryAction(Action(action))
+            context.Result(result[1])
+            return versionStrings.get(result[1], "unknown")
+        else:                           # workaround scons bug
+            for string, key in versionStrings.items():
+                action = r"$CC --version | grep '%s' > $TARGET" % string
+                result = context.TryAction(Action(action))
+                if result[0]:
+                    context.Result(key)
+                    return key
+
+            return "unknown"
 
     if env.GetOption("clean") or env.GetOption("no_exec") or env.GetOption("help") :
         env.whichCc = "unknown"         # who cares? We're cleaning/not execing, not building
@@ -413,29 +424,28 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     if env.whichCc == "gcc":
         env.Append(CCFLAGS = ['-Wall'])
     if env.whichCc == "icc":
-        if True:
-            env.Append(CCFLAGS = ['-Wall'])
-        else:
-            print >> sys.stderr, "Turning warnings OFF"
+        env.Append(CCFLAGS = ['-Wall'])
 
         ignoreWarnings = {
-            #68 : 'integer conversion resulted in a change of sign',
-            #111 : 'statement is unreachable',
-            #191 : 'type qualifier is meaningless on cast type',
+            21 : 'type qualifiers are meaningless in this declaration',
+            68 : 'integer conversion resulted in a change of sign',
+            111 : 'statement is unreachable',
+            191 : 'type qualifier is meaningless on cast type',
             193 : 'zero used for undefined preprocessing identifier "SYMB"',
-            #279 : 'controlling expression is constant',
-            #304 : 'access control not specified ("public" by default)', # comes from boost
+            279 : 'controlling expression is constant',
+            304 : 'access control not specified ("public" by default)', # comes from boost
             383 : 'value copied to temporary, reference to temporary used',
             #424 : 'Extra ";" ignored',
-            #444 : 'destructor for base class "CLASS" is not virtual',
+            444 : 'destructor for base class "CLASS" is not virtual',
             981 : 'operands are evaluated in unspecified order',
             1418 : 'external function definition with no prior declaration',
             1419 : 'external declaration in primary source file',
-            #1572 : 'floating-point equality and inequality comparisons are unreliable',
-            #1720 : 'function "FUNC" has no corresponding member operator delete (to be called if an exception is thrown during initialization of an allocated object)',
+            1572 : 'floating-point equality and inequality comparisons are unreliable',
+            1720 : 'function "FUNC" has no corresponding member operator delete (to be called if an exception is thrown during initialization of an allocated object)',
             2259 : 'non-pointer conversion from "int" to "float" may lose significant bits',
             }
-        env.Append(CCFLAGS = ["-wd%s" % (",".join([str(k) for k in ignoreWarnings.keys()]))])
+        if env['filterWarn']:
+            env.Append(CCFLAGS = ["-wd%s" % (",".join([str(k) for k in ignoreWarnings.keys()]))])
         # Workaround intel bug; cf. RHL's intel bug report 580167
         env.Append(LINKFLAGS = ["-Wl,-no_compact_unwind", "-wd,11015"])
         
@@ -636,6 +646,48 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     return env
 
 makeEnv = MakeEnv                       # backwards compatibility
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def ConfigureDependentProducts(productName, dependencyFilename=None):
+    """Process a product's dependency file, returning a list suitable for passing to SconsUtils.makeEnv
+
+E.g.
+    env = scons.makeEnv("afw",
+                        r"$HeadURL: svn+ssh://svn.lsstcorp.org/DMS/afw/trunk/SConstruct $",
+                        scons.ConfigureDependentProducts("afw"))
+"""
+    if not dependencyFilename:
+        dependencyFilename = "dependencies.dat"
+
+    productDir = eups.productDir(productName)
+    if not productDir:
+        raise RuntimeError, ("%s is not setup" % productName)
+
+    dependencies = os.path.join(productDir, "etc", dependencyFilename)
+
+    try:
+        fd = open(dependencies)
+    except:
+        raise RuntimeError, ("Unable to lookup dependencies for %s in %s" % (productName, dependencies))
+
+    dependencies = []
+
+    for line in fd.readlines():
+        if re.search(r"^\s*#", line):
+            continue
+
+        mat = re.search(r"^(\S+)\s*:\s*(\S*)\s*$", line)
+        if mat:
+            dependencies += ConfigureDependentProducts(mat.group(1), mat.group(2))
+            continue
+        #
+        # Split the line into "" separated fields
+        #
+        line = re.sub(r"(^\s*|\s*,\s*|\s*$)", "", line) # remove whitespace and commas in the config file
+        dependencies.append([f for f in re.split(r"['\"]", line) if f])
+
+    return dependencies
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
