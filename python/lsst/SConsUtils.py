@@ -1589,7 +1589,7 @@ The usage pattern in an SConscript file is:
    env.SharedLibrary('afw', ccFiles, LIBS=filter(lambda x: x != "afw", env.getlibs("afw")))
 """
 
-    if not self["noOptFiles"]:
+    if not self.get("noOptFiles"):
         return files
 
     noOptFiles = Split(self["noOptFiles"])
