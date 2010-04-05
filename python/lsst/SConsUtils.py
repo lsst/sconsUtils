@@ -168,7 +168,8 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     #
     # We made the changes needed for scons 1.2; some (Option -> Variable) are not backwards compatible
     #
-    EnsureSConsVersion(1, 2, 0)
+    if False:                           # apparently we're using trunk sconsUtils in the buildbot
+        EnsureSConsVersion(1, 2, 0)
     #
     # We don't usually want a traceback at the interactive prompt
     # XXX This hook appears to be ignored by scons. Why?
