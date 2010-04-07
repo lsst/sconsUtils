@@ -628,7 +628,21 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         else:
             sys.excepthook(RuntimeError, msg, None)
     #
-    # Include TOPLEVEL/include while searching for .h files;
+    # If we called ConfigureDependentProducts, automatically include all dependencies which declare
+    # libraries in env.libs[eups_product]
+    #
+    # The usedConfigureDependentProducts test is only needed for backwards compatibility
+    #
+    try:
+        if usedConfigureDependentProducts and dependencies:
+            for productProps in dependencies:
+                product = productProps[0]
+                if env.libs.has_key(product):
+                    env.libs[eups_product] += env.libs[product]
+    except:
+        pass                            # an old SConstruct file
+    #
+    # include TOPLEVEL/include while searching for .h files;
     # include TOPLEVEL/lib while searching for libraries
     #
     for d in ["include"]:
@@ -691,6 +705,11 @@ E.g.
         #
         line = re.sub(r"(^\s*|\s*,\s*|\s*$)", "", line) # remove whitespace and commas in the config file
         dependencies.append([f for f in re.split(r"['\"]", line) if f])
+    #
+    # Set a variable that tells us to automatically include this products in env.libs[eups_produc]
+    #
+    global usedConfigureDependentProducts
+    usedConfigureDependentProducts = True
 
     return dependencies
 
