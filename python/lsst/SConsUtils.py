@@ -242,12 +242,18 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     else:
         SHELL = None
         
+    if os.environ.has_key('TMPDIR'):     # needed by eups
+        TMPDIR = os.environ['TMPDIR']
+    else:
+        TMPDIR = None
+        
     ourEnv = {'EUPS_DIR' : os.environ['EUPS_DIR'],
               'EUPS_PATH' : os.environ['EUPS_PATH'],
               'PATH' : os.environ['PATH'],
               'DYLD_LIBRARY_PATH' : DYLD_LIBRARY_PATH,
               'LD_LIBRARY_PATH' : LD_LIBRARY_PATH,
               'SHELL' : SHELL,
+              'TMPDIR' : TMPDIR,
               }
     # Add all EUPS directories
     for k in filter(lambda x: re.search(r"_DIR$", x), os.environ.keys()):
@@ -713,6 +719,19 @@ E.g.
 
     return dependencies
 
+def getDependentProductIncludes(productName, dependencyFilename=None):
+    """Return a list of products that need to be included (i.e. ones that configured an include file)"""
+
+    dependencies = ConfigureDependentProducts(productName, dependencyFilename)
+
+    incs = {}
+    for productProps in dependencies:
+        product = productProps[0]
+        if len(productProps) >= 2:
+            incs[eups_product] = 1
+
+    return sorted(incs.keys())
+
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 def LsstVariables(files=None):
@@ -1102,12 +1121,9 @@ def copytree(src, dst, symlinks=False, ignore = None):
 
 def ProductDir(product):
     """Return a product's PRODUCT_DIR, or None"""
-    product_dir = product.upper() + "_DIR"
+    import eups
 
-    if os.environ.has_key(product_dir):
-        return os.environ[product_dir]
-    else:
-        return None
+    return eups.productDir(product)
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -1616,9 +1632,10 @@ The usage pattern in an SConscript file is:
     if not self.get("noOptFiles"):
         return files
 
-    noOptFiles = Split(self["noOptFiles"])
+    noOptFiles = self["noOptFiles"].replace(".", r"\.") # it'll be used in an RE
+    noOptFiles = Split(noOptFiles.replace(",", " "))
 
-    noOptFilesRe = "/(%s)$" % "|".join(noOptFiles) # we don't bother to escape "."; this should be OK
+    noOptFilesRe = "/(%s)$" % "|".join(noOptFiles)
 
     CCFLAGS_NOOPT = re.sub(r"-O\d\s*", "", str(self["CCFLAGS"])) # remove -O flags from CCFLAGS
 
