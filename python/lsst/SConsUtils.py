@@ -210,7 +210,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
 
     for p in products:
         pdir = ProductDir(p)
-        if not pdir:
+        if not pdir or pdir == "none":
             continue
 
         opts.AddVariables(
