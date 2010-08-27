@@ -200,6 +200,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         BoolVariable('setenv', 'Treat arguments such as Foo=bar as defining construction variables', False),
         ('version', 'Specify the current version', None),
         ('baseversion', 'Specify the current base version', None),
+        ('optFiles', "Specify a list of files that SHOULD be optimized", None),
         ('noOptFiles', "Specify a list of files that should NOT be optimized", None)
         )
 
@@ -1622,26 +1623,48 @@ def SourcesForSharedLibrary(self, files):
     """Prepare the list of files to be passed to a SharedLibrary constructor
 
 In particular, ensure that any files listed in env.NoOptFiles (set by the command line option
-noOptFile="file1 file2") are built without optimisation.
+noOptFile="file1 file2") are built without optimisation and files listed in env.optFiles are
+built with optimisation
 
 The usage pattern in an SConscript file is:
    ccFiles = env.SourcesForSharedLibrary(glob.glob("../src/*/*.cc"))
    env.SharedLibrary('afw', ccFiles, LIBS=filter(lambda x: x != "afw", env.getlibs("afw")))
 """
 
-    if not self.get("noOptFiles"):
+    if not (self.get("optFiles") or self.get("noOptFiles")):
         return files
 
-    noOptFiles = self["noOptFiles"].replace(".", r"\.") # it'll be used in an RE
-    noOptFiles = Split(noOptFiles.replace(",", " "))
+    if self.get("optFiles"):
+        optFiles = self["optFiles"].replace(".", r"\.") # it'll be used in an RE
+        optFiles = Split(optFiles.replace(",", " "))
+        optFilesRe = "/(%s)$" % "|".join(optFiles)
+    else:
+        optFilesRe = None
 
-    noOptFilesRe = "/(%s)$" % "|".join(noOptFiles)
+    if self.get("noOptFiles"):
+        noOptFiles = self["noOptFiles"].replace(".", r"\.") # it'll be used in an RE
+        noOptFiles = Split(noOptFiles.replace(",", " "))
+        noOptFilesRe = "/(%s)$" % "|".join(noOptFiles)
+    else:
+        noOptFilesRe = None
 
-    CCFLAGS_NOOPT = re.sub(r"-O\d\s*", "", str(self["CCFLAGS"])) # remove -O flags from CCFLAGS
+    if self.get("opt"):
+        opt = int(self["opt"])
+    else:
+        opt = 0
+
+    if opt == 0:
+        opt = 3
+
+    CCFLAGS_OPT = re.sub(r"-O\d\s*", "-O%d " % opt, str(self["CCFLAGS"]))
+    CCFLAGS_NOOPT = re.sub(r"-O\d\s*", "", str(self["CCFLAGS"]))
 
     sources = []
     for ccFile in files:
-        if re.search(noOptFilesRe, ccFile):
+        if optFilesRe and re.search(optFilesRe, ccFile):
+            self.SharedObject(ccFile, CCFLAGS=CCFLAGS_OPT)
+            ccFile = os.path.splitext(ccFile)[0] + self["SHOBJSUFFIX"]
+        elif noOptFilesRe and re.search(noOptFilesRe, ccFile):
             self.SharedObject(ccFile, CCFLAGS=CCFLAGS_NOOPT)
             ccFile = os.path.splitext(ccFile)[0] + self["SHOBJSUFFIX"]
 
