@@ -186,6 +186,9 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     if opts is None:
         opts = LsstVariables()
 
+    AddOption('--noCheck', dest='checkDependencies', action='store_false', default=True,
+              help="Don't check dependencies")
+
     opts.AddVariables(
         EnumVariable('cc', 'Choose the compiler to use', '', allowed_values=('', 'gcc', 'icc')),
         BoolVariable('debug', 'Set to enable debugging flags', True),
@@ -303,6 +306,8 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     #
     if env['debug']:
         env.Append(CCFLAGS = ['-g'])
+
+    checkDependencies = GetOption('checkDependencies')
 
     eups_path = None
     try:
@@ -1122,9 +1127,28 @@ def copytree(src, dst, symlinks=False, ignore = None):
 
 def ProductDir(product):
     """Return a product's PRODUCT_DIR, or None"""
+
     import eups
 
-    return eups.productDir(product)
+    global _productDirs
+
+    try:
+        _productDirs
+    except:
+        try:
+            _productDirs = eups.productDir()
+        except TypeError:               # old version of eups (pre r18588)
+            _productDirs = None
+
+    if _productDirs:
+        pdir = _productDirs.get(product)
+    else:
+        pdir = eups.productDir(product)
+            
+    if pdir == "none":
+        pdir = None
+        
+    return pdir
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -1569,6 +1593,9 @@ def CheckSwig(self, language="python", ilang="C", ignoreWarnings=None,
         print >> sys.stderr, "Unknown input language %s" % ilang
         
     self['SWIGFLAGS'] += " -%s" % language
+    if False:
+        if language == "python":
+            self['SWIGFLAGS'] += " -keyword"
 
     if ignoreWarnings:
         self['SWIGFLAGS'] += " -w" + ",".join(Split(ignoreWarnings))    
