@@ -186,7 +186,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     if opts is None:
         opts = LsstVariables()
 
-    AddOption('--noCheck', dest='checkDependencies', action='store_false', default=True,
+    AddOption('--noCheckProducts', dest='checkDependencies', action='store_false', default=True,
               help="Don't check dependencies")
 
     opts.AddVariables(
@@ -433,7 +433,6 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
 
         conf = Configure(env, custom_tests = {'ClassifyCc' : ClassifyCc})
         env.whichCc = conf.ClassifyCc()
-
         conf.Finish()
     #
     # Compiler flags; CCFLAGS => C and C++
@@ -553,14 +552,16 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
 
                 if incfiles:
                     try:
-                        if env.CheckHeaderGuessLanguage(incdir, incfiles) and incdir:
+                        if incdir and \
+                               (not checkDependencies or env.CheckHeaderGuessLanguage(incdir, incfiles)):
                             env.Replace(CPPPATH = env['CPPPATH'] + [incdir])
                     except RuntimeError, msg:
                         errors += [str(msg)]
                         success = False
                         
                 if not (env.GetOption("no_exec") or env.GetOption("help")) and libs:
-                    conf = env.Clone(LIBPATH = env['LIBPATH'] + [libdir]).Configure()
+                    if checkDependencies:
+                        conf = env.Clone(LIBPATH = env['LIBPATH'] + [libdir]).Configure()
                     try:
                         libs, lang = libs.split(":")
                     except ValueError:
@@ -571,7 +572,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                         # Allow for boost messing with library names. Sigh.
                         lib = mangleLibraryName(env, libdir, lib)
                         
-                        if conf.CheckLib(lib, language=lang):
+                        if not checkDependencies or conf.CheckLib(lib, language=lang):
                             env.libs[product] += [lib]
                         else:
                             errors += ["Failed to find/use %s library" % (lib)]
@@ -579,14 +580,15 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
 
                     lib = mangleLibraryName(env, libdir, libs[-1])
                         
-                    if conf.CheckLib(lib, symbol, language=lang):
+                    if not checkDependencies or conf.CheckLib(lib, symbol, language=lang):
                         if libdir not in env['LIBPATH']:
                             env.Replace(LIBPATH = env['LIBPATH'] + [libdir])
                             Repository(libdir)                        
                     else:
                         errors += ["Failed to find/use %s library in %s" % (lib, libdir)]
                         success = False
-                    conf.Finish()
+                    if checkDependencies:
+                        conf.Finish()
 
                     env.libs[product] += [lib]
 
@@ -597,14 +599,16 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                 
                 if incfiles:
                     try:
-                        if incdir and env.CheckHeaderGuessLanguage(incdir, incfiles):
+                        if incdir and \
+                               (not checkDependencies or env.CheckHeaderGuessLanguage(incdir, incfiles)):
                             env.Replace(CPPPATH = env['CPPPATH'] + [incdir])
                     except RuntimeError, msg:
                         errors += [str(msg)]
                         success = False
 
                 if libs:
-                    conf = env.Configure()
+                    if checkDependencies:
+                        conf = env.Configure()
                     for lib in Split(libs):
                         try:
                             lib, lang = lib.split(":")
@@ -613,11 +617,12 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
 
                         lib = mangleLibraryName(env, libdir, lib)
 
-                        if conf.CheckLib(lib, symbol, language=lang):
+                        if not checkDependencies or conf.CheckLib(lib, symbol, language=lang):
                             env.libs[product] += [lib]
                         else:
                             success = False
-                    conf.Finish()
+                    if checkDependencies:
+                        conf.Finish()
 
                 if success:
                     continue
