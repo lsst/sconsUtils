@@ -710,7 +710,7 @@ E.g.
     dependencies = []
 
     for line in fd.readlines():
-        if re.search(r"^\s*#", line):
+        if re.search(r"^\s*(#.*)?$", line):
             continue
 
         mat = re.search(r"^(\S+)\s*:\s*(\S*)\s*$", line)
@@ -1246,7 +1246,7 @@ def setPrefix(env, versionString, eups_product_path=None):
         eups_prefix = None
 
     if env.has_key('prefix'):
-        if eups_prefix:
+        if eups_prefix and eups_prefix != env['prefix']:
             print >> sys.stderr, "Ignoring prefix %s from EUPS_PATH" % eups_prefix
 
         return makeProductPath(env['prefix'], env)
