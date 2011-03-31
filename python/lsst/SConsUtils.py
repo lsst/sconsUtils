@@ -188,19 +188,26 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
 
     AddOption('--noCheckProducts', dest='checkDependencies', action='store_false', default=True,
               help="Don't check dependencies")
+    # These options were originally settable as variables; that's still supported for "force"
+    # but this way is easier/more idiomatic
+    AddOption('--filterWarn', dest='filterWarn', action='store_true', default=False,
+              help="Filter out a class of warnings deemed irrelevant"),
+    AddOption('--force', dest='force', action='store_true', default=False,
+              help="Set to force possibly dangerous behaviours")
+    AddOption('--setenv', dest='setenv', action='store_true', default=False,
+              help="Treat arguments such as Foo=bar as defining construction variables")
 
     opts.AddVariables(
-        EnumVariable('cc', 'Choose the compiler to use', '', allowed_values=('', 'gcc', 'icc')),
-        BoolVariable('debug', 'Set to enable debugging flags', True),
+        ('archflags', 'Extra architecture specification to add to CC/LINK flags (e.g. -m32)', ''),
+        ('cc', 'Choose the compiler to use', ''),
+        BoolVariable('debug', 'Set to enable debugging flags (use --debug)', True),
         ('eupsdb', 'Specify which element of EUPS_PATH should be used', None),
-        BoolVariable('filterWarn', 'Filter out a class of warnings deemed irrelevant', True),
         ('flavor', 'Set the build flavor', None),
-        BoolVariable('force', 'Set to force possibly dangerous behaviours', False),
+        BoolVariable('force', 'Set to force possibly dangerous behaviours (use --force)', False),
         ('optfile', 'Specify a file to read default options from', None),
         ('prefix', 'Specify the install destination', None),
         EnumVariable('opt', 'Set the optimisation level', 0, allowed_values=('0', '1', '2', '3')),
         EnumVariable('profile', 'Compile/link for profiler', 0, allowed_values=('0', '1', 'pg', 'gcov')),
-        BoolVariable('setenv', 'Treat arguments such as Foo=bar as defining construction variables', False),
         ('version', 'Specify the current version', None),
         ('baseversion', 'Specify the current base version', None),
         ('optFiles', "Specify a list of files that SHOULD be optimized", None),
@@ -230,35 +237,16 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         toolpath += ["python/lsst"]
     elif os.environ.has_key('SCONSUTILS_DIR'):
         toolpath += ["%s/python/lsst" % os.environ['SCONSUTILS_DIR']]
-
-    if os.environ.has_key('LD_LIBRARY_PATH'):
-        LD_LIBRARY_PATH = os.environ['LD_LIBRARY_PATH']
-    else:
-        LD_LIBRARY_PATH = None
         
-    if os.environ.has_key('DYLD_LIBRARY_PATH'):
-        DYLD_LIBRARY_PATH = os.environ['DYLD_LIBRARY_PATH']
-    else:
-        DYLD_LIBRARY_PATH = None
-
-    if os.environ.has_key('SHELL'):     # needed by eups
-        SHELL = os.environ['SHELL']
-    else:
-        SHELL = None
-        
-    if os.environ.has_key('TMPDIR'):     # needed by eups
-        TMPDIR = os.environ['TMPDIR']
-    else:
-        TMPDIR = None
-        
-    ourEnv = {'EUPS_DIR' : os.environ['EUPS_DIR'],
-              'EUPS_PATH' : os.environ['EUPS_PATH'],
-              'PATH' : os.environ['PATH'],
-              'DYLD_LIBRARY_PATH' : DYLD_LIBRARY_PATH,
-              'LD_LIBRARY_PATH' : LD_LIBRARY_PATH,
-              'SHELL' : SHELL,
-              'TMPDIR' : TMPDIR,
-              }
+    ourEnv = {
+        'EUPS_DIR' : os.environ.get("EUPS_DIR"),
+        'EUPS_PATH' : os.environ.get("EUPS_PATH"),
+        'PATH' : os.environ.get("PATH"),
+        'DYLD_LIBRARY_PATH' : os.environ.get("DYLD_LIBRARY_PATH"),
+        'LD_LIBRARY_PATH' : os.environ.get("LD_LIBRARY_PATH"),
+        'SHELL' : os.environ.get("SHELL"), # needed by eups
+        'TMPDIR' : os.environ.get("TMPDIR"), # needed by eups
+        }
     # Add all EUPS directories
     for k in filter(lambda x: re.search(r"_DIR$", x), os.environ.keys()):
         p = re.search(r"^(.*)_DIR$", k).groups()[0]
@@ -304,6 +292,10 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     #
     # Process those arguments
     #
+    for k in ("force",):                # these may now be set as options instead of variables
+        if GetOption(k):
+            env[k] = True
+        
     if env['debug']:
         env.Append(CCFLAGS = ['-g'])
 
@@ -351,7 +343,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     # Process otherwise unknown arguments.  If setenv is true,
     # set construction variables; otherwise generate an error
     #
-    if env['setenv']:
+    if GetOption("setenv"):
         for key in ARGUMENTS.keys():
             env[key] = Split(ARGUMENTS[key])
     else:
@@ -417,7 +409,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         if env['cc'] != '':
             CC = CXX = None
 
-            if re.search(r"^gcc( |$)", env['cc']):
+            if re.search(r"^gcc(-\d+(\.\d+)*)?( |$)", env['cc']):
                 CC = env['cc']
                 CXX = re.sub(r"^gcc", "g++", CC)
             elif re.search(r"^icc( |$)", env['cc']):
@@ -437,6 +429,11 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     #
     # Compiler flags; CCFLAGS => C and C++
     #
+    ARCHFLAGS = os.environ.get("ARCHFLAGS", env.get('archflags'))
+    if ARCHFLAGS:
+        env.Append(CCFLAGS = [ARCHFLAGS])
+        env.Append(LINKFLAGS = [ARCHFLAGS])
+
     if env.whichCc == "gcc":
         env.Append(CCFLAGS = ['-Wall'])
     if env.whichCc == "icc":
@@ -460,7 +457,8 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
             1720 : 'function "FUNC" has no corresponding member operator delete (to be called if an exception is thrown during initialization of an allocated object)',
             2259 : 'non-pointer conversion from "int" to "float" may lose significant bits',
             }
-        if env['filterWarn']:
+
+        if GetOption('filterWarn'):
             env.Append(CCFLAGS = ["-wd%s" % (",".join([str(k) for k in ignoreWarnings.keys()]))])
         # Workaround intel bug; cf. RHL's intel bug report 580167
         env.Append(LINKFLAGS = ["-Wl,-no_compact_unwind", "-wd,11015"])
@@ -698,14 +696,16 @@ E.g.
 
     productDir = eups.productDir(productName)
     if not productDir:
-        raise RuntimeError, ("%s is not setup" % productName)
+        print >> sys.stderr, "%s is not setup" % productName
+        sys.exit(1)
 
     dependencies = os.path.join(productDir, "etc", dependencyFilename)
 
     try:
         fd = open(dependencies)
     except:
-        raise RuntimeError, ("Unable to lookup dependencies for %s in %s" % (productName, dependencies))
+        print >> sys.stderr, "Unable to lookup dependencies for %s in %s" % (productName, dependencies)
+        sys.exit(1)
 
     dependencies = []
 
@@ -1689,7 +1689,7 @@ The usage pattern in an SConscript file is:
         opt = 3
 
     CCFLAGS_OPT = re.sub(r"-O\d\s*", "-O%d " % opt, str(self["CCFLAGS"]))
-    CCFLAGS_NOOPT = re.sub(r"-O\d\s*", "", str(self["CCFLAGS"]))
+    CCFLAGS_NOOPT = re.sub(r"-O\d\s*", "-O0 ", str(self["CCFLAGS"])) # remove -O flags from CCFLAGS
 
     sources = []
     for ccFile in files:
