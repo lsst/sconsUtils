@@ -194,6 +194,8 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
               help="Filter out a class of warnings deemed irrelevant"),
     AddOption('--force', dest='force', action='store_true', default=False,
               help="Set to force possibly dangerous behaviours")
+    AddOption('--prefix', dest='prefix', action='store', default=False,
+              help="Specify the install destination")
     AddOption('--setenv', dest='setenv', action='store_true', default=False,
               help="Treat arguments such as Foo=bar as defining construction variables")
 
@@ -292,9 +294,9 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     #
     # Process those arguments
     #
-    for k in ("force",):                # these may now be set as options instead of variables
+    for k in ("force", "prefix"):       # these may now be set as options instead of variables
         if GetOption(k):
-            env[k] = True
+            env[k] = GetOption(k)
         
     if env['debug']:
         env.Append(CCFLAGS = ['-g'])
