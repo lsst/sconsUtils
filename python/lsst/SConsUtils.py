@@ -384,6 +384,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         """Return a string identifing the compiler in use"""
         versionStrings = {"Free Software Foundation" : "gcc",
                           "Intel Corporation" : "icc",
+                          "Apple clang version" : "clang"
                           }
 
         context.Message("Checking who built the CC compiler...")
@@ -415,6 +416,9 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
             elif re.search(r"^icc( |$)", env['cc']):
                 CC = env['cc']
                 CXX = re.sub(r"^icc", "icpc", CC)
+            elif re.search(r"^clang( |$)", env['cc']):
+                CC = env['cc']
+                CXX = re.sub(r"^clang", "clang++", CC)
             else:
                 errors += ["Unrecognised compiler:%s" % env['cc']]
 
@@ -434,37 +438,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         env.Append(CCFLAGS = [ARCHFLAGS])
         env.Append(LINKFLAGS = [ARCHFLAGS])
 
-    if env.whichCc == "gcc":
-        env.Append(CCFLAGS = ['-Wall'])
-    if env.whichCc == "icc":
-        env.Append(CCFLAGS = ['-Wall'])
-
-        ignoreWarnings = {
-            21 : 'type qualifiers are meaningless in this declaration',
-            68 : 'integer conversion resulted in a change of sign',
-            111 : 'statement is unreachable',
-            191 : 'type qualifier is meaningless on cast type',
-            193 : 'zero used for undefined preprocessing identifier "SYMB"',
-            279 : 'controlling expression is constant',
-            304 : 'access control not specified ("public" by default)', # comes from boost
-            383 : 'value copied to temporary, reference to temporary used',
-            #424 : 'Extra ";" ignored',
-            444 : 'destructor for base class "CLASS" is not virtual',
-            981 : 'operands are evaluated in unspecified order',
-            1418 : 'external function definition with no prior declaration',
-            1419 : 'external declaration in primary source file',
-            1572 : 'floating-point equality and inequality comparisons are unreliable',
-            1720 : 'function "FUNC" has no corresponding member operator delete (to be called if an exception is thrown during initialization of an allocated object)',
-            2259 : 'non-pointer conversion from "int" to "float" may lose significant bits',
-            }
-
-        if GetOption('filterWarn'):
-            env.Append(CCFLAGS = ["-wd%s" % (",".join([str(k) for k in ignoreWarnings.keys()]))])
-        # Workaround intel bug; cf. RHL's intel bug report 580167
-        env.Append(LINKFLAGS = ["-Wl,-no_compact_unwind", "-wd,11015"])
-        
-    if env['opt']:
-        env.Append(CCFLAGS = ['-O%d' % int(env['opt'])])
+    # We'll add warning and optimisation options last
     if env['profile'] == '1' or env['profile'] == "pg":
         env.Append(CCFLAGS = ['-pg'])
         env.Append(LINKFLAGS = ['-pg'])
@@ -635,6 +609,49 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
             else:
                 errors += ["Failed to find a valid %s --- do you need to setup %s or specify %s=DIR?" % \
                            (product, product, product)]
+        
+    if env['opt']:
+        env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-O(\d|s)$", o)]
+        env.MergeFlags('-O%d' % int(env['opt']))
+
+    if env.whichCc == "clang":
+        env.Append(CCFLAGS = ['-Wall'])
+        env.Append(CCFLAGS = ['-Wno-char-subscripts']) # seems innocous enough, and is used by boost
+
+        ignoreWarnings = {
+            "unused-function" : 'boost::regex has functions in anon namespaces in headers',
+            }
+
+        if GetOption('filterWarn'):
+            env.Append(CCFLAGS = ["-Wno-%s" % (",".join([str(k) for k in ignoreWarnings.keys()]))])
+    elif env.whichCc == "gcc":
+        env.Append(CCFLAGS = ['-Wall'])
+    elif env.whichCc == "icc":
+        env.Append(CCFLAGS = ['-Wall'])
+
+        ignoreWarnings = {
+            21 : 'type qualifiers are meaningless in this declaration',
+            68 : 'integer conversion resulted in a change of sign',
+            111 : 'statement is unreachable',
+            191 : 'type qualifier is meaningless on cast type',
+            193 : 'zero used for undefined preprocessing identifier "SYMB"',
+            279 : 'controlling expression is constant',
+            304 : 'access control not specified ("public" by default)', # comes from boost
+            383 : 'value copied to temporary, reference to temporary used',
+            #424 : 'Extra ";" ignored',
+            444 : 'destructor for base class "CLASS" is not virtual',
+            981 : 'operands are evaluated in unspecified order',
+            1418 : 'external function definition with no prior declaration',
+            1419 : 'external declaration in primary source file',
+            1572 : 'floating-point equality and inequality comparisons are unreliable',
+            1720 : 'function "FUNC" has no corresponding member operator delete (to be called if an exception is thrown during initialization of an allocated object)',
+            2259 : 'non-pointer conversion from "int" to "float" may lose significant bits',
+            }
+
+        if GetOption('filterWarn'):
+            env.Append(CCFLAGS = ["-wd%s" % (",".join([str(k) for k in ignoreWarnings.keys()]))])
+        # Workaround intel bug; cf. RHL's intel bug report 580167
+        env.Append(LINKFLAGS = ["-Wl,-no_compact_unwind", "-wd,11015"])
         
     if errors:
         msg = "\n".join(errors)
@@ -1246,7 +1263,7 @@ def setPrefix(env, versionString, eups_product_path=None):
         eups_prefix = None
 
     if env.has_key('prefix'):
-        if eups_prefix and eups_prefix != env['prefix']:
+        if getVersion(env, versionString) != "unknown" and eups_prefix and eups_prefix != env['prefix']:
             print >> sys.stderr, "Ignoring prefix %s from EUPS_PATH" % eups_prefix
 
         return makeProductPath(env['prefix'], env)
@@ -1502,9 +1519,16 @@ def PkgConfigEUPS(self, product, function=None, unique=1):
         new = []
         for flag in self[k]:
             if isinstance(flag, tuple):
-                if flag[0] == "-arch":
-                    continue
-            new += [flag]    
+                f = flag[0]
+            else:
+                f = flag
+
+            if f in ("-arch", "-dynamic", "-fwrapv",
+                     "-fno-strict-aliasing", "-fno-common",
+                     "-Wstrict-prototypes"):
+                continue
+            
+            new += [flag]
         self[k] = new
 
 SConsEnvironment.PkgConfigEUPS = PkgConfigEUPS
@@ -1532,9 +1556,9 @@ def CheckPython(self):
         libpath = []
     pylibs = []
 
-    dir = distutils.sysconfig.get_config_var("LIBPL")
-    if not dir in libpath:
-        libpath += [dir]
+    libDir = distutils.sysconfig.get_config_var("LIBPL")
+    if not libDir  in libpath:
+        libpath += [libDir]
     pylibrary = distutils.sysconfig.get_config_var("LIBRARY")
     mat = re.search("(python.*)\.(a|so|dylib)$", pylibrary)
     if mat:
@@ -1559,6 +1583,22 @@ def CheckPython(self):
     except AttributeError:
         self.libs = {}
         
+    if self['PLATFORM'] == 'darwin':
+        frameworkDir = libDir           # search up the libDir tree for the proper home for frameworks
+        while frameworkDir:
+            frameworkDir, d2 = os.path.split(frameworkDir)
+
+            if d2 == "Python.framework":
+                if not "Python" in os.listdir(os.path.join(frameworkDir, d2)):
+                    print >> sys.stderr, \
+                          "Expected to find Python in framework directory %s, but it isn't there" % \
+                          frameworkDir
+                break
+
+        opt = "-F%s" % frameworkDir
+        if opt not in self["LDMODULEFLAGS"]:
+            self.Append(LDMODULEFLAGS = [opt,])
+
     self.libs["python"] = pylibs
 
 SConsEnvironment.CheckPython = CheckPython
@@ -1688,8 +1728,8 @@ The usage pattern in an SConscript file is:
     if opt == 0:
         opt = 3
 
-    CCFLAGS_OPT = re.sub(r"-O\d\s*", "-O%d " % opt, str(self["CCFLAGS"]))
-    CCFLAGS_NOOPT = re.sub(r"-O\d\s*", "-O0 ", str(self["CCFLAGS"])) # remove -O flags from CCFLAGS
+    CCFLAGS_OPT = re.sub(r"-O(\d|s)\s*", "-O%d " % opt, str(self["CCFLAGS"]))
+    CCFLAGS_NOOPT = re.sub(r"-O(\d|s)\s*", "-O0 ", str(self["CCFLAGS"])) # remove -O flags from CCFLAGS
 
     sources = []
     for ccFile in files:
