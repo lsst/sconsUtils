@@ -11,12 +11,15 @@ SCons.progress_display = SCons.Script.Main.progress_display
 import stat
 import sys
 from types import *
-import lsst.svn as svn
+from . import svn
 
 try:
     import eups
 except ImportError:
     pass    
+
+def checkVersion():
+    return "NEW VERSION!"
 
 def MakeEnv(eups_product, versionString=None, dependencies=[],
             eups_product_path=None, variables=None, traceback=False):
@@ -209,6 +212,8 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     products.sort()
 
     for p in products:
+        if p.startswith("boost"):
+            p = "boost"
         pdir = ProductDir(p)
         if not pdir:
             continue
@@ -222,10 +227,10 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
             )
 
     toolpath = []
-    if os.path.exists("python/lsst/SConsUtils.py"): # boostrapping sconsUtils
-        toolpath += ["python/lsst"]
+    if os.path.exists("python/lsst/scons/SConsUtils.py"): # boostrapping sconsUtils
+        toolpath += ["python/lsst/scons"]
     elif os.environ.has_key('SCONSUTILS_DIR'):
-        toolpath += ["%s/python/lsst" % os.environ['SCONSUTILS_DIR']]
+        toolpath += ["%s/python/lsst/scons" % os.environ['SCONSUTILS_DIR']]
 
     if os.environ.has_key('LD_LIBRARY_PATH'):
         LD_LIBRARY_PATH = os.environ['LD_LIBRARY_PATH']
@@ -246,7 +251,12 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         TMPDIR = os.environ['TMPDIR']
     else:
         TMPDIR = None
-        
+
+    if os.environ.has_key('BPDOX_PATH'):     # needed by bpdox
+        BPDOX_PATH = os.environ['BPDOX_PATH']
+    else:
+        BPDOX_PATH = None
+
     ourEnv = {'EUPS_DIR' : os.environ['EUPS_DIR'],
               'EUPS_PATH' : os.environ['EUPS_PATH'],
               'PATH' : os.environ['PATH'],
@@ -254,6 +264,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
               'LD_LIBRARY_PATH' : LD_LIBRARY_PATH,
               'SHELL' : SHELL,
               'TMPDIR' : TMPDIR,
+              'BPDOX_PATH' : BPDOX_PATH,
               }
     # Add all EUPS directories
     for k in filter(lambda x: re.search(r"_DIR$", x), os.environ.keys()):
@@ -271,12 +282,17 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
 		      toolpath = toolpath
 		      )
     env0 = env.Clone()
-    
+
     env['eups_product'] = eups_product
     Help(opts.GenerateHelpText(env))
 
     env.libs = {}
-    env.libs[eups_product] = [eups_product]; # Assume that this product has a library of the same name
+    if False:
+        env.libs[eups_product] = [eups_product]; # Assume that this product has a library of the same name
+
+    env.pylibs = {}    # extra libraries only needed for Python modules
+    env.testlibs = {}  # extra libraries only needed for C++ unit tests
+
     #
     # We don't want "lib" inserted at the beginning of loadable module names;
     # we'll import them under their given names.
@@ -503,6 +519,15 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
             product = productProps[0]
             if not env.libs.has_key(product):
                 env.libs[product] = []
+            if not env.pylibs.has_key(product):
+                env.pylibs[product] = []
+            if not env.testlibs.has_key(product):
+                env.testlibs[product] = []
+
+    #
+    # A list of doxygen tag files from dependent products with a doc/doxygen subdirectory.
+    #
+    env["DOXYGEN_TAGS"] = []
 
     env['CPPPATH'] = []
     env['LIBPATH'] = []
@@ -524,7 +549,11 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
             # Did they specify a directory on the command line? We accept:
             #   product{,Lib,Include}=DIR
             #
-            (topdir, incdir, libdir) = searchEnvForDirs(env, product)
+            if product.startswith("boost"):
+                (topdir, incdir, libdir) = searchEnvForDirs(env, "boost")
+            else:
+                (topdir, incdir, libdir) = searchEnvForDirs(env, product)
+
             #
             # See if pkgconfig knows about us.  ParseConfig sets values in env for us
             #
@@ -541,9 +570,12 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
             if topdir:
                 success = True          # they said they knew what was going on.  If they didn't
                                         # specify incfiles/libs, we'll have to trust them
-                if product == "numpy" or product == "pycore":
-                    import numpy
-                    incdir = numpy.get_include()
+
+                for midPath in ("doxygen", "htmlDir"):
+                    doxytagFile = os.path.join(topdir, "doc", midPath, "doxygen.tag")
+                    if os.path.exists(doxytagFile):
+                        env["DOXYGEN_TAGS"].append(doxytagFile)
+                        break
 
                 if incfiles:
                     try:
@@ -552,37 +584,65 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                     except RuntimeError, msg:
                         errors += [str(msg)]
                         success = False
-                        
                 if not (env.GetOption("no_exec") or env.GetOption("help")) and libs:
                     conf = env.Clone(LIBPATH = env['LIBPATH'] + [libdir]).Configure()
                     try:
                         libs, lang = libs.split(":")
                     except ValueError:
                         lang = "C"
+                    try:
+                        lang, libTarget = lang.split(";")
+                    except ValueError:
+                        libTarget = None
+                    if libTarget:
+                        libTarget = libTarget.strip().lower()
+
+                    if libTarget == "python":
+                        if not env.pylibs.has_key("python"):
+                            env.CheckPython()
+                        env.pylibs[product] += env.pylibs["python"]
+
+                    if product == "numpy" or product == "pycore":
+                        import numpy
+                        incdir = numpy.get_include()
 
                     libs = Split(libs)
                     for lib in libs[:-1]:
                         # Allow for boost messing with library names. Sigh.
                         lib = mangleLibraryName(env, libdir, lib)
-                        
-                        if conf.CheckLib(lib, language=lang):
-                            env.libs[product] += [lib]
+
+                        if libTarget == "python":
+                            print "Using library %s from %s." % (lib, libdir)
+                            env.pylibs[product] += [lib]
+                        elif conf.CheckLib(lib, language=lang):
+                            if libTarget == "test":
+                                env.testlibs[product] += [lib]
+                            else:
+                                env.libs[product] += [lib]
                         else:
                             errors += ["Failed to find/use %s library" % (lib)]
                             success = False
-
-                    lib = mangleLibraryName(env, libdir, libs[-1])
                         
-                    if conf.CheckLib(lib, symbol, language=lang):
+                    lib = mangleLibraryName(env, libdir, libs[-1])
+
+                    if libTarget == "python":
+                        print "Using library %s from %s." % (lib, libdir)
                         if libdir not in env['LIBPATH']:
                             env.Replace(LIBPATH = env['LIBPATH'] + [libdir])
-                            Repository(libdir)                        
+                            Repository(libdir)
+                        env.pylibs[product] += [lib]
+                    elif conf.CheckLib(lib, symbol, language=lang):
+                        if libdir not in env['LIBPATH']:
+                            env.Replace(LIBPATH = env['LIBPATH'] + [libdir])
+                            Repository(libdir)
+                        if libTarget == "test":
+                            env.testlibs[product] += [lib]
+                        else:
+                            env.libs[product] += [lib]
                     else:
                         errors += ["Failed to find/use %s library in %s" % (lib, libdir)]
                         success = False
                     conf.Finish()
-
-                    env.libs[product] += [lib]
 
                 if success:
                     continue
@@ -604,11 +664,26 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                             lib, lang = lib.split(":")
                         except ValueError:
                             lang = "C"
+                        try:
+                            lang, libTarget = lang.split(";")
+                        except ValueError:
+                            libTarget = None
+                        if libTarget:
+                            libTarget = libTarget.strip().lower()
 
                         lib = mangleLibraryName(env, libdir, lib)
 
-                        if conf.CheckLib(lib, symbol, language=lang):
-                            env.libs[product] += [lib]
+                        if libTarget == "python":
+                            if not env.pylibs.has_key("python"):
+                                env.CheckPython()
+                            env.pylibs[product] += env.pylibs["python"]
+                            print "Using library %s from %s." % (lib, libdir)
+                            env.pylibs[product] += [lib]
+                        elif conf.CheckLib(lib, symbol, language=lang):
+                            if libTarget == "test":
+                                env.testlibs[product] += [lib]
+                            else:
+                                env.libs[product] += [lib]
                         else:
                             success = False
                     conf.Finish()
@@ -645,6 +720,10 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                 product = productProps[0]
                 if env.libs.has_key(product):
                     env.libs[eups_product] += env.libs[product]
+                if env.pylibs.has_key(product):
+                    env.pylibs[eups_product] += env.pylibs[product]
+                if env.testlibs.has_key(product):
+                    env.testlibs[eups_product] += env.testlibs[product]
     except:
         pass                            # an old SConstruct file
     #
@@ -674,7 +753,7 @@ makeEnv = MakeEnv                       # backwards compatibility
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def ConfigureDependentProducts(productName, dependencyFilename=None):
+def ConfigureDependentProducts(productName, dependencyFilename=None, alreadyConfigured=None):
     """Process a product's dependency file, returning a list suitable for passing to SconsUtils.makeEnv
 
 E.g.
@@ -684,6 +763,9 @@ E.g.
 """
     if not dependencyFilename:
         dependencyFilename = "dependencies.dat"
+
+    if alreadyConfigured is None:
+        alreadyConfigured = set()
 
     productDir = eups.productDir(productName)
     if not productDir:
@@ -704,7 +786,9 @@ E.g.
 
         mat = re.search(r"^(\S+)\s*:\s*(\S*)\s*$", line)
         if mat:
-            dependencies += ConfigureDependentProducts(mat.group(1), mat.group(2))
+            if mat.group(1) not in alreadyConfigured:
+                dependencies += ConfigureDependentProducts(mat.group(1), mat.group(2), alreadyConfigured)
+                alreadyConfigured.add(mat.group(1))
             continue
         #
         # Split the line into "" separated fields
@@ -859,31 +943,52 @@ SConsEnvironment.CheckHeaderGuessLanguage = CheckHeaderGuessLanguage
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
+def removeDuplicates(seq):
+    unique = set()
+    _seq = seq
+    seq = []
+    for item in _seq:
+        if item not in unique:
+            unique.add(item)
+            seq.append(item)
+    return seq
+
+def extractLibs(dictionary, products):
+    libs = []
+    for lib in products:
+        for l in Split(lib):
+            if dictionary.has_key(l):
+                libs += dictionary[l]
+            else:
+                libs += [l]
+    return libs
+    
+
 def getlibs(env, *products):
     """Return a list of all the libraries needed by products named in the list;
     each element may be a string on names ("aa bb cc"). If the name isn't recognised
     it's taken to be a library name"""
-    
-    libs = []
-    for lib in products:
-        for l in Split(lib):
-            if env.libs.has_key(l):
-                libs += env.libs[l]
-            else:
-                libs += [l]
-
-    if True:                            # make each library apply only once
-        _libdict = {}
-        _libs = libs
-        libs = []
-        for l in _libs:
-            if not _libdict.has_key(l):
-                _libdict[l] = 1
-                libs += [l]
-
+    libs = extractLibs(env.libs, products)
+    libs = removeDuplicates(libs)
     return libs
 
 SConsEnvironment.getlibs = getlibs
+
+def getpylibs(env, *products):
+    """Like getlibs, but returns libs for compiling Python modules."""
+    libs = extractLibs(env.pylibs, products)
+    libs = removeDuplicates(libs)
+    return libs
+
+SConsEnvironment.getpylibs = getpylibs
+
+def gettestlibs(env, *products):
+    """Like getlibs, but returns libs for compiling C++ unit tests"""
+    libs = extractLibs(env.testlibs, products)
+    libs = removeDuplicates(libs)
+    return libs
+
+SConsEnvironment.gettestlibs = gettestlibs
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -1525,11 +1630,11 @@ def CheckPython(self):
 
     self.Replace(LIBPATH = libpath)
     try:
-        type(self.libs)
+        type(self.pylibs)
     except AttributeError:
-        self.libs = {}
+        self.pylibs = {}
         
-    self.libs["python"] = pylibs
+    self.pylibs["python"] = pylibs
 
 SConsEnvironment.CheckPython = CheckPython
 
@@ -1730,7 +1835,7 @@ def InstallDir(self, prefix, dir, ignoreRegexp = r"(~$|\.pyc$|\.os?$)", recursiv
     """
 
     if not self.installing:
-        return
+        return []
 
     targets = []
     for dirpath, dirnames, filenames in os.walk(dir):
@@ -1759,6 +1864,7 @@ def InstallLSST(self, prefix, dirs):
     for d in dirs:
         if d == "doc":
             t = self.InstallAs(os.path.join(prefix, "doc", "doxygen"), os.path.join("doc", "htmlDir"))
+            t += self.InstallDir(prefix, os.path.join("doc", "xml"))
         elif d == "ups":
             t = self.InstallEups(os.path.join(prefix, "ups"))
         else:
@@ -1769,3 +1875,60 @@ def InstallLSST(self, prefix, dirs):
     self.Clean("install", prefix)
 
 SConsEnvironment.InstallLSST = InstallLSST
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def PythonDependencies():
+    """Return the dependencies needed to build Python modules.
+
+    We can't add these to dependencies files, because we don't want the libraries 
+    them added to env.libs.
+    """
+    return [["python", "Python.h"],
+            ["numpy"],
+            ["boost", "boost/python.hpp", "boost_python:Python"]]
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def TestDependencies():
+    """Return the dependencies needed to build C++ unit tests.
+
+    We can't add these to dependencies files, because we don't want the libraries 
+    them added to env.libs.
+    """
+    return [["boost", "boost/test/unit_test.hpp", "boost_unit_test_framework:C++"]]
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def BuildDoxygenConfig(target, source, env):
+    shutil.copy2(source[0].abspath, target[0].abspath)
+    f = open(target[0].abspath, 'a')
+    values = []
+    for tagPath in env['DOXYGEN_TAGS']:
+        htmlDir, tagFile = os.path.split(tagPath)
+        values.append('"{tagPath}={htmlDir}"'.format(tagPath=tagPath, htmlDir=htmlDir))
+    f.write("TAGFILES = ")
+    f.write(" ".join(values))
+    f.write("\n")
+    f.close()
+
+def DoxygenConfig(env, src):
+    """Build a doxygen.conf file from a doxygen.conf.in, adding a TAGFILES option containing
+    all of the doxygen tag files from dependent products."""
+    dest, garbage = os.path.splitext(src)
+    return env.Command(dest, src, action=BuildDoxygenConfig)
+
+SConsEnvironment.DoxygenConfig = DoxygenConfig
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def BPDox(env, src, *dependencies):
+    """Generate a Boost.Python C++ source using bpdox (part of the bputils package).
+    """
+    packages = [env["eups_product"]]
+    for item in dependencies:
+        packages.extend(Split(item))
+    target, garbage = os.path.splitext(src)
+    return env.Command(target, src, action="bpdox $SOURCE {0}".format(" ".join(packages)))
+
+SConsEnvironment.BPDox = BPDox

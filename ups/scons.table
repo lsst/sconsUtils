@@ -1,2 +1,2 @@
-setupRequired(sconsUtils)
-setupOptional(sconsDistrib)
+setupRequired(sconsUtils bp)
+setupOptional(sconsDistrib 2.0.1+jb0)
