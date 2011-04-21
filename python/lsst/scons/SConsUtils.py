@@ -286,12 +286,12 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     env['eups_product'] = eups_product
     Help(opts.GenerateHelpText(env))
 
+    # Assume that this product has a library of the same name
+    # The first level of the libs dict is the "target": we have separate
+    # lists for main libraries, Python modules, and C++-coded unit tests.
     env.libs = {}
-    if False:
-        env.libs[eups_product] = [eups_product]; # Assume that this product has a library of the same name
-
-    env.pylibs = {}    # extra libraries only needed for Python modules
-    env.testlibs = {}  # extra libraries only needed for C++ unit tests
+    for target in ("main", "python", "test"):
+        env.libs[target] = {eups_product: [eups_product],}
 
     #
     # We don't want "lib" inserted at the beginning of loadable module names;
@@ -517,12 +517,9 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     if dependencies:
         for productProps in dependencies:
             product = productProps[0]
-            if not env.libs.has_key(product):
-                env.libs[product] = []
-            if not env.pylibs.has_key(product):
-                env.pylibs[product] = []
-            if not env.testlibs.has_key(product):
-                env.testlibs[product] = []
+            for target in ("main", "python", "test"):
+                if not env.libs[target].has_key(product):
+                    env.libs[target][product] = []
 
     #
     # A list of doxygen tag files from dependent products with a doc/doxygen subdirectory.
@@ -572,7 +569,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                                         # specify incfiles/libs, we'll have to trust them
 
                 for midPath in ("doxygen", "htmlDir"):
-                    doxytagFile = os.path.join(topdir, "doc", midPath, "doxygen.tag")
+                    doxytagFile = os.path.join(topdir, "doc", midPath, product + ".tag")
                     if os.path.exists(doxytagFile):
                         env["DOXYGEN_TAGS"].append(doxytagFile)
                         break
@@ -593,14 +590,12 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                     try:
                         lang, libTarget = lang.split(";")
                     except ValueError:
-                        libTarget = None
-                    if libTarget:
-                        libTarget = libTarget.strip().lower()
+                        libTarget = "main"
 
                     if libTarget == "python":
-                        if not env.pylibs.has_key("python"):
+                        if not env.libs["python"].has_key("python"):
                             env.CheckPython()
-                        env.pylibs[product] += env.pylibs["python"]
+                        env.libs["python"][product] += env.libs["python"]["python"]
 
                     if product == "numpy" or product == "pycore":
                         import numpy
@@ -613,12 +608,9 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
 
                         if libTarget == "python":
                             print "Using library %s from %s." % (lib, libdir)
-                            env.pylibs[product] += [lib]
+                            env.libs["python"][product] += [lib]
                         elif conf.CheckLib(lib, language=lang):
-                            if libTarget == "test":
-                                env.testlibs[product] += [lib]
-                            else:
-                                env.libs[product] += [lib]
+                            env.libs[libTarget][product] += [lib]
                         else:
                             errors += ["Failed to find/use %s library" % (lib)]
                             success = False
@@ -630,15 +622,12 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                         if libdir not in env['LIBPATH']:
                             env.Replace(LIBPATH = env['LIBPATH'] + [libdir])
                             Repository(libdir)
-                        env.pylibs[product] += [lib]
+                        env.libs["python"][product] += [lib]
                     elif conf.CheckLib(lib, symbol, language=lang):
                         if libdir not in env['LIBPATH']:
                             env.Replace(LIBPATH = env['LIBPATH'] + [libdir])
                             Repository(libdir)
-                        if libTarget == "test":
-                            env.testlibs[product] += [lib]
-                        else:
-                            env.libs[product] += [lib]
+                        env.libs[libTarget][product] += [lib]
                     else:
                         errors += ["Failed to find/use %s library in %s" % (lib, libdir)]
                         success = False
@@ -674,16 +663,13 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                         lib = mangleLibraryName(env, libdir, lib)
 
                         if libTarget == "python":
-                            if not env.pylibs.has_key("python"):
+                            if not env.libs["python"].has_key("python"):
                                 env.CheckPython()
-                            env.pylibs[product] += env.pylibs["python"]
+                            env.libs["python"][product] += env.libs["python"]["python"]
                             print "Using library %s from %s." % (lib, libdir)
-                            env.pylibs[product] += [lib]
+                            env.libs["python"][product] += [lib]
                         elif conf.CheckLib(lib, symbol, language=lang):
-                            if libTarget == "test":
-                                env.testlibs[product] += [lib]
-                            else:
-                                env.libs[product] += [lib]
+                            env.libs[libTarget][product] += [lib]
                         else:
                             success = False
                     conf.Finish()
@@ -711,21 +697,13 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     #
     # If we called ConfigureDependentProducts, automatically include all dependencies which declare
     # libraries in env.libs[eups_product]
-    #
-    # The usedConfigureDependentProducts test is only needed for backwards compatibility
-    #
-    try:
-        if usedConfigureDependentProducts and dependencies:
-            for productProps in dependencies:
-                product = productProps[0]
-                if env.libs.has_key(product):
-                    env.libs[eups_product] += env.libs[product]
-                if env.pylibs.has_key(product):
-                    env.pylibs[eups_product] += env.pylibs[product]
-                if env.testlibs.has_key(product):
-                    env.testlibs[eups_product] += env.testlibs[product]
-    except:
-        pass                            # an old SConstruct file
+    if usedConfigureDependentProducts and dependencies:
+        for productProps in dependencies:
+            product = productProps[0]
+            for target in ("main", "python", "test"):
+                if env.libs[target].has_key(product):
+                    env.libs[target][eups_product] += env.libs[target][product]
+
     #
     # include TOPLEVEL/include while searching for .h files;
     # include TOPLEVEL/lib while searching for libraries
@@ -750,6 +728,50 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
     return env
 
 makeEnv = MakeEnv                       # backwards compatibility
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def getLibs(env, targets="main", products=None):
+    """Recursively get the libraries a package is linked with, with duplicates removed.
+
+    Arguments:
+       targets --- A string containing whitespace-delimited targets.  Standard
+                   targets are "main", "python", and "test".  Default is "main".
+                   A special virtual target "self" can be provided, returning
+                   the results of targets="main" with the eups_target library
+                   removed.
+       products -- A string contained whitespace-delimited products.  Defaults
+                   to env["eups_product"].
+
+    Typically, main libraries will be linked with LIBS=getLibs("self"),
+    Python modules will be linked with LIBS=getLibs("main python") and
+    C++-coded test programs will be linked with LIBS=getLibs("main test")
+    """               
+    if products is None:
+        products = (env["eups_product"],)
+    else:
+        products = products.split()
+    
+    libs = []
+    removeSelf = False
+    for target in targets.split():
+        if target == "self":
+            d = env.libs["main"]
+            removeSelf = True
+        else:
+            d = env.libs[target]
+        for product in products:
+            for lib in d[product]:
+                if lib not in libs:
+                    libs.append(lib)
+    if removeSelf:
+        try:
+            libs.remove(env["eups_product"])
+        except LookupError:
+            pass
+    return libs
+
+SConsEnvironment.getLibs = getLibs
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -786,17 +808,18 @@ E.g.
 
         mat = re.search(r"^(\S+)\s*:\s*(\S*)\s*$", line)
         if mat:
-            if mat.group(1) not in alreadyConfigured:
-                dependencies += ConfigureDependentProducts(mat.group(1), mat.group(2), alreadyConfigured)
-                alreadyConfigured.add(mat.group(1))
+            dependencies += ConfigureDependentProducts(mat.group(1), mat.group(2), alreadyConfigured)
             continue
         #
         # Split the line into "" separated fields
         #
         line = re.sub(r"(^\s*|\s*,\s*|\s*$)", "", line) # remove whitespace and commas in the config file
-        dependencies.append([f for f in re.split(r"['\"]", line) if f])
+        items = [f for f in re.split(r"['\"]", line) if f]
+        if items[0] not in alreadyConfigured:
+            dependencies.append(items)
+            alreadyConfigured.add(items[0])
     #
-    # Set a variable that tells us to automatically include this products in env.libs[eups_produc]
+    # Set a variable that tells us to automatically include this products in env.libs[*][eups_produc]
     #
     global usedConfigureDependentProducts
     usedConfigureDependentProducts = True
@@ -940,55 +963,6 @@ def CheckHeaderGuessLanguage(self, incdir, incfiles):
         raise RuntimeError, "Failed to find %s in %s" % (incfiles[-1], incdir)
 
 SConsEnvironment.CheckHeaderGuessLanguage = CheckHeaderGuessLanguage
-
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-
-def removeDuplicates(seq):
-    unique = set()
-    _seq = seq
-    seq = []
-    for item in _seq:
-        if item not in unique:
-            unique.add(item)
-            seq.append(item)
-    return seq
-
-def extractLibs(dictionary, products):
-    libs = []
-    for lib in products:
-        for l in Split(lib):
-            if dictionary.has_key(l):
-                libs += dictionary[l]
-            else:
-                libs += [l]
-    return libs
-    
-
-def getlibs(env, *products):
-    """Return a list of all the libraries needed by products named in the list;
-    each element may be a string on names ("aa bb cc"). If the name isn't recognised
-    it's taken to be a library name"""
-    libs = extractLibs(env.libs, products)
-    libs = removeDuplicates(libs)
-    return libs
-
-SConsEnvironment.getlibs = getlibs
-
-def getpylibs(env, *products):
-    """Like getlibs, but returns libs for compiling Python modules."""
-    libs = extractLibs(env.pylibs, products)
-    libs = removeDuplicates(libs)
-    return libs
-
-SConsEnvironment.getpylibs = getpylibs
-
-def gettestlibs(env, *products):
-    """Like getlibs, but returns libs for compiling C++ unit tests"""
-    libs = extractLibs(env.testlibs, products)
-    libs = removeDuplicates(libs)
-    return libs
-
-SConsEnvironment.gettestlibs = gettestlibs
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -1634,7 +1608,7 @@ def CheckPython(self):
     except AttributeError:
         self.pylibs = {}
         
-    self.pylibs["python"] = pylibs
+    self.libs["python"]["python"] = pylibs
 
 SConsEnvironment.CheckPython = CheckPython
 
