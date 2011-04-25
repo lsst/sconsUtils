@@ -259,6 +259,16 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         if os.environ.has_key(varname):
             ourEnv[varname] = os.environ[varname]
             ourEnv[k] = os.environ[k]
+    #
+    # Add any values marked as export=FOO=XXX[,GOO=YYY] to ourEnv
+    #
+    opt = "export"
+    if ARGUMENTS.has_key(opt):
+        for kv in ARGUMENTS[opt].split(','):
+            k, v = kv.split('=')
+            ourEnv[k] = v
+
+        del ARGUMENTS[opt]
 
     env = Environment(ENV = ourEnv, variables=opts,
 		      tools = ["default", "doxygen"],
@@ -732,15 +742,16 @@ E.g.
         if re.search(r"^\s*(#.*)?$", line):
             continue
 
+        if re.search(r"clapack\.h", line):
+            import pdb; pdb.set_trace() 
+
         mat = re.search(r"^(\S+)\s*:\s*(\S*)\s*$", line)
         if mat:
             dependencies += ConfigureDependentProducts(mat.group(1), mat.group(2))
             continue
-        #
-        # Split the line into "" separated fields
-        #
-        line = re.sub(r"(^\s*|\s*,\s*|\s*$)", "", line) # remove whitespace and commas in the config file
-        dependencies.append([f for f in re.split(r"['\"]", line) if f])
+
+        fields = eval("[%s]" % line, {}, {})
+        dependencies.append(fields)
     #
     # Set a variable that tells us to automatically include this products in env.libs[eups_produc]
     #
