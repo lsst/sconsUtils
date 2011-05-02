@@ -46,6 +46,8 @@ def DoxyfileParse(file_contents):
    new_data = True
 
    def append_data(data, key, new_data, token):
+      if key not in data:
+         data[key] = []
       if new_data or len(data[key]) == 0:
          data[key].append(token)
       else:

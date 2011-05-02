@@ -18,9 +18,6 @@ try:
 except ImportError:
     pass    
 
-def checkVersion():
-    return "NEW VERSION!"
-
 def MakeEnv(eups_product, versionString=None, dependencies=[],
             eups_product_path=None, variables=None, traceback=False):
     """
@@ -522,9 +519,14 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                     env.libs[target][product] = []
 
     #
-    # A list of doxygen tag files from dependent products with a doc/doxygen subdirectory.
+    # A list of doxygen tag files from dependent products with a doc subdirectory.
     #
     env["DOXYGEN_TAGS"] = []
+
+    #
+    # A list of doxygen include files from dependent products with a doc subdirectory.
+    #    
+    env["DOXYGEN_INCLUDES"] = []
 
     env['CPPPATH'] = []
     env['LIBPATH'] = []
@@ -568,11 +570,13 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
                 success = True          # they said they knew what was going on.  If they didn't
                                         # specify incfiles/libs, we'll have to trust them
 
-                for midPath in ("doxygen", "htmlDir"):
-                    doxytagFile = os.path.join(topdir, "doc", midPath, product + ".tag")
-                    if os.path.exists(doxytagFile):
-                        env["DOXYGEN_TAGS"].append(doxytagFile)
-                        break
+                doxytagFile = os.path.join(topdir, "doc", product + ".tag")
+                if os.path.exists(doxytagFile):
+                    env["DOXYGEN_TAGS"].append(doxytagFile)
+
+                doxyincFile = os.path.join(topdir, "doc", product + ".inc")
+                if os.path.exists(doxyincFile):
+                    env["DOXYGEN_INCLUDES"].append(doxyincFile)
 
                 if incfiles:
                     try:
@@ -1836,10 +1840,7 @@ def InstallLSST(self, prefix, dirs):
     """Install directories in the usual LSST way, handling "doc" and "ups" specially"""
     
     for d in dirs:
-        if d == "doc":
-            t = self.InstallAs(os.path.join(prefix, "doc", "doxygen"), os.path.join("doc", "htmlDir"))
-            t += self.InstallDir(prefix, os.path.join("doc", "xml"))
-        elif d == "ups":
+        if d == "ups":
             t = self.InstallEups(os.path.join(prefix, "ups"))
         else:
             t = self.InstallDir(prefix, d)
@@ -1875,15 +1876,34 @@ def TestDependencies():
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 def BuildDoxygenConfig(target, source, env):
-    shutil.copy2(source[0].abspath, target[0].abspath)
-    f = open(target[0].abspath, 'a')
-    values = []
+    #shutil.copy2(source[0].abspath, target[0].abspath)
+    f = open(target[0].abspath, 'w')
     for tagPath in env['DOXYGEN_TAGS']:
-        htmlDir, tagFile = os.path.split(tagPath)
-        values.append('"{tagPath}={htmlDir}"'.format(tagPath=tagPath, htmlDir=htmlDir))
-    f.write("TAGFILES = ")
-    f.write(" ".join(values))
-    f.write("\n")
+        docDir, tagFile = os.path.split(tagPath)
+        htmlDir = os.path.join(docDir, "html")
+        f.write('TAGFILES += "{tagPath}={htmlDir}"\n'.format(tagPath=tagPath, htmlDir=htmlDir))
+    docPaths = []
+    incFiles = []
+    for incPath in env['DOXYGEN_INCLUDES']:
+        docDir, incFile = os.path.split(incPath)
+        docPaths.append('"{0}"'.format(docDir))
+        incFiles.append('"{0}"'.format(incFile))
+    if docPaths:
+        f.write('@INCLUDE_PATH = {0}\n'.format(" ".join(docPaths)))
+    for incFile in incFiles:
+        f.write('@INCLUDE = {0}\n'.format(incFile))
+    f.write("PROJECT_NAME = {0}\n".format("/".join(["lsst"] + env["eups_product"].split("_"))))
+    f.write("PROJECT_NUMBER = {0}\n".format(env["version"]))
+    f.write("GENERATE_HTML = YES\n")
+    f.write("HTML_OUTPUT = html\n")
+    f.write("GENERATE_XML = YES\n")
+    f.write("GENERATE_LATEX = NO\n") # scons' doxygen.py doesn't recognize these in @INCLUDE files
+    f.write("GENERATE_MAN = NO\n")
+    f.write("XML_OUTPUT = {0}\n".format(os.path.join("xml", env["eups_product"])))
+    f.write("GENERATE_TAGFILE = {0}.tag\n".format(env["eups_product"]))
+    i = open(source[0].abspath, 'r')
+    f.write(i.read())
+    i.close()
     f.close()
 
 def DoxygenConfig(env, src):
