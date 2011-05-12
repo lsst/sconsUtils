@@ -14,8 +14,10 @@ import os, re
 def guessVersionName():
     """Guess a version name"""
 
-    ident = os.popen("hg id").readlines()
-    if len(ident) != 1:
-        raise RuntimeError("Unable to interpret id: %s" % ident)
-    ident = re.split(r"\s+", ident[0])
-    return ident[1] if len(ident) > 1 and ident[1] != "tip" else ident[0]
+    idents = os.popen("hg id").readline()
+    ident = re.split(r"\s+", idents)
+    if re.search(r"\+", ident[0]):
+        raise RuntimeError("Error with hg version: uncommited changes")
+    if ident[1] == "tip":
+        return ident[0]
+    return ident[1]
