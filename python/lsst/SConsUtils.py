@@ -12,6 +12,7 @@ import stat
 import sys
 from types import *
 import lsst.svn as svn
+import lsst.hg as hg
 
 try:
     import eups
@@ -1249,6 +1250,17 @@ def getVersion(env, versionString):
                     sys.exit(1)
             if env.has_key('baseversion'):
                 version = env['baseversion'] + "+" + version
+    elif versionString.lower() in ("hg", "mercurial"):
+        # Mercurial (hg).
+        try:
+            version = hg.guessVersionName()
+        except RuntimeError, e:
+            if env['force']:
+                version = "unknown"
+            else:
+                print >> sys.stderr, \
+                      "%s\nFound problem with hg version; update or specify force=True to proceed" %e
+                sys.exit(1)
 
     env["version"] = version
     return version
