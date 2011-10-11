@@ -37,6 +37,7 @@ class Logger(object):
             sys.stderr.write(message)
             sys.stderr.write("\n")
             sys.stderr.flush()
+        self.messages = []
         if self.hasFailed:
             abort(1)
 

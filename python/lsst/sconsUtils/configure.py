@@ -5,9 +5,6 @@ import sys
 
 from . import utils
 
-def getPackageRoot(cfgFile):
-    return os.path.abspath(os.path.join(os.path.dirname(cfgFile), ".."))
-
 class Configuration(object):
     """Base class for defining how to configure an LSST sconsUtils package.
 
@@ -21,12 +18,18 @@ class Configuration(object):
     purpose is to define a number of instance variables used by configure().
     """
 
-    def __init__(self, name, root, headers=(), libs=None, hasSwigFiles=True, hasDoxygenInclude=False):
+    @staticmethod
+    def parseFilename(cfgFile):
+        """Parse the name of a .cfg, returning the package name and root directory."""
+        dir, file = os.path.split(cfgFile)
+        name, ext = os.path.splitext(file)
+        return name, os.path.abspath(os.path.join(dir, ".."))
+
+    def __init__(self, cfgFile, headers=(), libs=None, hasSwigFiles=True, hasDoxygenInclude=False):
         """Initialize the configuration object.
 
-        @param name     The name of the package.  This will be used to compute the names of
-                        libraries and doxygen input files in a standard way.
-        @param root     Root path for the package.
+        @param cfgFile  The name of the calling .cfg file, usually just passed in with the special
+                        variable __file__.  This will be parsed to extract the package name and root.
         @param headers  A list of headers provided by the package, to be used in autoconf-style tests.
         @param libs     A list or dictionary of libraries provided by the package.  If a dictionary
                         is provided, libs["main"] should contain a list of regular libraries provided
@@ -38,8 +41,7 @@ class Configuration(object):
         @param hasDoxygenInclude   If True, the package provides a Doxygen include file with the
                                    name "<root>/doc/<name>.inc".
         """
-        self.name = name
-        self.root = root
+        self.name, self.root = self.parseFilename(cfgFile)
         self.paths = {
             # Sequence of include path for headers provided by this package
             "CPPPATH": [os.path.join(self.root, "include")],

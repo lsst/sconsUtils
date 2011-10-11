@@ -427,22 +427,22 @@ def MakeEnv(packageName, versionString=None, eupsProduct=None, eupsProductPath=N
     #
     # If we're linking to libraries that themselves linked to
     # shareable libraries we need to do something special.
-    if (re.search(r"^(Linux|Linux64)$", env["eupsFlavor"]) and 
-        os.environ.has_key("LD_LIBRARY_PATH")):
+    if (re.search(r"^(Linux|Linux64)$", env["eupsFlavor"]) and os.environ.has_key("LD_LIBRARY_PATH")):
         env.Append(LINKFLAGS = ["-Wl,-rpath-link"])
         env.Append(LINKFLAGS = ["-Wl,%s" % os.environ["LD_LIBRARY_PATH"]])
 
     #
     # Process dependencies
     #
+    utils.log.traceback = env.GetOption("traceback")
+    utils.log.verbose = env.GetOption("verbose")
+    packages = configure.Tree(packageName, upsDirs)
+    utils.log.finish() # if we've already hit a fatal error, die now.
+    env.libs = {"main":[], "python":[], "test":[]}
+    env.doxygen = {"tags":[], "includes":[]}
+    env['CPPPATH'] = []
+    env['LIBPATH'] = []
     if not env.GetOption("clean") and not env.GetOption("help"):
-        utils.log.traceback = env.GetOption("traceback")
-        utils.log.verbose = env.GetOption("verbose")
-        packages = configure.Tree(packageName, upsDirs)
-        env.libs = {"main":[], "python":[], "test":[]}
-        env.doxygen = {"tags":[], "includes":[]}
-        env['CPPPATH'] = []
-        env['LIBPATH'] = []
         packages.configure(env, check=checkDependencies)
         for target in env.libs:
             utils.log.info("Libraries in target '%s': %s" % (target, env.libs[target]))
