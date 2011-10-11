@@ -55,7 +55,7 @@ tests = lsst.tests.Control(env,
                     f = f[1:]
                 else:
                     if not os.path.exists(f):
-                        print >> sys.stderr, "You're ignoring a non-existent file, %s" % f
+                        state.log.warning("You're ignoring a non-existent file, %s" % f)
                 self._info[f] = (self._IGNORE, None)
 
         if expectedFailures:
@@ -108,9 +108,8 @@ tests = lsst.tests.Control(env,
                    "false", "failed"
 
     def run(self, fileGlob):
-        if not isinstance(fileGlob, str): # env.Glob() returns an instance, but isinstance(fileGlob, 'instance') fails
+        if not isinstance(fileGlob, basestring): # env.Glob() returns an scons Node
             fileGlob = str(fileGlob)
-
         targets = []
         if not self.runExamples:
             return targets

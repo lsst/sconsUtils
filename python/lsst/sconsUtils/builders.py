@@ -177,13 +177,14 @@ def CleanTree(self, files, dir=".", recurse=True, verbose=False):
         action += " -print"
     #
     # Clean up scons files --- users want to be able to say scons -c and get a clean copy
-    # But with SCons 2.1.0, we can't remove .sconsign.dblite without getting exceptions thrown.
+    # We can't delete .sconsign.dblite if we use "scons clean" instead of "scons --clean",
+    # so the former is no longer supported.
     #
-    action += " ; rm -rf .sconf_temp" 
+    action += " ; rm -rf .sconf_temp .sconsign.dblite .sconsign.tmp config.log" 
     #
     # Do we actually want to clean up?  We don't if the command is e.g. "scons -c install"
     #
     if "clean" in SCons.Script.COMMAND_LINE_TARGETS:
-        self.Command("clean", "", action=action)
+        state.log.fail("'scons clean' is no longer supported; please use 'scons --clean'.")
     elif not SCons.Script.COMMAND_LINE_TARGETS and self.GetOption("clean"):
         self.Execute(self.Action([action]))

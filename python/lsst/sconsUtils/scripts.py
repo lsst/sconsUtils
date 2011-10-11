@@ -11,6 +11,7 @@ from . import dependencies
 from . import builders
 from . import installation
 from . import state
+from . import tests
 
 def BasicSConstruct(packageName, versionString, eupsProduct=None, eupsProductPath=None, 
                     subDirs=None, cleanExt=None, ignoreRegex=None):
@@ -58,3 +59,65 @@ class BasicSConscript(object):
         elif libs is None:
             libs = []
         return state.env.SwigLoadableModule("_" + swigName, Split(swigName + ".i"), LIBS=libs)
+
+    @staticmethod
+    def tests(pyTests=None, ccTests=None, swigNames=None, swigSrc=None, ignoreList=None):
+        """Standard tests/SConscript boilerplate.
+
+        Arguments:
+          @param pyTests          A sequence of Python tests to run (including .py extensions).
+                                  Defaults to a *.py glob of the tests directory, minus any
+                                  files corresponding to the SWIG modules in swigFiles.
+          @param ccTests          A sequence of C++ unit tests to run (including .cc extensions).
+                                  Defaults to a *.cc glob of the tests directory, minus any
+                                  files that end with *_wrap.cc and files present in swigSrc.
+          @param swigNames        A sequence of SWIG modules to build (NOT including .i extensions).
+          @param swigSrc          Additional source files to be compiled into SWIG modules, as a
+                                  dictionary; each key must be an entry in swigNames, and each
+                                  value a list of additional source files.
+          @param ignoreList       List of ignored tests to be passed to tests.Control (note that
+                                  ignored tests will be built, but not run).
+        """
+        def getFileBase(node):
+            name, ext = os.path.splitext(os.path.basename(str(node)))
+            return name
+        if swigNames is None:
+            swigFiles = Glob("*.i")
+            swigNames = [getFileBase(node) for node in swigFiles]
+        else:
+            swigFiles = [File(name) for name in swigNames]
+        if swigSrc is None:
+            swigSrc = {}
+        allSwigSrc = set()
+        for name, node in zip(swigNames, swigFiles):
+            src = swigSrc.setdefault(name, [])
+            allSwigSrc.update(str(element) for element in src)
+            src.append(node)
+        if pyTests is None:
+            pyTests = [node for node in Glob("*.py") if getFileBase(node) not in swigNames]
+        if ccTests is None:
+            ccTests = [node for node in Glob("*.cc") 
+                       if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc]
+        if swigSrc is None:
+            swigSrc = dict((name, ()) for name in swigNames)
+        if ignoreList is None:
+            ignoreList = []
+        state.log.info("SWIG modules for tests: %s" % swigFiles)
+        state.log.info("Python tests: %s" % pyTests)
+        state.log.info("C++ tests: %s" % ccTests)
+        state.log.info("Ignored tests: %s" % ignoreList)
+        control = tests.Control(state.env, ignoreList=ignoreList, verbose=True)
+        for ccTest in ccTests:
+            state.env.Program(ccTest, LIBS=state.env.getLibs("main test"))
+        swigMods = []
+        for name, src in swigSrc.iteritems():
+            swigMods.extend(
+                state.env.SwigLoadableModule("_" + name, src, LIBS=state.env.getLibs("main python"))
+            )
+        ccTests = [control.run(str(node)) for node in ccTests]
+        pyTests = [control.run(str(node)) for node in pyTests]
+        for pyTest in pyTests:
+            state.env.Depends(pyTest, swigMods)
+            state.env.Depends(pyTest, "#python")
+        
+        return ccTests, pyTests
