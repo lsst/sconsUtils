@@ -2,8 +2,48 @@ import os.path
 import collections
 import imp
 import sys
+import SCons.Script
+from SCons.Script.SConscript import SConsEnvironment
 
-from . import utils
+from . import installation
+from . import state
+
+def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath=None):
+    """Recursively configure a package using ups/.cfg files."""
+    if eupsProduct is None:
+        eupsProduct = packageName
+    state.env['eupsProduct'] = eupsProduct
+    state.env['packageName'] = packageName
+    #
+    # Setup installation directories and variables
+    #
+    SCons.Script.Help(state.opts.GenerateHelpText(state.env))
+    state.env.installing = filter(lambda t: t == "install", SCons.Script.BUILD_TARGETS) 
+    state.env.declaring = filter(lambda t: t == "declare" or t == "current", SCons.Script.BUILD_TARGETS)
+    prefix = installation.setPrefix(state.env, versionString, eupsProductPath)
+    state.env['prefix'] = prefix
+    state.env["libDir"] = "%s/lib" % prefix
+    state.env["pythonDir"] = "%s/python" % prefix
+    if state.env.installing:
+        SCons.progress_display("Installing into %s" % prefix)
+    #
+    # Process dependencies
+    #
+    state.log.traceback = state.env.GetOption("traceback")
+    state.log.verbose = state.env.GetOption("verbose")
+    packages = PackageTree(packageName)
+    state.log.flush() # if we've already hit a fatal error, die now.
+    state.env.libs = {"main":[], "python":[], "test":[]}
+    state.env.doxygen = {"tags":[], "includes":[]}
+    state.env['CPPPATH'] = []
+    state.env['LIBPATH'] = []
+    if not state.env.GetOption("clean") and not state.env.GetOption("help"):
+        packages.configure(state.env, check=state.env.GetOption("checkDependencies"))
+        for target in state.env.libs:
+            state.log.info("Libraries in target '%s': %s" % (target, state.env.libs[target]))
+    state.log.flush()
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 class Configuration(object):
     """Base class for defining how to configure an LSST sconsUtils package.
@@ -94,28 +134,29 @@ class Configuration(object):
         """
         assert(not (check and build))
         conf.env.PrependUnique(**self.paths)
-        utils.log.info("Configuring package '%s'." % self.name)
+        state.log.info("Configuring package '%s'." % self.name)
         if not build:
             conf.env.doxygen["tags"].extend(self.doxygen["tags"])
             conf.env.doxygen["includes"].extend(self.doxygen["includes"])
         for target in self.libs:
             if target not in conf.env.libs:
                 conf.env.libs[target] = lib[target].copy()
-                utils.log.info("Adding '%s' libraries to target '%s'." % (self.libs[target], target))
+                state.log.info("Adding '%s' libraries to target '%s'." % (self.libs[target], target))
             else:
                 for lib in self.libs[target]:
                     if lib not in conf.env.libs[target]:
                         conf.env.libs[target].append(lib)
-                        utils.log.info("Adding '%s' library to target '%s'." % (lib, target))
+                        state.log.info("Adding '%s' library to target '%s'." % (lib, target))
         if check:
             for header in self.provides["headers"]:
                 if not conf.CheckCXXHeader(header): return False
             for lib in self.provides["headers"]:
                 if not conf.CheckLib(lib, autoadd=False, language="C++"): return False
         return True
-                
 
-class Tree(object):
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+class PackageTree(object):
     """A class for loading and managing the dependency tree of a package, as defined by its
     configuration module (.cfg) file.
 
@@ -123,25 +164,23 @@ class Tree(object):
     as it is recursively loaded.
     """
 
-    def __init__(self, primaryName, upsDirs):
+    def __init__(self, primaryName):
         """Recursively load *.cfg files for packageName and all its dependencies.
 
         @param primaryName      The name of the primary package being built.
-        @param upsDirs          A list of "ups" directories for all setup EUPS packages, to be
-                                searched for *.cfg files.
 
         After __init__, self.primary will be set to the configuration module for the primary package,
         and self.packages will be an OrderedDict of dependencies (excluding self.primary), ordered
         such that configuration can proceed in iteration order.
         """
-        self.upsDirs = upsDirs
+        self.upsDirs = state.env.upsDirs
         self.packages = collections.OrderedDict()
         self.primary = self._tryImport(primaryName)
         if self.primary is None: fail("Failed to load primary package configuration.")
         for dependency in self.primary.dependencies.get("required", ()):
-            if not self._recurse(dependency): utils.log.fail("Failed to load required dependencies.")
+            if not self._recurse(dependency): state.log.fail("Failed to load required dependencies.")
         for dependency in self.primary.dependencies.get("buildRequired", ()):
-            if not self._recurse(dependency): utils.log.fail("Failed to load required build dependencies.")
+            if not self._recurse(dependency): state.log.fail("Failed to load required build dependencies.")
         for dependency in self.primary.dependencies.get("optional", ()):
             self._recurse(dependency)
         for dependency in self.primary.dependencies.get("buildOptional", ()):
@@ -152,7 +191,7 @@ class Tree(object):
         conf = env.Configure()
         for module in self.packages.itervalues():
             if not module.config.configure(conf, packages=self.packages, check=check, build=False):
-                utils.log.fail("Some dependencies were found but did not pass configuration checks.")
+                state.log.fail("Some dependencies were found but did not pass configuration checks.")
         self.primary.config.configure(conf, packages=self.packages, check=False, build=True)
         env.AppendUnique(SWIGPATH=env["CPPPATH"])
         env = conf.Finish()
@@ -163,16 +202,16 @@ class Tree(object):
         for path in self.upsDirs:
             filename = os.path.join(path, name + ".cfg")
             if os.path.exists(filename):
-                utils.log.info("Using configuration for package '%s' at '%s'." % (name, filename))
+                state.log.info("Using configuration for package '%s' at '%s'." % (name, filename))
                 module = imp.load_source(name + "_cfg", filename)
                 if not hasattr(module, "dependencies") or not isinstance(module.dependencies, dict):
-                    utils.log.warn("Configuration module for package '%s' lacks a dependencies dict." % name)
+                    state.log.warn("Configuration module for package '%s' lacks a dependencies dict." % name)
                     return
                 if not hasattr(module, "config") or not isinstance(module.config, Configuration):
-                    utils.log.warn("Configuration module for package '%s' lacks a config object." % name)
+                    state.log.warn("Configuration module for package '%s' lacks a config object." % name)
                     return
                 return module
-        utils.log.warn("Failed to import configuration for package '%s'." % name)
+        state.log.warn("Failed to import configuration for package '%s'." % name)
 
     def _recurse(self, name):
         """Recursively load a dependency."""
@@ -187,10 +226,44 @@ class Tree(object):
                 # We can't configure this package because a required dependency wasn't found.
                 # But this package might itself be optional, so we don't die yet.
                 self.packages[name] = None
-                utils.log.warn("Could not load all dependencies for package '%s'." % name)
+                state.log.warn("Could not load all dependencies for package '%s'." % name)
                 return False
         for dependency in module.dependencies.get("optional", ()):
             self._recurse(dependency)
         # This comes last to ensure the ordering puts all dependencies first.
         self.packages[name] = module
         return True
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+def getLibs(env, targets="main"):
+    """Get the libraries the package should be linked with.
+
+    Arguments:
+       targets --- A string containing whitespace-delimited targets.  Standard
+                   targets are "main", "python", and "test".  Default is "main".
+                   A special virtual target "self" can be provided, returning
+                   the results of targets="main" with the eups_target library
+                   removed.
+
+    Typically, main libraries will be linked with LIBS=getLibs("self"),
+    Python modules will be linked with LIBS=getLibs("main python") and
+    C++-coded test programs will be linked with LIBS=getLibs("main test")
+    """
+    libs = []
+    removeSelf = False
+    for target in targets.split():
+        if target == "self":
+            target = "main"
+            removeSelf = True
+        for lib in env.libs[target]:
+            if lib not in libs:
+                libs.append(lib)
+    if removeSelf:
+        try:
+            libs.remove(env["eupsProduct"])
+        except ValueError:
+            pass
+    return libs
+
+SConsEnvironment.getLibs = getLibs

@@ -1,29 +1,122 @@
 #
 # Note that this file is called SConsUtils.py not SCons.py so as to allow us to import SCons
 #
+import os.path
 import glob
-import os
 import re
-import shutil
-from SCons.Script import *
-from SCons.Script.SConscript import SConsEnvironment
-SCons.progress_display = SCons.Script.Main.progress_display
-import stat
 import sys
 
-from . import svn
-from . import hg
-from . import configure
-from . import utils
+import SCons.Script
+from SCons.Script.SConscript import SConsEnvironment
 
-try:
-    import eups
-except ImportError:
-    pass
+from .vcs import svn
+from .vcs import hg
 
+from . import state
+from .utils import memberOf
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+def makeProductPath(env, pathFormat):
+    """return a path to use as the installation directory for a product
+    @param pathFormat     the format string to process 
+    @param env            the scons environment
+    @param versionString  the versionString passed to MakeEnv
+    """
+    pathFormat = re.sub(r"%(\w)", r"%(\1)s", pathFormat)
+    
+    eupsPath = os.environ['PWD']
+    if env.has_key('eupsProduct') and env['eupsPath']:
+        eupsPath = env['eupsPath']
+
+    return pathFormat % { "P": eupsPath,
+                          "f": env['eupsFlavor'],
+                          "p": env['eupsProduct'],
+                          "v": env['version'],
+                          "c": os.environ['PWD'] }
+    
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+def getVersion(env, versionString):
+    """Set a version ID from env, or
+    a cvs or svn ID string (dollar name dollar or dollar HeadURL dollar)"""
+
+    version = "unknown"
+
+    if env.has_key('version'):
+        version = env['version']
+        if env.has_key('baseversion') and \
+                not version.startswith(env['baseversion']):
+            utils.log.warn("Explicit version %s is incompatible with baseversion %s"
+                           % (version, env['baseversion']))
+    elif not versionString:
+        version = "unknown"
+    elif re.search(r"^[$]Name:\s+", versionString):
+        # CVS.  Extract the tagname
+        version = re.search(r"^[$]Name:\s+([^ $]*)", versionString).group(1)
+        if version == "":
+            version = "cvs"
+    elif re.search(r"^[$]HeadURL:\s+", versionString):
+        # SVN.  Guess the tagname from the last part of the directory
+        HeadURL = re.search(r"^[$]HeadURL:\s+(.*)", versionString).group(1)
+        HeadURL = os.path.split(HeadURL)[0]
+        if env.installing or env.declaring:
+            try:
+                version = svn.guessVersionName(HeadURL)
+            except RuntimeError as err:
+                if env['force']:
+                    version = "unknown"
+                else:
+                    state.log.fail(
+                        "%s\nFound problem with svn revision number; update or specify force=True to proceed"
+                        % err
+                        )
+            if env.has_key('baseversion'):
+                version = env['baseversion'] + "+" + version
+    elif versionString.lower() in ("hg", "mercurial"):
+        # Mercurial (hg).
+        try:
+            version = hg.guessVersionName()
+        except RuntimeError as err:
+            if env['force']:
+                version = "unknown"
+            else:
+                state.log.fail(
+                    "%s\nFound problem with hg version; update or specify force=True to proceed" % e
+                    )
+    state.log.flush()
+    env["version"] = version
+    return version
+
+def setPrefix(env, versionString, eupsProductPath=None):
+    """Set a prefix based on the EUPS_PATH, the product name, and a versionString from cvs or svn."""
+    if eupsProductPath:
+        getVersion(env, versionString)
+        eupsPrefix = makeProductPath(env, eupsProductPath)
+    elif env.has_key('eupsPath') and env['eupsPath']:
+        eupsPrefix = env['eupsPath']
+	flavor = env['eupsFlavor']
+	if not re.search("/" + flavor + "$", eupsPrefix):
+	    eupsPrefix = os.path.join(eupsPrefix, flavor)
+        prodPath = env['eupsProduct']
+        if env.has_key('eupsProductPath') and env['eupsProductPath']:
+            prodPath = env['eupsProductPath']
+        eupsPrefix = os.path.join(eupsPrefix, prodPath, getVersion(env, versionString))
+    else:
+        eupsPrefix = None
+    if env.has_key('prefix'):
+        if getVersion(env, versionString) != "unknown" and eupsPrefix and eupsPrefix != env['prefix']:
+            print >> sys.stderr, "Ignoring prefix %s from EUPS_PATH" % eupsPrefix
+        return makeProductPath(env, env['prefix'])
+    elif env.has_key('eupsPath') and env['eupsPath']:
+        prefix = eupsPrefix
+    else:
+        prefix = "/usr/local"
+    return prefix
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+@memberOf(SConsEnvironment)
 def Declare(self, products=None):
     """Create current and declare targets for products.  products
     may be a list of (product, version) tuples.  If product is None
@@ -32,14 +125,13 @@ def Declare(self, products=None):
     
     We'll add Declare to class Environment"""
 
-    if "undeclare" in COMMAND_LINE_TARGETS and not self.GetOption("silent"):
-        print >> sys.stderr, "'scons undeclare' is deprecated; please use 'scons declare -c' instead"
-
+    if "undeclare" in SCons.Script.COMMAND_LINE_TARGETS and not self.GetOption("silent"):
+        state.log.warn("'scons undeclare' is deprecated; please use 'scons declare -c' instead")
     if \
-           "declare" in COMMAND_LINE_TARGETS or \
-           "undeclare" in COMMAND_LINE_TARGETS or \
-           ("install" in COMMAND_LINE_TARGETS and self.GetOption("clean")) or \
-           "current" in COMMAND_LINE_TARGETS:
+           "declare" in SCons.Script.COMMAND_LINE_TARGETS or \
+           "undeclare" in SCons.Script.COMMAND_LINE_TARGETS or \
+           ("install" in SCons.Script.COMMAND_LINE_TARGETS and self.GetOption("clean")) or \
+           "current" in SCons.Script.COMMAND_LINE_TARGETS:
         current = []; declare = []; undeclare = []
 
         if not products:
@@ -62,11 +154,12 @@ def Declare(self, products=None):
             if "EUPS_DIR" in os.environ.keys():
                 self['ENV']['PATH'] += os.pathsep + "%s/bin" % (os.environ["EUPS_DIR"])
 
-                if "undeclare" in COMMAND_LINE_TARGETS or self.GetOption("clean"):
+                if "undeclare" in SCons.Script.COMMAND_LINE_TARGETS or self.GetOption("clean"):
                     if version:
                         command = "eups undeclare --flavor %s %s %s" % \
                                   (self['eupsFlavor'], product, version)
-                        if "current" in COMMAND_LINE_TARGETS and not "declare" in COMMAND_LINE_TARGETS:
+                        if ("current" in SCons.Script.COMMAND_LINE_TARGETS 
+                            and not "declare" in SCons.Script.COMMAND_LINE_TARGETS):
                             command += " --current"
                             
                         if self.GetOption("clean"):
@@ -74,7 +167,7 @@ def Declare(self, products=None):
                         else:
                             undeclare += [command]
                     else:
-                        print >> sys.stderr, "I don't know your version; not undeclaring to eups"
+                        state.log.warn("I don't know your version; not undeclaring to eups")
                 else:
                     command = "eups declare --force --flavor %s --root %s" % \
                               (self['eupsFlavor'], self['prefix'])
@@ -91,17 +184,16 @@ def Declare(self, products=None):
         if current:
             self.Command("current", "", action=current)
         if declare:
-            if "current" in COMMAND_LINE_TARGETS:
+            if "current" in SCons.Script.COMMAND_LINE_TARGETS:
                 self.Command("declare", "", action="") # current will declare it for us
             else:
                 self.Command("declare", "", action=declare)
         if undeclare:
             self.Command("undeclare", "", action=undeclare)
-                
-SConsEnvironment.Declare = Declare
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+@memberOf(SConsEnvironment)
 def InstallDir(self, prefix, dir, ignoreRegex=r"(~$|\.pyc$|\.os?$)", recursive=True):
     """
     Install the directory dir into prefix, (along with all its descendents if recursive is True).
@@ -130,10 +222,9 @@ def InstallDir(self, prefix, dir, ignoreRegex=r"(~$|\.pyc$|\.os?$)", recursive=T
 
     return targets
 
-SConsEnvironment.InstallDir = InstallDir
-
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+@memberOf(SConsEnvironment)
 def InstallEups(env, dest, files=[], presetup=""):
     """Install a ups directory, setting absolute versions as appropriate
     (unless you're installing from the trunk, in which case no versions
@@ -193,10 +284,9 @@ def InstallEups(env, dest, files=[], presetup=""):
 
     return dest
 
-SConsEnvironment.InstallEups = InstallEups
-
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+@memberOf(SConsEnvironment)
 def InstallLSST(self, prefix, dirs, ignoreRegex=None):
     """Install directories in the usual LSST way, handling "doc" and "ups" specially"""
     
@@ -209,5 +299,3 @@ def InstallLSST(self, prefix, dirs, ignoreRegex=None):
         self.Alias("install", t)
             
     self.Clean("install", prefix)
-
-SConsEnvironment.InstallLSST = InstallLSST

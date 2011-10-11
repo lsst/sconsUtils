@@ -7,7 +7,7 @@ try:
 except ImportError:
     abort = sys.exit
 
-class Logger(object):
+class Log(object):
 
     def __init__(self):
         self.traceback = False
@@ -32,7 +32,7 @@ class Logger(object):
             self.messages.append(message)
             self.hasFailed = True
 
-    def finish(self):
+    def flush(self):
         for message in self.messages:
             sys.stderr.write(message)
             sys.stderr.write("\n")
@@ -41,4 +41,29 @@ class Logger(object):
         if self.hasFailed:
             abort(1)
 
-log = Logger()
+def memberOf(cls, name=None):
+    """A parametrized descriptor that adds a method or nested class to a class outside the class
+    definition scope.  Example:
+
+    class test_class(object):
+        pass
+
+    @memberOf(test_class):
+    def test_method(self):
+        print "test_method!"
+
+    The function or method will still be added to the module scope as well, replacing any
+    existing module-scope function with that name; this appears to be an
+    unavoidable side-effect.
+    """
+    if isinstance(cls, type):
+        classes = (cls,)
+    else:
+        classes = tuple(cls)
+    kw = {"name": name}
+    def nested(member):
+        if kw["name"] is None: kw["name"] = member.__name__
+        for scope in classes:
+            setattr(scope, kw["name"], member)
+        return member
+    return nested

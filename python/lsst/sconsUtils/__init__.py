@@ -1,6 +1,11 @@
-from .configure import Configuration
-from .environment import MakeEnv, CleanTree
-from .install import InstallEups, InstallDir, InstallLSST
+# Pull some names into the package namespace
+from .dependencies import Configuration, configure
+from .state import env, opts, log
+
+# These inject methods into SConsEnviroment
+from . import installation
+from . import builders
+
+# These should remain in their own namespaces
 from . import scripts
 from . import tests
-from .utils import log
