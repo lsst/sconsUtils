@@ -3,6 +3,8 @@
 #
 import os
 import re
+import fnmatch
+
 import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
 
@@ -188,3 +190,204 @@ def CleanTree(self, files, dir=".", recurse=True, verbose=False):
         state.log.fail("'scons clean' is no longer supported; please use 'scons --clean'.")
     elif not SCons.Script.COMMAND_LINE_TARGETS and self.GetOption("clean"):
         self.Execute(self.Action([action]))
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+class DoxygenBuilder(object):
+
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
+        self.results = []
+        self.sources = []
+        self.targets = []
+        self.useTags = list(SCons.Script.File(item).abspath for item in self.useTags)
+        self.inputs = list(SCons.Script.Entry(item).abspath for item in self.inputs)
+        self.excludes = list(SCons.Script.Entry(item).abspath for item in self.excludes)
+        self.outputPaths = list(SCons.Script.Dir(item) for item in self.outputs)
+
+    def __call__(self, env, config):
+        self.findSources()
+        self.findTargets()
+        inConfigNode = SCons.Script.File(config)
+        outConfigName, ext = os.path.splitext(inConfigNode.abspath)
+        outConfigNode = SCons.Script.File(outConfigName)
+        if self.makeTag:
+            tagNode = SCons.Script.File(self.makeTag)
+            self.makeTag = tagNode.abspath
+            self.targets.append(tagNode)
+        config = env.Command(target=outConfigNode, source=inConfigNode, action=self.buildConfig)
+        doc = env.Command(target=self.targets, source=self.sources,
+                          action="doxygen %s" % outConfigNode.abspath)
+        env.Depends(doc, config)
+        self.results.extend(config)
+        self.results.extend(doc)
+        return self.results
+
+    def findSources(self):
+        for path in self.inputs:
+            if os.path.isdir(path):
+                for root, dirs, files in os.walk(path):
+                    if os.path.abspath(root) in self.excludes:
+                        dirs[:] = []
+                        continue
+                    if not self.recursive:
+                        dirs[:] = []
+                    else:
+                        toKeep = []
+                        for relDir in dirs:
+                            if relDir.startswith("."):
+                                continue
+                            absDir = os.path.abspath(os.path.join(root, relDir))
+                            if absDir not in self.excludes:
+                                toKeep.append(relDir)
+                        dirs[:] = toKeep
+                    if self.excludeSwig:
+                        for relFile in files:
+                            base, ext = os.path.splitext(relFile)
+                            if ext == ".i":
+                                self.excludes.append(os.path.join(root, base + ".py"))
+                                self.excludes.append(os.path.join(root, base + "_wrap.cc"))
+                    for relFile in files:
+                        absFile = os.path.abspath(os.path.join(root, relFile))
+                        if absFile in self.excludes:
+                            continue
+                        for pattern in self.patterns:
+                            if fnmatch.fnmatch(relFile, pattern):
+                                self.sources.append(SCons.Script.File(absFile))
+                                break
+            elif os.path.isfile(path):
+                self.sources.append(SCons.Script.File(path))
+
+    def findTargets(self):
+        for item in self.outputs:
+            self.targets.append(SCons.Script.Dir(item))
+
+    def buildConfig(self, target, source, env):
+        inConfigFile = open(source[0].abspath, "r")
+        outConfigFile = open(target[0].abspath, "w")
+        outConfigFile.write(inConfigFile.read())
+        inConfigFile.close()
+        for tagPath in self.useTags:
+            docDir, tagFile = os.path.split(tagPath)
+            htmlDir = os.path.join(docDir, "html")
+            outConfigFile.write('TAGFILES += "%s=%s"\n' % (tagPath, htmlDir))
+            self.sources.append(SCons.Script.Dir(docDir))
+        docPaths = []
+        incFiles = []
+        for incPath in self.includes:
+            docDir, incFile = os.path.split(incPath)
+            docPaths.append('"%s"' % docDir)
+            incFiles.append('"%s"' % incFile)
+            self.sources.append(SCons.Script.File(incPath))
+        if docPaths:
+            outConfigFile.write('@INCLUDE_PATH = %s\n' % " ".join(docPaths))
+        for incFile in incFiles:
+            outConfigFile.write('@INCLUDE = %s\n' % incFile)
+        if self.projectName is not None:
+            outConfigFile.write("PROJECT_NAME = %s\n" % self.projectName)
+        if self.projectNumber is not None:
+            outConfigFile.write("PROJECT_NUMBER = %s\n" % self.projectNumber)
+        outConfigFile.write("INPUT = %s\n" % " ".join(self.inputs))
+        outConfigFile.write("EXCLUDE = %s\n" % " ".join(self.excludes))
+        outConfigFile.write("FILE_PATTERNS = %s\n" % " ".join(self.patterns))
+        outConfigFile.write("RECURSIVE = YES\n" if self.recursive else "RECURSIVE = NO\n")
+        allOutputs = set(("html", "latex", "man", "rtf", "xml"))
+        for output, path in zip(self.outputs, self.outputPaths):
+            try:
+                allOutputs.remove(output.lower())
+            except:
+                state.log.fail("Unknown Doxygen output format '%s'." % output)
+                state.log.finish()
+            outConfigFile.write("GENERATE_%s = YES\n" % output.upper())
+            outConfigFile.write("%s_OUTPUT = %s\n" % (output.upper(), path.abspath))
+        for output in allOutputs:
+            outConfigFile.write("GENERATE_%s = NO\n" % output.upper())
+        if self.makeTag is not None:
+            outConfigFile.write("GENERATE_TAGFILE = %s\n" % self.makeTag)
+        outConfigFile.close()
+
+@memberOf(SConsEnvironment)
+def Doxygen(self, config, **kw):
+    """Generate a Doxygen config file and run Doxygen on it.
+
+    Rather than parse a complete Doxygen config file for SCons sources
+    and targets, this Doxygen builder builds a Doxygen config file,
+    adding INPUT, FILE_PATTERNS, RECUSRIVE, EXCLUDE, XX_OUTPUT and
+    GENERATE_XX options (and possibly others) to an existing
+    proto-config file.  Generated settings will override those in
+    the proto-config file.
+
+    @param config         A Doxygen config file, usually with the
+                          extension .conf.in; a new file with the .in
+                          removed will be generated and passed to
+                          Doxygen.  Settings in the original config
+                          file will be overridden by those generated
+                          by this method.
+    @param inputs         A sequence of folders or files to be passed
+                          as the INPUT setting for Doxygen.  This list
+                          will be turned into absolute paths by SCons,
+                          so the "#folder" syntax will work.
+                          Otherwise, the list is passed in as-is, but
+                          the builder will also examine those
+                          directories to find which source files the
+                          Doxygen output actually depends on.
+    @param patterns       A sequence of glob patterns for the
+                          FILE_PATTERNS Doxygen setting.  This will be
+                          passed directly to Doxygen, but it is also
+                          used to determine which source files should
+                          be considered dependencies.
+    @param recursive      Whether the inputs should be searched
+                          recursively (used for the Doxygen RECURSIVE
+                          setting).
+    @param outputs        A sequence of output formats which will also
+                          be used as output directories.
+    @param exclude        A sequence of folders or files (not globs)
+                          to be ignored by Doxygen (the Doxygen
+                          EXCLUDE setting).  Hidden directories are
+                          automatically ignored.
+    @param includes       A sequence of Doxygen config files to
+                          include.  These will automatically be
+                          separated into paths and files to fill in
+                          the @INCLUDE_PATH and @INCLUDE settings.
+    @param useTags        A sequence of Doxygen tag files to use.  It
+                          will be assumed that the html directory for
+                          each tag file is in an "html" subdirectory
+                          in the same directory as the tag file.
+    @param makeTag        A string indicating the name of a tag file
+                          to be generated.
+    @param projectName    Sets the Doxygen PROJECT_NAME setting.
+    @param projectNumber  Sets the Doxygen PROJECT_NUMBER setting.
+    @param excludeSwig    If True (default), looks for SWIG .i files
+                          in the input directories and adds Python
+                          and C++ files generated by SWIG to the
+                          list of files to exclude.  For this to work,
+                          the SWIG-generated filenames must be the
+                          default ones ("module.i" generates "module.py"
+                          and "moduleLib_wrap.cc").
+
+    Known bugs:
+     - When building documentation from a clean source tree, 
+       generated source files (like headers generated with M4)
+       will not be included among the dependencies, because
+       they aren't present when we walk the input folders.
+       The workaround is just to build the docs after building
+       the source.       
+    """
+    defaults = {
+        "inputs": ["#doc", "#include", "#python", "#src"],
+        "recursive": True, 
+        "patterns": ["*.h", "*.cc", "*.py", "*.dox"],
+        "outputs": ["html",],
+        "excludes": [],
+        "includes": [],
+        "useTags": [],
+        "makeTag": None,
+        "projectName": None,
+        "projectNumber": None,
+        "excludeSwig": True
+        }
+    for k in defaults:
+        if kw.get(k) is None:
+            kw[k] = defaults[k]
+    builder = DoxygenBuilder(**kw)
+    return builder(self, config)

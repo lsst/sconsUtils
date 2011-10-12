@@ -34,6 +34,7 @@ def BasicSConstruct(packageName, versionString, eupsProduct=None, eupsProductPat
     state.env.BuildETags()
     state.env.CleanTree(cleanExt)
     state.env.Declare()
+    state.env.Default(*(item for item in ("include", "lib", "python", "tests") if os.path.isdir(item)))
     return state.env
 
 class BasicSConscript(object):
@@ -59,6 +60,20 @@ class BasicSConscript(object):
         elif libs is None:
             libs = []
         return state.env.SwigLoadableModule("_" + swigName, Split(swigName + ".i"), LIBS=libs)
+
+    @staticmethod
+    def doc(config="doxygen.conf.in", projectName=None, projectNumber=None, **kw):
+        if projectName is None:
+            projectName = ".".join(["lsst"] + state.env["packageName"].split("_"))
+        if projectNumber is None:
+            projectNumber = state.env["version"]
+        return state.env.Doxygen(
+            "doxygen.conf.in", projectName=projectName, projectNumber=projectNumber,
+            includes=state.env.doxygen["includes"],
+            useTags=state.env.doxygen["tags"],
+            makeTag=(state.env["packageName"] + ".tag"),
+            **kw
+            )
 
     @staticmethod
     def tests(pyTests=None, ccTests=None, swigNames=None, swigSrc=None, ignoreList=None):

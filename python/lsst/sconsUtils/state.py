@@ -94,7 +94,6 @@ def _initEnvironment():
             ourEnv[varname] = os.environ[varname]
             ourEnv[k] = os.environ[k]
             upsDirs.append(os.path.join(os.environ[k], "ups"))
-    toolpath = [os.path.join(os.path.dirname(__file__), "tools")]
     #
     # Add any values marked as export=FOO=XXX[,GOO=YYY] to ourEnv
     #
@@ -106,10 +105,7 @@ def _initEnvironment():
 
         del SCons.Script.ARGUMENTS[opt]
     global env
-    env = SCons.Script.Environment(ENV=ourEnv, variables=opts,
-                                   tools=["default", "doxygen"],
-                                   toolpath=toolpath
-                                   )
+    env = SCons.Script.Environment(ENV=ourEnv, variables=opts, tools=["default"])
     env.upsDirs = upsDirs
     #
     # We don't want "lib" inserted at the beginning of loadable module names;

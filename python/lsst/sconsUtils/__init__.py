@@ -1,5 +1,5 @@
 # Pull some names into the package namespace
-from .dependencies import Configuration, configure
+from .dependencies import configure, Configuration, ExternalConfiguration
 from .state import env, opts, log
 
 # These inject methods into SConsEnviroment
