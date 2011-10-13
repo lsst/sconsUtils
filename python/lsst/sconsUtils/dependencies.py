@@ -41,6 +41,7 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
         packages.configure(state.env, check=state.env.GetOption("checkDependencies"))
         for target in state.env.libs:
             state.log.info("Libraries in target '%s': %s" % (target, state.env.libs[target]))
+    state.env.dependencies = packages
     state.log.flush()
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -213,16 +214,43 @@ class PackageTree(object):
         for dependency in self.primary.dependencies.get("buildOptional", ()):
             self._recurse(dependency)
 
+    name = property(lambda self: self.primary.config.name)
+
     def configure(self, env, check=False):
         """Configure the entire dependency tree in order. and return an updated environment."""
         conf = env.Configure()
-        for module in self.packages.itervalues():
+        for name, module in self.packages.iteritems():
+            if module is None:
+                state.log.info("Skipping missing optional package %s." % name)
+                continue
             if not module.config.configure(conf, packages=self.packages, check=check, build=False):
-                state.log.fail("Some dependencies were found but did not pass configuration checks.")
+                state.log.fail("%s was found but did not pass configuration checks." % name)
         self.primary.config.configure(conf, packages=self.packages, check=False, build=True)
         env.AppendUnique(SWIGPATH=env["CPPPATH"])
         env = conf.Finish()
         return env
+
+    def __contains__(self, name):
+        return name == self.name or name in self.packages
+
+    has_key = __contains__
+
+    def __getitem__(self, name):
+        if name == self.name:
+            return self.primary
+        else:
+            return self.packages[name]
+
+    def get(self, name, default=None):
+        if name == self.name:
+            return self.primary
+        else:
+            return self.packages.get(name)
+
+    def keys(self):
+        k = self.packages.keys()
+        k.append(self.name)
+        return k
 
     def _tryImport(self, name):
         """Search for and import an individual configuration module from file."""

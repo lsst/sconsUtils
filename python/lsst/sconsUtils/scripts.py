@@ -121,9 +121,10 @@ class BasicSConscript(object):
             swigSrc = dict((name, ()) for name in swigNames)
         if ignoreList is None:
             ignoreList = []
-        state.log.info("SWIG modules for tests: %s" % swigFiles)
-        state.log.info("Python tests: %s" % pyTests)
-        state.log.info("C++ tests: %s" % ccTests)
+        s = lambda l: [str(i) for i in l]
+        state.log.info("SWIG modules for tests: %s" % s(swigFiles))
+        state.log.info("Python tests: %s" % s(pyTests))
+        state.log.info("C++ tests: %s" % s(ccTests))
         state.log.info("Ignored tests: %s" % ignoreList)
         control = tests.Control(state.env, ignoreList=ignoreList, verbose=True)
         for ccTest in ccTests:
