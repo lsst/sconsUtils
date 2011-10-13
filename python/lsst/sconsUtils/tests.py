@@ -2,6 +2,7 @@
 
 import glob, os, re, sys
 from SCons.Script import *              # So that this file has the same namespace as SConstruct/SConscript
+from . import state
 
 class Control(object):
     _IGNORE = "IGNORE"
@@ -55,7 +56,7 @@ tests = lsst.tests.Control(env,
                     f = f[1:]
                 else:
                     if not os.path.exists(f):
-                        state.log.warning("You're ignoring a non-existent file, %s" % f)
+                        state.log.warn("You're ignoring a non-existent file, %s" % f)
                 self._info[f] = (self._IGNORE, None)
 
         if expectedFailures:

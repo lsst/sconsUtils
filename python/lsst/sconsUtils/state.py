@@ -18,7 +18,8 @@ log = None
 opts = None
 
 def _initOptions():
-    SCons.Script.AddOption('--checkProducts', dest='checkDependencies', action='store_true', default=False,
+    SCons.Script.AddOption('--checkDependencies', dest='checkDependencies',
+                           action='store_true', default=False,
                            help="Verify dependencies with autoconf-style tests.")
     SCons.Script.AddOption('--filterWarn', dest='filterWarn', action='store_true', default=False,
                            help="Filter out a class of warnings deemed irrelevant"),

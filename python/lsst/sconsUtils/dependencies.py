@@ -154,7 +154,7 @@ class Configuration(object):
         if check:
             for header in self.provides["headers"]:
                 if not conf.CheckCXXHeader(header): return False
-            for lib in self.provides["headers"]:
+            for lib in self.libs["main"]:
                 if not conf.CheckLib(lib, autoadd=False, language="C++"): return False
         return True
 
