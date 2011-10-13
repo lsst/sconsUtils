@@ -1,4 +1,5 @@
 if (type == "build") {
-   setupRequired(sconsDistrib >= 0.98.5)
+   setupRequired(sconsDistrib >= 2.1.0)
 }
 envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
+envPrepend(PATH, ${PRODUCT_DIR}/bin)
