@@ -39,6 +39,7 @@ def BasicSConstruct(packageName, versionString, eupsProduct=None, eupsProductPat
     state.env.CleanTree(cleanExt)
     state.env.Declare()
     state.env.Default(*(item for item in ("include", "lib", "python", "tests") if os.path.isdir(item)))
+    state.env.Decider("MD5-timestamp") # if timestamps haven't changed, don't do MD5 checks
     return state.env
 
 class BasicSConscript(object):
@@ -48,7 +49,7 @@ class BasicSConscript(object):
         if libName is None:
             libName = state.env["packageName"]
         if src is None:
-            src = Glob("#src/*.cc") + Glob("#src/*/*.cc") + Glob("#src/*/*/*.cc")
+            src = Glob("#src/*.cc") + Glob("#src/*/*.cc") + Glob("#src/*/*/*.cc") + Glob("#src/*/*/*/*.cc")
         if isinstance(libs, basestring):
             libs = state.env.getLibs(libs)
         elif libs is None:
@@ -56,16 +57,21 @@ class BasicSConscript(object):
         return state.env.SharedLibrary(libName, src, LIBS=libs)
 
     @staticmethod
-    def python(swigNames=None, libs="main python"):
+    def python(swigNames=None, libs="main python", swigSrc=None):
         if swigNames is None:
             swigNames = [state.env["packageName"].split("_")[-1] + "Lib"]
+        swigFiles = [File(name + ".i") for name in swigNames]
+        if swigSrc is None:
+            swigSrc = {}
+        for name, node in zip(swigNames, swigFiles):
+            swigSrc.setdefault(name, []).append(node)
         if isinstance(libs, basestring):
             libs = state.env.getLibs(libs)
         elif libs is None:
             libs = []
         result = []
-        for swigName in swigNames:
-            result.extend(state.env.SwigLoadableModule("_" + swigName, Split(swigName + ".i"), LIBS=libs))
+        for name, src in swigSrc.iteritems():
+            result.extend(state.env.SwigLoadableModule("_" + name, src, LIBS=libs))
         return result
 
     @staticmethod
@@ -83,7 +89,7 @@ class BasicSConscript(object):
             )
 
     @staticmethod
-    def tests(pyTests=None, ccTests=None, swigNames=None, swigSrc=None, ignoreList=None):
+    def tests(pyTests=None, ccTests=None, swigNames=None, swigSrc=None, ignoreList=None, args=None):
         """Standard tests/SConscript boilerplate.
 
         Arguments:
@@ -104,7 +110,7 @@ class BasicSConscript(object):
             swigFiles = Glob("*.i")
             swigNames = [_getFileBase(node) for node in swigFiles]
         else:
-            swigFiles = [File(name) for name in swigNames]
+            swigFiles = [File(name + ".i") for name in swigNames]
         if swigSrc is None:
             swigSrc = {}
         allSwigSrc = set()
@@ -117,8 +123,6 @@ class BasicSConscript(object):
         if ccTests is None:
             ccTests = [node for node in Glob("*.cc") 
                        if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc]
-        if swigSrc is None:
-            swigSrc = dict((name, ()) for name in swigNames)
         if ignoreList is None:
             ignoreList = []
         s = lambda l: [str(i) for i in l]
@@ -126,7 +130,7 @@ class BasicSConscript(object):
         state.log.info("Python tests: %s" % s(pyTests))
         state.log.info("C++ tests: %s" % s(ccTests))
         state.log.info("Ignored tests: %s" % ignoreList)
-        control = tests.Control(state.env, ignoreList=ignoreList, verbose=True)
+        control = tests.Control(state.env, ignoreList=ignoreList, args=args, verbose=True)
         for ccTest in ccTests:
             state.env.Program(ccTest, LIBS=state.env.getLibs("main test"))
         swigMods = []
@@ -169,8 +173,6 @@ class BasicSConscript(object):
         if ccExamples is None:
             ccExamples = [node for node in Glob("*.cc") 
                           if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc]
-        if swigSrc is None:
-            swigSrc = dict((name, ()) for name in swigNames)
         state.log.info("SWIG modules for examples: %s" % swigFiles)
         state.log.info("C++ examples: %s" % ccExamples)
         for ccExample in ccExamples:

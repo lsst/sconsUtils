@@ -190,6 +190,33 @@ def CleanTree(self, files, dir=".", recurse=True, verbose=False):
         state.log.fail("'scons clean' is no longer supported; please use 'scons --clean'.")
     elif not SCons.Script.COMMAND_LINE_TARGETS and self.GetOption("clean"):
         self.Execute(self.Action([action]))
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+@memberOf(SConsEnvironment)
+def ProductDir(env, product):
+    """Return a product's PRODUCT_DIR, or None"""
+
+    import eups
+
+    global _productDirs
+
+    try:
+        _productDirs
+    except:
+        try:
+            _productDirs = eups.productDir()
+        except TypeError:               # old version of eups (pre r18588)
+            _productDirs = None
+
+    if _productDirs:
+        pdir = _productDirs.get(product)
+    else:
+        pdir = eups.productDir(product)
+            
+    if pdir == "none":
+        pdir = None
+        
+    return pdir
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 

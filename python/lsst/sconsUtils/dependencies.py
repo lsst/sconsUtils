@@ -37,6 +37,7 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     state.env.doxygen = {"tags":[], "includes":[]}
     state.env['CPPPATH'] = []
     state.env['LIBPATH'] = []
+    state.env['XCPPPATH'] = []
     if not state.env.GetOption("clean") and not state.env.GetOption("help"):
         packages.configure(state.env, check=state.env.GetOption("checkDependencies"))
         for target in state.env.libs:
@@ -162,7 +163,11 @@ class Configuration(object):
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 class ExternalConfiguration(Configuration):
-    """Configuration subclass that doesn't the package uses SWIG or Doxygen.
+    """Configuration subclass that doesn't assume, the package uses SWIG or Doxygen,
+    and tells SCons not to consider header files this package provides as dependencies.
+
+    This means things won't rebuild automatically if you change which version of a package
+    is setup, but SCons won't waste time looking for changes in it every time you build.
     """
 
     def __init__(self, cfgFile, headers=(), libs=None):
@@ -181,6 +186,9 @@ class ExternalConfiguration(Configuration):
         """
         Configuration.__init__(self, cfgFile, headers, libs, hasSwigFiles=False,
                                hasDoxygenTag=False, hasDoxygenInclude=False)
+        # XCPPPATHS is like CPPPATHS, but we add it to CCFLAGS manually after 
+        self.paths["XCPPPATH"] = self.paths["CPPPATH"]
+        del self.paths["CPPPATH"]
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -227,6 +235,8 @@ class PackageTree(object):
                 state.log.fail("%s was found but did not pass configuration checks." % name)
         self.primary.config.configure(conf, packages=self.packages, check=False, build=True)
         env.AppendUnique(SWIGPATH=env["CPPPATH"])
+        xccflags = [env["INCPREFIX"] + i + env["INCSUFFIX"] for i in env["XCPPPATH"]]
+        env.Append(CCFLAGS=xccflags, SWIGFLAGS=xccflags)
         env = conf.Finish()
         return env
 

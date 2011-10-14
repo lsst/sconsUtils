@@ -360,13 +360,6 @@ def ProductDir(product):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-def _ProductDir(self, product):
-    return ProductDir(product)
-
-SConsEnvironment.ProductDir = _ProductDir
-
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-
 def PkgConfigEUPS(self, product, function=None, unique=1):
     """Load pkg-config options into the environment. Look for packages in
     PRODUCT_DIR, if they're not in the path, and suppress error messages
