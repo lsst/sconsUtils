@@ -1,10 +1,13 @@
+##
+#  @file installation.py
 #
-# Note that this file is called SConsUtils.py not SCons.py so as to allow us to import SCons
-#
+#  Builders and path setup for installation targets.
+##
 import os.path
 import glob
 import re
 import sys
+import shutil
 
 import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
@@ -17,12 +20,13 @@ from .utils import memberOf
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
+##
+# @brief return a path to use as the installation directory for a product
+# @param pathFormat     the format string to process 
+# @param env            the scons environment
+# @param versionString  the versionString passed to MakeEnv
+##
 def makeProductPath(env, pathFormat):
-    """return a path to use as the installation directory for a product
-    @param pathFormat     the format string to process 
-    @param env            the scons environment
-    @param versionString  the versionString passed to MakeEnv
-    """
     pathFormat = re.sub(r"%(\w)", r"%(\1)s", pathFormat)
     
     eupsPath = os.environ['PWD']
@@ -37,9 +41,8 @@ def makeProductPath(env, pathFormat):
     
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
+## @brief Set a version ID from env, or a version control ID string ($name$ or $HeadURL$)
 def getVersion(env, versionString):
-    """Set a version ID from env, or
-    a cvs or svn ID string (dollar name dollar or dollar HeadURL dollar)"""
 
     version = "unknown"
 
@@ -88,8 +91,8 @@ def getVersion(env, versionString):
     env["version"] = version
     return version
 
+## @brief Set a prefix based on the EUPS_PATH, the product name, and a versionString from cvs or svn.
 def setPrefix(env, versionString, eupsProductPath=None):
-    """Set a prefix based on the EUPS_PATH, the product name, and a versionString from cvs or svn."""
     if eupsProductPath:
         getVersion(env, versionString)
         eupsPrefix = makeProductPath(env, eupsProductPath)
@@ -116,14 +119,14 @@ def setPrefix(env, versionString, eupsProductPath=None):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+##
+# Create current and declare targets for products.  products
+# may be a list of (product, version) tuples.  If product is None
+# it's taken to be self['eupsProduct']; if version is None it's
+# taken to be self['version'].
+##
 @memberOf(SConsEnvironment)
 def Declare(self, products=None):
-    """Create current and declare targets for products.  products
-    may be a list of (product, version) tuples.  If product is None
-    it's taken to be self['eupsProduct']; if version is None it's
-    taken to be self['version'].
-    
-    We'll add Declare to class Environment"""
 
     if "undeclare" in SCons.Script.COMMAND_LINE_TARGETS and not self.GetOption("silent"):
         state.log.warn("'scons undeclare' is deprecated; please use 'scons declare -c' instead")
@@ -193,14 +196,14 @@ def Declare(self, products=None):
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+##
+#  Install the directory dir into prefix, (along with all its descendents if recursive is True).
+#  Omit files and directories that match ignoreRegex
+#
+#  Unless force is true, this routine won't do anything unless you specified an "install" target
+##
 @memberOf(SConsEnvironment)
 def InstallDir(self, prefix, dir, ignoreRegex=r"(~$|\.pyc$|\.os?$)", recursive=True):
-    """
-    Install the directory dir into prefix, (along with all its descendents if recursive is True).
-    Omit files and directories that match ignoreRegex
-
-    Unless force is true, this routine won't do anything unless you specified an "install" target
-    """
 
     if not self.installing:
         return
@@ -224,18 +227,19 @@ def InstallDir(self, prefix, dir, ignoreRegex=r"(~$|\.pyc$|\.os?$)", recursive=T
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+##
+# Install a ups directory, setting absolute versions as appropriate
+# (unless you're installing from the trunk, in which case no versions
+# are expanded).  Any build/table files present in "./ups" are automatically
+# added to files.
+#
+# If presetup is provided, it's expected to be a dictionary with keys
+# product names and values the version that should be installed into
+# the table files, overriding eups expandtable's usual behaviour. E.g.
+# env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env['version']})
+##
 @memberOf(SConsEnvironment)
 def InstallEups(env, dest, files=[], presetup=""):
-    """Install a ups directory, setting absolute versions as appropriate
-    (unless you're installing from the trunk, in which case no versions
-    are expanded).  Any build/table files present in "./ups" are automatically
-    added to files.
-    
-    If presetup is provided, it's expected to be a dictionary with keys
-    product names and values the version that should be installed into
-    the table files, overriding eups expandtable's usual behaviour. E.g.
-    env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env['version']})
-    """
 
     if not env.installing:
         return
@@ -270,7 +274,7 @@ def InstallEups(env, dest, files=[], presetup=""):
             env.AlwaysBuild(i)
 
             cmd = "eups expandbuild -i --version %s %s" % (env['version'], str(i))
-            env.AddPostAction(i, Action("%s" %(cmd), cmd, ENV = os.environ))
+            env.AddPostAction(i, env.Action("%s" %(cmd), cmd, ENV = os.environ))
 
         for i in table_obj:
             env.AlwaysBuild(i)
@@ -280,22 +284,19 @@ def InstallEups(env, dest, files=[], presetup=""):
                 cmd += presetup + " "
             cmd += str(i)
 
-            env.AddPostAction(i, Action("%s" %(cmd), cmd, ENV = os.environ))
+            env.AddPostAction(i, env.Action("%s" %(cmd), cmd, ENV = os.environ))
 
     return dest
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+## @brief Install directories in the usual LSST way, handling "ups" specially.
 @memberOf(SConsEnvironment)
 def InstallLSST(self, prefix, dirs, ignoreRegex=None):
-    """Install directories in the usual LSST way, handling "doc" and "ups" specially"""
-    
     for d in dirs:
         if d == "ups":
             t = self.InstallEups(os.path.join(prefix, "ups"))
         else:
             t = self.InstallDir(prefix, d, ignoreRegex=ignoreRegex)
-
         self.Alias("install", t)
-            
     self.Clean("install", prefix)

@@ -1,3 +1,12 @@
+##
+#  @file dependencies.py
+#
+#  Dependency configuration and definition.
+#
+#  @defgroup sconsUtilsDependencies Dependencies and Configuration
+#  @{
+##
+
 import os.path
 import collections
 import imp
@@ -8,8 +17,23 @@ from SCons.Script.SConscript import SConsEnvironment
 from . import installation
 from . import state
 
+##
+# @brief Recursively configure a package using ups/.cfg files.
+#
+# Aliased as lsst.sconsUtils.configure().
+#
+# Usually, LSST packages will call this function through scripts.BasicSConstruct.
+#
+# @param packageName       Name of the package being built; must correspond to a .cfg file in ups/.
+# @param versionString     Version-control system string to be parsed for version information
+#                          ($HeadURL$ for SVN).
+# @param eupsProduct       Name of the EUPS product being built.  Defaults to and is almost always
+#                          the name of the package.
+# @param eupsProductPath   An alternate directory where the package should be installed.
+#
+# @return an SCons Environment object (which is also available as lsst.sconsUtils.env).
+##
 def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath=None):
-    """Recursively configure a package using ups/.cfg files."""
     if eupsProduct is None:
         eupsProduct = packageName
     state.env['eupsProduct'] = eupsProduct
@@ -25,7 +49,7 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     state.env["libDir"] = "%s/lib" % prefix
     state.env["pythonDir"] = "%s/python" % prefix
     if state.env.installing:
-        SCons.progress_display("Installing into %s" % prefix)
+        SCons.Script.Progress("Installing into %s" % prefix)
     #
     # Process dependencies
     #
@@ -47,45 +71,50 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
+##
+# @brief Base class for defining how to configure an LSST sconsUtils package.
+#
+# Aliased as lsst.sconsUtils.Configuration.
+#
+# An ups/*.cfg file should contain an instance of this class called
+# "config".  Most LSST packages will be able to use this class directly
+# instead of subclassing it.
+#
+# The only important method is configure(), which modifies an SCons
+# environment to use the package.  If a subclass overrides configure,
+# it may not need to call the base class __init__(), whose only
+# purpose is to define a number of instance variables used by configure().
+##
 class Configuration(object):
-    """Base class for defining how to configure an LSST sconsUtils package.
 
-    An ups/*.cfg file should contain an instance of this class called
-    "config".  Most LSST packages will be able to use this class directly
-    instead of subclassing it.
-
-    The only important method is configure(), which modifies an SCons
-    environment to use the package.  If a subclass overrides configure,
-    it may not need to call the base class __init__(), whose only
-    purpose is to define a number of instance variables used by configure().
-    """
-
+    ## @brief Parse the name of a .cfg file, returning the package name and root directory.
     @staticmethod
     def parseFilename(cfgFile):
-        """Parse the name of a .cfg, returning the package name and root directory."""
         dir, file = os.path.split(cfgFile)
         name, ext = os.path.splitext(file)
         return name, os.path.abspath(os.path.join(dir, ".."))
 
+    ##
+    # @brief Initialize the configuration object.
+    #
+    # @param cfgFile             The name of the calling .cfg file, usually just passed in with the special
+    #                            variable __file__.  This will be parsed to extract the package name and root.
+    # @param headers             A list of headers provided by the package, to be used in autoconf-style
+    #                            tests.
+    # @param libs                A list or dictionary of libraries provided by the package.  If a dictionary
+    #                            is provided, libs["main"] should contain a list of regular libraries provided
+    #                            by the library.  Other keys are "python" and "test", which refer to libraries
+    #                            that are only linked against compiled Python modules and unit tests,
+    #                            respectively.  If a list is provided, the list is used as "main".  These are
+    #                            used both for autoconf-style tests and to support env.getLibs(...), which
+    #                            recursively computes the libraries a package must be linked with.
+    # @param hasSwigFiles        If True, the package provides SWIG interface files in "<root>/python".
+    # @param hasDoxygenInclude   If True, the package provides a Doxygen include file with the
+    #                            name "<root>/doc/<name>.inc".
+    # @param hasDoxygenTag       If True, the package generates a Doxygen TAG file.
+    ##
     def __init__(self, cfgFile, headers=(), libs=None, hasSwigFiles=True,
                  hasDoxygenInclude=False, hasDoxygenTag=True):
-        """Initialize the configuration object.
-
-        @param cfgFile  The name of the calling .cfg file, usually just passed in with the special
-                        variable __file__.  This will be parsed to extract the package name and root.
-        @param headers  A list of headers provided by the package, to be used in autoconf-style tests.
-        @param libs     A list or dictionary of libraries provided by the package.  If a dictionary
-                        is provided, libs["main"] should contain a list of regular libraries provided
-                        by the library.  Other keys are "python" and "test", which refer to libraries
-                        that are only linked against compiled Python modules and unit tests, respectively.
-                        If a list is provided, the list is used as "main".  These are used both for
-                        autoconf-style tests and to support env.getLib(...), which recursively computes
-                        the libraries a package must be linked with.
-        @param hasSwigFiles        If True, the package provides SWIG interface files in "<root>/python".
-        @param hasDoxygenInclude   If True, the package provides a Doxygen include file with the
-                                   name "<root>/doc/<name>.inc".
-        @param hasDoxygenTag       If True, the package generates a Doxygen TAG file.
-        """
         self.name, self.root = self.parseFilename(cfgFile)
         self.paths = {
             # Sequence of include path for headers provided by this package
@@ -121,22 +150,22 @@ class Configuration(object):
             "headers": tuple(headers),
             "libs": tuple(self.libs["main"])
             }
-
+    ##
+    # @brief Update an SCons environment to make use of the package.
+    #
+    # @param conf      An SCons Configure context.  The SCons Environment conf.env should be updated
+    #                  by the configure function.
+    # @param packages  A dictionary containing the configuration modules of all dependencies (or None if
+    #                  the dependency was optional and was not found).  The <module>.config.configure(...)
+    #                  method will have already been called on all dependencies.
+    # @param check     If True, perform autoconf-style tests to verify that key components are in
+    #                  fact in place.
+    # @param build     If True, this is the package currently being built, and packages in
+    #                  "buildRequired" and "buildOptional" dependencies will also be present in
+    #                  the packages dict.
+    ##
     def configure(self, conf, packages, check=False, build=True):
         """
-        Update an SCons environment to make use of the package.
-
-        Arguments:
-        @param conf      An SCons Configure context.  The SCons Environment conf.env should be updated
-                         by the configure function.
-        @param packages  A dictionary containing the configuration modules of all dependencies (or None if
-                         the dependency was optional and was not found).  The <module>.config.configure(...)
-                         method will have already been called on all dependencies.
-        @param check     If True, perform autoconf-style tests to verify that key components are in
-                         fact in place.
-        @param build     If True, this is the package currently being built, and packages in
-                         "buildRequired" and "buildOptional" dependencies will also be present in
-                         the packages dict.
         """
         assert(not (check and build))
         conf.env.PrependUnique(**self.paths)
@@ -162,28 +191,33 @@ class Configuration(object):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
+##
+# @brief A Configuration subclass for external (third-party) packages.
+#
+# Aliased as lsst.sconsUtils.ExternalConfiguration.
+#
+# ExternalConfiguration doesn't assume the package uses SWIG or Doxygen,
+# and tells SCons not to consider header files this package provides as dependencies.
+#
+# This means things SCons won't waste time looking for changes in it every time you build.
+##
 class ExternalConfiguration(Configuration):
-    """Configuration subclass that doesn't assume, the package uses SWIG or Doxygen,
-    and tells SCons not to consider header files this package provides as dependencies.
 
-    This means things won't rebuild automatically if you change which version of a package
-    is setup, but SCons won't waste time looking for changes in it every time you build.
-    """
-
+    ##
+    # @brief Initialize the configuration object.
+    #
+    # @param cfgFile  The name of the calling .cfg file, usually just passed in with the special
+    #                 variable __file__.  This will be parsed to extract the package name and root.
+    # @param headers  A list of headers provided by the package, to be used in autoconf-style tests.
+    # @param libs     A list or dictionary of libraries provided by the package.  If a dictionary
+    #                 is provided, libs["main"] should contain a list of regular libraries provided
+    #                 by the library.  Other keys are "python" and "test", which refer to libraries
+    #                 that are only linked against compiled Python modules and unit tests, respectively.
+    #                 If a list is provided, the list is used as "main".  These are used both for
+    #                 autoconf-style tests and to support env.getLibs(...), which recursively computes
+    #                 the libraries a package must be linked with.
+    ##
     def __init__(self, cfgFile, headers=(), libs=None):
-        """Initialize the configuration object.
-
-        @param cfgFile  The name of the calling .cfg file, usually just passed in with the special
-                        variable __file__.  This will be parsed to extract the package name and root.
-        @param headers  A list of headers provided by the package, to be used in autoconf-style tests.
-        @param libs     A list or dictionary of libraries provided by the package.  If a dictionary
-                        is provided, libs["main"] should contain a list of regular libraries provided
-                        by the library.  Other keys are "python" and "test", which refer to libraries
-                        that are only linked against compiled Python modules and unit tests, respectively.
-                        If a list is provided, the list is used as "main".  These are used both for
-                        autoconf-style tests and to support env.getLib(...), which recursively computes
-                        the libraries a package must be linked with.
-        """
         Configuration.__init__(self, cfgFile, headers, libs, hasSwigFiles=False,
                                hasDoxygenTag=False, hasDoxygenInclude=False)
         # XCPPPATHS is like CPPPATHS, but we add it to CCFLAGS manually after 
@@ -192,23 +226,32 @@ class ExternalConfiguration(Configuration):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
+##
+# @brief A class for loading and managing the dependency tree of a package, as defined by its
+#        configuration module (.cfg) file.
+#
+# This tree isn't actually stored as a tree; it's flattened into an ordered dictionary
+# as it is recursively loaded.
+#
+# The main SCons produced by configure() and available as sconsUtils.env will contain
+# an instance of this class as env.dependencies.
+#
+# Its can be used like a read-only dictionary to check whether an optional package has been
+# configured; a package that was not found will have a value of None, while a configured
+# package's value will be its imported .cfg module.
+##
 class PackageTree(object):
-    """A class for loading and managing the dependency tree of a package, as defined by its
-    configuration module (.cfg) file.
-
-    This tree isn't actually stored as a tree; it's flattened into an ordered dictionary
-    as it is recursively loaded.
-    """
-
+    
+    ##
+    # @brief Recursively load *.cfg files for packageName and all its dependencies.
+    #
+    # @param primaryName      The name of the primary package being built.
+    #
+    # After __init__, self.primary will be set to the configuration module for the primary package,
+    # and self.packages will be an OrderedDict of dependencies (excluding self.primary), ordered
+    # such that configuration can proceed in iteration order.
+    ##
     def __init__(self, primaryName):
-        """Recursively load *.cfg files for packageName and all its dependencies.
-
-        @param primaryName      The name of the primary package being built.
-
-        After __init__, self.primary will be set to the configuration module for the primary package,
-        and self.packages will be an OrderedDict of dependencies (excluding self.primary), ordered
-        such that configuration can proceed in iteration order.
-        """
         self.upsDirs = state.env.upsDirs
         self.packages = collections.OrderedDict()
         self.primary = self._tryImport(primaryName)
@@ -224,8 +267,9 @@ class PackageTree(object):
 
     name = property(lambda self: self.primary.config.name)
 
+    ## @brief Configure the entire dependency tree in order. and return an updated environment."""
     def configure(self, env, check=False):
-        """Configure the entire dependency tree in order. and return an updated environment."""
+        
         conf = env.Configure()
         for name, module in self.packages.iteritems():
             if module is None:
@@ -301,34 +345,35 @@ class PackageTree(object):
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-def getLibs(env, targets="main"):
-    """Get the libraries the package should be linked with.
-
-    Arguments:
-       targets --- A string containing whitespace-delimited targets.  Standard
-                   targets are "main", "python", and "test".  Default is "main".
-                   A special virtual target "self" can be provided, returning
-                   the results of targets="main" with the eups_target library
-                   removed.
-
-    Typically, main libraries will be linked with LIBS=getLibs("self"),
-    Python modules will be linked with LIBS=getLibs("main python") and
-    C++-coded test programs will be linked with LIBS=getLibs("main test")
-    """
+##
+# @brief Get the libraries the package should be linked with.
+#
+# @param categories   A string containing whitespace-delimited categories.  Standard
+#                     categories are "main", "python", and "test".  Default is "main".
+#                     A special virtual category "self" can be provided, returning
+#                     the results of targets="main" with the env["packageName"] removed.
+#
+# Typically, main libraries will be linked with LIBS=getLibs("self"),
+# Python modules will be linked with LIBS=getLibs("main python") and
+# C++-coded test programs will be linked with LIBS=getLibs("main test").
+# """
+def getLibs(env, categories="main"):
     libs = []
     removeSelf = False
-    for target in targets.split():
-        if target == "self":
-            target = "main"
+    for category in categories.split():
+        if category == "self":
+            category = "main"
             removeSelf = True
-        for lib in env.libs[target]:
+        for lib in env.libs[category]:
             if lib not in libs:
                 libs.append(lib)
     if removeSelf:
         try:
-            libs.remove(env["eupsProduct"])
+            libs.remove(env["packageName"])
         except ValueError:
             pass
     return libs
 
 SConsEnvironment.getLibs = getLibs
+
+## @}

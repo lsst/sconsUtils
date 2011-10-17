@@ -296,9 +296,9 @@ def LsstVariables(files=None):
 
     To actually use these options, you must load them into the environment
     by passing it to the scons.makeEnv() function via its variables argument:
-    @code
+
        env = scons.makeEnv("mypackage", "$HeadURL$", variables=opts)
-    @endcode
+
     scons.makeEnv() will automatically look for these options on the command
     line as well as any option files.  The values found their will be loaded
     into the environment's dictionary (i.e. accessible via env[optionname]).
@@ -306,7 +306,7 @@ def LsstVariables(files=None):
     Note that makeEnv() will internally add additional options to the Variables
     object you pass it, overriding your definitions where you have used the
     same name.  These standard options include:
-    @verbatim
+
         debug     Set to > 1 to enable debugging flag (default: 0)
         eupsdb    Specify which element of EUPS_PATH should be used (default:
                     the value of $EUPS_PATH)
@@ -318,7 +318,6 @@ def LsstVariables(files=None):
         opt       the optimization level, an integer between 0 and 3, inclusive
                     (default: 0)
         version   Specify the current version (default is auto-detected)
-    @endverbatim    
     
     This constructor should be preferred over the standard SCons Variables
     constructor because it defines various LSST conventions.  In particular,

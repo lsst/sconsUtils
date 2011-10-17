@@ -1,3 +1,9 @@
+##
+#  @file utils.py
+#
+#  Internal utilities for sconsUtils.
+##
+
 import sys
 import warnings
 
@@ -7,6 +13,13 @@ try:
 except ImportError:
     abort = sys.exit
 
+##
+#  @brief A dead-simple logger for all messages.
+#
+#  This simply centralizes decisions about whether to throw exceptions or print user-friendly messages
+#  (the traceback variable) and whether to print extra debug info (the verbose variable).
+#  These are set from command-line options in state.py.
+##
 class Log(object):
 
     def __init__(self):
@@ -41,21 +54,24 @@ class Log(object):
         if self.hasFailed:
             abort(1)
 
+##
+#  @brief A Python decorator that injects functions into a class.
+#
+#  For example:
+#  @code
+#  class test_class(object):
+#      pass
+#
+#  @memberOf(test_class):
+#  def test_method(self):
+#      print "test_method!"
+#  @endcode
+#  ...will cause test_method to appear as as if it were defined within test_class.
+#
+#  The function or method will still be added to the module scope as well, replacing any
+#  existing module-scope function with that name; this appears to be unavoidable.
+##
 def memberOf(cls, name=None):
-    """A parametrized descriptor that adds a method or nested class to a class outside the class
-    definition scope.  Example:
-
-    class test_class(object):
-        pass
-
-    @memberOf(test_class):
-    def test_method(self):
-        print "test_method!"
-
-    The function or method will still be added to the module scope as well, replacing any
-    existing module-scope function with that name; this appears to be an
-    unavoidable side-effect.
-    """
     if isinstance(cls, type):
         classes = (cls,)
     else:

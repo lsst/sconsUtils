@@ -1,10 +1,17 @@
-"""This module acts like a singleton, holding all global state for sconsUtils.
-This includes the primary Environment object (state.env), the message log (state.log),
-the command-line variables object (state.opts).
+##
+#  @file state.py
+#
+# This module acts like a singleton, holding all global state for sconsUtils.
+# This includes the primary Environment object (state.env), the message log (state.log),
+# the command-line variables object (state.opts).  All three of these variables
+# are aliased to the main lsst.sconsUtils scope, so there should be no need for users
+# to deal with the state module directly.
+#
+# These are all initialized when the module is imported, but may be modified by other code
+# (particularly dependencies.configure()).
+##
 
-These are all initialized when the module is imported, but may be modified by other code,
-which may also add more module variables.
-"""
+## @cond INTERNAL
 
 import SCons.Script
 import sys
@@ -315,3 +322,5 @@ _initLog()
 _initVariables()
 _initEnvironment()
 _configureCommon()
+
+## @endcond

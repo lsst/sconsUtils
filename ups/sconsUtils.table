@@ -1,5 +1,4 @@
-if (type == "build") {
-   setupRequired(sconsDistrib >= 2.1.0)
-}
+setupRequired(sconsDistrib >= 2.1.0)
+setupOptional(doxygen >= 1.7.4)
 envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
 envPrepend(PATH, ${PRODUCT_DIR}/bin)
