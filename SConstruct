@@ -8,5 +8,5 @@ from lsst.sconsUtils import scripts
 
 scripts.BasicSConstruct(
     packageName="sconsUtils",
-    versionString=r"$HeadURL",
+    versionString=r"$HeadURL$",
     )
