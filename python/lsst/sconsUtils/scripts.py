@@ -46,31 +46,44 @@ def _getFileBase(node):
 #
 #  @returns an SCons Environment object (which is also available as lsst.sconsUtils.env).
 ##
-def BasicSConstruct(packageName, versionString, eupsProduct=None, eupsProductPath=None, 
-                    subDirs=None, cleanExt=None, ignoreRegex=None):
-      
-    if subDirs is None:
-        subDirs = []
-        for path in os.listdir("."):
-            if os.path.isdir(path) and not path.startswith("."):
-                subDirs.append(path)
-    if cleanExt is None:
-        cleanExt = r"*~ core *.so *.os *.o *.pyc *.pkgc"
-    if ignoreRegex is None:
-        ignoreRegex = r"(~$|\.pyc$|^\.svn$|\.o|\.os$)"
-    dependencies.configure(packageName, versionString, eupsProduct, eupsProductPath)
-    for root, dirs, files in os.walk("."):
-        dirs = [d for d in dirs if (not d.startswith('.'))]
-        if "SConscript" in files:
-            SCons.Script.SConscript(os.path.join(root, "SConscript"))
-    state.env.InstallLSST(state.env["prefix"], [subDir for subDir in subDirs if os.path.exists(subDir)],
-                          ignoreRegex=ignoreRegex)
-    state.env.BuildETags()
-    state.env.CleanTree(cleanExt)
-    state.env.Declare()
-    state.env.Default(*(item for item in ("include", "lib", "python", "tests") if os.path.isdir(item)))
-    state.env.Decider("MD5-timestamp") # if timestamps haven't changed, don't do MD5 checks
-    return state.env
+class BasicSConstruct(object):
+
+    def __new__(cls, packageName, versionString, eupsProduct=None, eupsProductPath=None, cleanExt=None,
+                defaults=("lib", "python", "tests"), subDirs=None, ignoreRegex=None):
+        cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt)
+        cls.finish(defaults, subDirs, ignoreRegex)
+        return state.env
+
+    @staticmethod
+    def initialize(packageName, versionString, eupsProduct=None, eupsProductPath=None, cleanExt=None):
+        if cleanExt is None:
+            cleanExt = r"*~ core *.so *.os *.o *.pyc *.pkgc"
+        dependencies.configure(packageName, versionString, eupsProduct, eupsProductPath)
+        state.env.BuildETags()
+        state.env.CleanTree(cleanExt)
+        for root, dirs, files in os.walk("."):
+            dirs = [d for d in dirs if (not d.startswith('.'))]
+            if "SConscript" in files:
+                SCons.Script.SConscript(os.path.join(root, "SConscript"))
+
+    @staticmethod
+    def finish(defaults=("lib", "python", "tests"), subDirs=None, ignoreRegex=None):
+        if ignoreRegex is None:
+            ignoreRegex = r"(~$|\.pyc$|^\.svn$|\.o|\.os$)"
+        if subDirs is None:
+            subDirs = []
+            for path in os.listdir("."):
+                if os.path.isdir(path) and not path.startswith("."):
+                    subDirs.append(path)
+        install = state.env.InstallLSST(state.env["prefix"],
+                                        [subDir for subDir in subDirs if os.path.exists(subDir)],
+                                        ignoreRegex=ignoreRegex)
+        for name, target in state.targets.iteritems():
+            state.env.Requires(install, target)
+        state.env.Declare()
+        defaults = tuple(state.targets[t] for t in defaults)
+        state.env.Default(defaults)
+        state.env.Decider("MD5-timestamp") # if timestamps haven't changed, don't do MD5 checks
 
 ##
 # @brief A scope-only class for SConscript-replacement convenience functions.
@@ -90,8 +103,6 @@ class BasicSConscript(object):
     #                    of all *.cc files in \#src.
     #  @param libs       Libraries to link against, either as a string argument to be passed to 
     #                    env.getLibs() or a sequence of actual libraries to pass in.
-    #
-    #  @returns the result of the env.SharedLibrary call.
     ##
     @staticmethod
     def lib(libName=None, src=None, libs="self"):
@@ -99,12 +110,14 @@ class BasicSConscript(object):
             libName = state.env["packageName"]
         if src is None:
             src = Glob("#src/*.cc") + Glob("#src/*/*.cc") + Glob("#src/*/*/*.cc") + Glob("#src/*/*/*/*.cc")
-        src = env.SourcesForSharedLibrary(src)
+        src = state.env.SourcesForSharedLibrary(src)
         if isinstance(libs, basestring):
             libs = state.env.getLibs(libs)
         elif libs is None:
             libs = []
-        return state.env.SharedLibrary(libName, src, LIBS=libs)
+        result = state.env.SharedLibrary(libName, src, LIBS=libs)
+        state.targets["lib"].extend(result)
+        return result
 
     ##
     #  @brief Convenience function to replace standard python/*/SConscript boilerplate.
@@ -119,8 +132,6 @@ class BasicSConscript(object):
     #  @param swigSrc      A dictionary of additional source files that go into the modules.  Each
     #                      key should be an entry in swigNames, and each value should be a list
     #                      of additional C++ source files not generated by SWIG.
-    #
-    #  @returns the concatenated results of the env.SwigLoadableModule calls.
     ##
     @staticmethod
     def python(swigNames=None, libs="main python", swigSrc=None):
@@ -138,6 +149,7 @@ class BasicSConscript(object):
         result = []
         for name, src in swigSrc.iteritems():
             result.extend(state.env.SwigLoadableModule("_" + name, src, LIBS=libs))
+        state.targets["python"].extend(result)
         return result
 
     ##
@@ -156,13 +168,15 @@ class BasicSConscript(object):
             projectName = ".".join(["lsst"] + state.env["packageName"].split("_"))
         if projectNumber is None:
             projectNumber = state.env["version"]
-        return state.env.Doxygen(
+        result = state.env.Doxygen(
             "doxygen.conf.in", projectName=projectName, projectNumber=projectNumber,
             includes=state.env.doxygen["includes"],
             useTags=state.env.doxygen["tags"],
             makeTag=(state.env["packageName"] + ".tag"),
             **kw
             )
+        state.targets["doc"].extend(result)
+        return result
 
     ##
     #  @brief Convenience function to replace standard tests/SConscript boilerplate.
@@ -189,8 +203,6 @@ class BasicSConscript(object):
     #                          ignored tests will be built, but not run).
     #  @param args             A dictionary of program arguments for tests, passed directly
     #                          to tests.Control.
-    #
-    #  @return a tuple of (ccTests, pyTests), where each is now the result of running tests.Control.run().
     ##
     @staticmethod
     def tests(pyTests=None, ccTests=None, swigNames=None, swigSrc=None, ignoreList=None, args=None):
@@ -231,7 +243,9 @@ class BasicSConscript(object):
         for pyTest in pyTests:
             state.env.Depends(pyTest, swigMods)
             state.env.Depends(pyTest, "#python")
-        return ccTests, pyTests
+        result = ccTests + pyTests
+        state.targets["tests"].extend(result)
+        return result
 
     ##
     #  @brief Convenience function to replace standard examples/SConscript boilerplate.
@@ -271,7 +285,9 @@ class BasicSConscript(object):
         for name, src in swigSrc.iteritems():
             swigMods.extend(
                 state.env.SwigLoadableModule("_" + name, src, LIBS=state.env.getLibs("main python"))
-            )
-        return ccExamples, swigMods
+                )
+        result = ccExamples + swigMods
+        state.targets["examples"].extend(result)
+        return result
 
 ## @}

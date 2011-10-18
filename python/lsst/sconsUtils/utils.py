@@ -7,11 +7,7 @@
 import sys
 import warnings
 
-try:
-    import SCons.Script
-    abort = SCons.Script.Exit
-except ImportError:
-    abort = sys.exit
+import SCons.Script
 
 ##
 #  @brief A dead-simple logger for all messages.
@@ -24,8 +20,6 @@ class Log(object):
 
     def __init__(self):
         self.traceback = False
-        self.hasFailed = False
-        self.messages = []
         self.verbose = True
 
     def info(self, message):
@@ -36,23 +30,17 @@ class Log(object):
         if self.traceback:
             warnings.warn(message, stacklevel=2)
         else:
-            self.messages.append(message)
+            sys.stderr.write(message + "\n")
 
     def fail(self, message):
         if self.traceback:
             raise RuntimeError(message)
         else:
-            self.messages.append(message)
-            self.hasFailed = True
+            sys.stderr.write(message + "\n")
+            SCons.Script.Exit(1)
 
     def flush(self):
-        for message in self.messages:
-            sys.stderr.write(message)
-            sys.stderr.write("\n")
-            sys.stderr.flush()
-        self.messages = []
-        if self.hasFailed:
-            abort(1)
+        sys.stderr.flush()
 
 ##
 #  @brief A Python decorator that injects functions into a class.

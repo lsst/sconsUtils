@@ -124,7 +124,6 @@ class Control(object):
         targets = []
         if not self.runExamples:
             return targets
-
         for f in glob.glob(fileGlob):
             interpreter = ""            # interpreter to run test, if needed
 
@@ -137,7 +136,6 @@ class Control(object):
                 continue
 
             target = os.path.join(self._tmpDir, f)
-            targets += [target]
 
             args = []
             for a in self.args(f).split(" "):
@@ -157,7 +155,7 @@ class Control(object):
             (should_pass, passedMsg, should_fail, failedMsg) = self.messages(f)
 
             expandedArgs = " ".join(args)
-            self._env.Command(target, f, """
+            result = self._env.Command(target, f, """
             @rm -f ${TARGET}.failed;
             @printf "%%s" 'running ${SOURCES}... ';
             @echo $SOURCES %s > $TARGET; echo >> $TARGET;
@@ -169,6 +167,8 @@ class Control(object):
                echo "%s"; \
             fi;
             """ % (expandedArgs, interpreter, expandedArgs, should_pass, passedMsg, should_fail, failedMsg))
+
+            targets.extend(result)
 
             self._env.Alias(os.path.basename(target), target)
 

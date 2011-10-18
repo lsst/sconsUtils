@@ -1,4 +1,4 @@
-##
+#
 #  @file builders.py
 #
 #  Extra builders and methods to be injected into the SConsEnvironment class.
@@ -256,6 +256,8 @@ class DoxygenBuilder(object):
         env.AlwaysBuild(config)
         doc = env.Command(target=self.targets, source=self.sources,
                           action="doxygen %s" % outConfigNode.abspath)
+        for path in self.outputPaths:
+            env.Clean(doc, path)
         env.Depends(doc, config)
         self.results.extend(config)
         self.results.extend(doc)

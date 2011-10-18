@@ -48,8 +48,6 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     state.env['prefix'] = prefix
     state.env["libDir"] = "%s/lib" % prefix
     state.env["pythonDir"] = "%s/python" % prefix
-    if state.env.installing:
-        SCons.Script.Progress("Installing into %s" % prefix)
     #
     # Process dependencies
     #
@@ -255,7 +253,7 @@ class PackageTree(object):
         self.upsDirs = state.env.upsDirs
         self.packages = collections.OrderedDict()
         self.primary = self._tryImport(primaryName)
-        if self.primary is None: fail("Failed to load primary package configuration.")
+        if self.primary is None: state.log.fail("Failed to load primary package configuration.")
         for dependency in self.primary.dependencies.get("required", ()):
             if not self._recurse(dependency): state.log.fail("Failed to load required dependencies.")
         for dependency in self.primary.dependencies.get("buildRequired", ()):

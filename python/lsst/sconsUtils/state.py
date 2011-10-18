@@ -23,6 +23,7 @@ SCons.Script.EnsureSConsVersion(2, 1, 0)
 env = None
 log = None
 opts = None
+targets = {"doc": [], "tests": [], "lib": [], "python": [], "examples": [], "include": []}
 
 def _initOptions():
     SCons.Script.AddOption('--checkDependencies', dest='checkDependencies',

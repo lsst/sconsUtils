@@ -197,33 +197,59 @@ def Declare(self, products=None):
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 ##
+#  @brief SCons Action callable to recursively install a directory.
+#
+#  This is separate from the InstallDir function to allow the directory-walking
+#  to happen when installation is actually invoked, rather than when the SConscripts
+#  are parsed.  This still does not ensure that all necessary files are built as
+#  prerequisites to installing, but if one explicitly marks the install targets
+#  as dependent on the build targets, that should be enough.
+##
+class DirectoryInstaller(object):
+
+    def __init__(self, ignoreRegex, recursive):
+        self.ignoreRegex = re.compile(ignoreRegex)
+        self.recursive = recursive
+
+    def __call__(self, target, source, env):
+        results = []
+        prefix = os.path.abspath(os.path.join(target[0].abspath, ".."))
+        destpath = os.path.join(target[0].abspath)
+        if not os.path.isdir(destpath):
+            state.log.info("Creating directory %s" % destpath)
+            os.makedirs(destpath)
+        for root, dirnames, filenames in os.walk(source[0].path):
+            if not self.recursive:
+                dirnames[:] = []
+            else:
+                dirnames[:] = [d for d in dirnames if d != ".svn"] # ignore .svn tree
+            for dirname in dirnames:
+                destpath = os.path.join(prefix, root, dirname)
+                if not os.path.isdir(destpath):
+                    state.log.info("Creating directory %s" % destpath)
+                    os.makedirs(destpath)
+            for filename in filenames:
+                if self.ignoreRegex.search(filename):
+                    continue
+                destpath = os.path.join(prefix, root)
+                srcpath = os.path.join(root, filename)
+                state.log.info("Copying %s to %s" % (srcpath, destpath))
+                shutil.copy(srcpath, destpath)
+        return 0
+        
+
+##
 #  Install the directory dir into prefix, (along with all its descendents if recursive is True).
 #  Omit files and directories that match ignoreRegex
-#
-#  Unless force is true, this routine won't do anything unless you specified an "install" target
 ##
 @memberOf(SConsEnvironment)
 def InstallDir(self, prefix, dir, ignoreRegex=r"(~$|\.pyc$|\.os?$)", recursive=True):
-
     if not self.installing:
-        return
-
-    targets = []
-    for dirpath, dirnames, filenames in os.walk(dir):
-        if not recursive:
-            dirnames[:] = []
-        else:
-            dirnames[:] = [d for d in dirnames if d != ".svn"] # ignore .svn tree
-        #
-        # List of possible files to install
-        #
-        for f in filenames:
-            if re.search(ignoreRegex, f):
-                continue
-
-            targets += self.Install(os.path.join(prefix, dirpath), os.path.join(dirpath, f))
-
-    return targets
+        return []
+    result = self.Command(target=os.path.join(self.Dir(prefix).abspath, dir), source=dir,
+                          action=DirectoryInstaller(ignoreRegex, recursive))
+    self.AlwaysBuild(result)
+    return result
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -242,7 +268,7 @@ def InstallDir(self, prefix, dir, ignoreRegex=r"(~$|\.pyc$|\.os?$)", recursive=T
 def InstallEups(env, dest, files=[], presetup=""):
 
     if not env.installing:
-        return
+        return []
 
     if env.GetOption("clean"):
         print >> sys.stderr, "Removing", dest
@@ -255,10 +281,11 @@ def InstallEups(env, dest, files=[], presetup=""):
 
         env = env.Clone(ENV = os.environ)
         #
-        # Add any build/table files to the desired files
+        # Add any build/table/cfg files to the desired files
         #
         files = [str(f) for f in files] # in case the user used Glob not glob.glob
-        files += glob.glob(os.path.join("ups", "*.build")) + glob.glob(os.path.join("ups","*.table"))
+        files += glob.glob(os.path.join("ups", "*.build")) + glob.glob(os.path.join("ups","*.table")) \
+            + glob.glob(os.path.join("ups", "*.cfg"))
         files = list(set(files))        # remove duplicates
 
         buildFiles = filter(lambda f: re.search(r"\.build$", f), files)
@@ -293,10 +320,14 @@ def InstallEups(env, dest, files=[], presetup=""):
 ## @brief Install directories in the usual LSST way, handling "ups" specially.
 @memberOf(SConsEnvironment)
 def InstallLSST(self, prefix, dirs, ignoreRegex=None):
+    results = []
     for d in dirs:
         if d == "ups":
             t = self.InstallEups(os.path.join(prefix, "ups"))
         else:
             t = self.InstallDir(prefix, d, ignoreRegex=ignoreRegex)
+        self.Depends(t, d)
+        results.extend(t)
         self.Alias("install", t)
     self.Clean("install", prefix)
+    return results

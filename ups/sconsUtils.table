@@ -1,4 +1,4 @@
 setupRequired(sconsDistrib >= 2.1.0)
-setupOptional(doxygen >= 1.7.4)
+setupOptional(doxygen)
 envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
 envPrepend(PATH, ${PRODUCT_DIR}/bin)
