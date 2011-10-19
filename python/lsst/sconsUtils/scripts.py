@@ -20,40 +20,57 @@ def _getFileBase(node):
     name, ext = os.path.splitext(os.path.basename(str(node)))
     return name
 
+
 ##
-# @brief Convenience function to replace standard SConstruct boilerplate.
+# @brief A scope-only class for SConstruct-replacement convenience functions.
 #
-# This function:
-#  - Calls all SConscript files found in subdirectories.
-#  - Configures dependencies.
-#  - Sets up installation paths.
-#  - Sets how the --clean option works.
-#  - Tells SCons to only do MD5 checks when timestamps have changed.
-#  - Sets the "include", "lib", "python", and "tests" targets as the defaults
-#    to be built when scons is run with no target arguments.
+# The boilerplate for a standard LSST SConstruct file is replaced by two static methods:
+# initialize() and finish().  The former configures dependencies, sets up package-dependent
+# environment variables, and calls any SConscript files found in subdirectories, while the
+# latter sets up installation paths, default targets, and explicit dependencies.
 #
-# Arguments:
-#  @param packageName          Name of the package being built; must correspond to a .cfg file in ups/.
-#  @param versionString        Version-control system string to be parsed for version information
-#                              ($HeadURL$ for SVN).
-#  @param eupsProduct          Name of the EUPS product being built.  Defaults to and is almost always
-#                              the name of the package.
-#  @param eupsProductPath      An alternate directory where the package should be installed.
-#  @param subDirs              An explicit list of subdirectories that should be installed.  By default,
-#                              all non-hidden subdirectories will be installed.
-#  @param cleanExt             Whitespace delimited sequence of globs for files to remove with --clean.
-#  @param ignoreRegex          Regular expression that matches files that should not be installed.
-#
-#  @returns an SCons Environment object (which is also available as lsst.sconsUtils.env).
+# Calling BasicSConstruct as a function invokes its __new__ method, which calls both
+# initialize() and finish(), and should be used when the SConstruct file doesn't need to
+# do anything other than what they provide.
 ##
 class BasicSConstruct(object):
 
+    ##
+    # @brief Convenience function to replace standard SConstruct boilerplate.
+    #
+    # This is a shortcut for
+    # @code
+    # BasicSConstruct.initialize(...)
+    # BasicSConstruct.finalize(...)
+    # @endcode
+    #
+    # This returns the sconsUtils.env Environment object rather than
+    # a BasicSConstruct instance (which would be useless).
+    ##
     def __new__(cls, packageName, versionString, eupsProduct=None, eupsProductPath=None, cleanExt=None,
                 defaults=("lib", "python", "tests"), subDirs=None, ignoreRegex=None):
         cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt)
         cls.finish(defaults, subDirs, ignoreRegex)
         return state.env
 
+    ##
+    # @brief Convenience function to replace standard SConstruct boilerplate (step 1).
+    #
+    # This function:
+    #  - Calls all SConscript files found in subdirectories.
+    #  - Configures dependencies.
+    #  - Sets how the --clean option works.
+    #
+    #  @param packageName          Name of the package being built; must correspond to a .cfg file in ups/.
+    #  @param versionString        Version-control system string to be parsed for version information
+    #                              ($HeadURL$ for SVN).
+    #  @param eupsProduct          Name of the EUPS product being built.  Defaults to and is almost always
+    #                              the name of the package.
+    #  @param eupsProductPath      An alternate directory where the package should be installed.
+    #  @param cleanExt             Whitespace delimited sequence of globs for files to remove with --clean.
+    #
+    #  @returns an SCons Environment object (which is also available as lsst.sconsUtils.env).
+    ##
     @staticmethod
     def initialize(packageName, versionString, eupsProduct=None, eupsProductPath=None, cleanExt=None):
         if cleanExt is None:
@@ -66,6 +83,23 @@ class BasicSConstruct(object):
             if "SConscript" in files:
                 SCons.Script.SConscript(os.path.join(root, "SConscript"))
 
+    ##
+    # @brief Convenience function to replace standard SConstruct boilerplate (step 2).
+    #
+    # This function:
+    #  - Sets up installation paths.
+    #  - Tells SCons to only do MD5 checks when timestamps have changed.
+    #  - Sets the "include", "lib", "python", and "tests" targets as the defaults
+    #    to be built when scons is run with no target arguments.
+    #
+    #  @param subDirs              An explicit list of subdirectories that should be installed.  By default,
+    #                              all non-hidden subdirectories will be installed.
+    #  @param defaults             A sequence of targets (see state.targets) that should be built when
+    #                              scons is run with no arguments.
+    #  @param ignoreRegex          Regular expression that matches files that should not be installed.
+    #
+    #  @returns an SCons Environment object (which is also available as lsst.sconsUtils.env).
+    ##
     @staticmethod
     def finish(defaults=("lib", "python", "tests"), subDirs=None, ignoreRegex=None):
         if ignoreRegex is None:
@@ -80,6 +114,7 @@ class BasicSConstruct(object):
                                         ignoreRegex=ignoreRegex)
         for name, target in state.targets.iteritems():
             state.env.Requires(install, target)
+            state.env.Alias(name, target)
         state.env.Declare()
         defaults = tuple(state.targets[t] for t in defaults)
         state.env.Default(defaults)
@@ -88,7 +123,9 @@ class BasicSConstruct(object):
 ##
 # @brief A scope-only class for SConscript-replacement convenience functions.
 #
-# All methods of BasicSConscript are static.
+# All methods of BasicSConscript are static.  All of these functions update the state.targets
+# dictionary of targets used to set default targets and fix build dependencies; if you build anything
+# without using BasicSConscript methods, be sure to manually it to the state.targets dict.
 ##
 class BasicSConscript(object):
 
@@ -164,6 +201,9 @@ class BasicSConscript(object):
     ##
     @staticmethod
     def doc(config="doxygen.conf.in", projectName=None, projectNumber=None, **kw):
+        if not state.env.ProductDir("doxygen"):
+            state.log.warn("Doxygen is not setup; skipping documentation build.")
+            return []
         if projectName is None:
             projectName = ".".join(["lsst"] + state.env["packageName"].split("_"))
         if projectNumber is None:

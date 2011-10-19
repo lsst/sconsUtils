@@ -3,15 +3,14 @@
 #
 # This module acts like a singleton, holding all global state for sconsUtils.
 # This includes the primary Environment object (state.env), the message log (state.log),
-# the command-line variables object (state.opts).  All three of these variables
-# are aliased to the main lsst.sconsUtils scope, so there should be no need for users
-# to deal with the state module directly.
+# the command-line variables object (state.opts), and a dictionary of command-line targets
+# used to setup aliases, default targets, and dependencies (state.targets).  All four of
+# these variables are aliased to the main lsst.sconsUtils scope, so there should be no
+# need for users to deal with the state module directly.
 #
 # These are all initialized when the module is imported, but may be modified by other code
 # (particularly dependencies.configure()).
 ##
-
-## @cond INTERNAL
 
 import SCons.Script
 import sys
@@ -20,10 +19,28 @@ import re
 
 SCons.Script.EnsureSConsVersion(2, 1, 0)
 
+##
+#  @brief A dictionary of SCons aliases and targets.
+#
+#  These are used to setup aliases, default targets, and dependencies by BasicSConstruct.finish().
+#  While one can still use env.Alias to setup aliases (and should for "install"), putting targets
+#  here will generally provide better build-time dependency handling (like ensuring everything
+#  is built before we try to install, and making sure SCons doesn't rebuild the world before
+#  installing).
+#
+#  Users can add additional keys to the dictionary if desired.
+#
+#  Targets should be added by calling extend() or using += on the dict values, to keep the lists of
+#  targets from turning into lists-of-lists.
+##
+targets = {"doc": [], "tests": [], "lib": [], "python": [], "examples": [], "include": []}
+
+## @cond INTERNAL
+
 env = None
 log = None
 opts = None
-targets = {"doc": [], "tests": [], "lib": [], "python": [], "examples": [], "include": []}
+
 
 def _initOptions():
     SCons.Script.AddOption('--checkDependencies', dest='checkDependencies',
