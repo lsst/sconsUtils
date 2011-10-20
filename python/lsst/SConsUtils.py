@@ -1510,11 +1510,14 @@ env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env
 
         miscFiles = filter(lambda f: not re.search(r"\.(build|table)$", f), files)
         misc_obj = env.Install(dest, miscFiles)
-
+            
         for i in build_obj:
             env.AlwaysBuild(i)
 
-            cmd = "eups expandbuild -i --version %s %s" % (env['version'], str(i))
+            cmd = "eups expandbuild -i --version %s " % env['version']
+            if env.has_key('baseversion'):
+                cmd += " --repoversion %s " % env['baseversion']
+            cmd += str(i)
             env.AddPostAction(i, Action("%s" %(cmd), cmd, ENV = os.environ))
 
         for i in table_obj:
