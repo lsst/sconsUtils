@@ -250,6 +250,11 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
         'SHELL' : os.environ.get("SHELL"), # needed by eups
         'TMPDIR' : os.environ.get("TMPDIR"), # needed by eups
         }
+
+    EUPS_LOCK_PID = os.environ.get("EUPS_LOCK_PID") # needed by eups
+    if EUPS_LOCK_PID is not None:
+        ourEnv['EUPS_LOCK_PID'] = EUPS_LOCK_PID
+
     # Add all EUPS directories
     for k in filter(lambda x: re.search(r"_DIR$", x), os.environ.keys()):
         p = re.search(r"^(.*)_DIR$", k).groups()[0]
