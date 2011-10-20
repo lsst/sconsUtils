@@ -634,20 +634,27 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
 
     if env.whichCc == "clang":
         env.Append(CCFLAGS = ['-Wall'])
-        env.Append(CCFLAGS = ['-Wno-char-subscripts']) # seems innocous enough, and is used by boost
-
         ignoreWarnings = {
             "unused-function" : 'boost::regex has functions in anon namespaces in headers',
             }
+        filterWarnings = {
+            "char-subscripts" : 'seems innocous enough, and is used by boost',
+            "constant-logical-operand" : "Used by eigen 2.0.15. Should get this fixed",
+            "mismatched-tags" : "mixed class and struct.  Used by gcc 4.2 RTL",
+            }
 
+        for k in ignoreWarnings.keys():
+            env.Append(CCFLAGS = ["-Wno-%s" % k])
+            
         if GetOption('filterWarn'):
-            env.Append(CCFLAGS = ["-Wno-%s" % (",".join([str(k) for k in ignoreWarnings.keys()]))])
+            for k in filterWarnings.keys():
+                env.Append(CCFLAGS = ["-Wno-%s" % k])
     elif env.whichCc == "gcc":
         env.Append(CCFLAGS = ['-Wall'])
     elif env.whichCc == "icc":
         env.Append(CCFLAGS = ['-Wall'])
 
-        ignoreWarnings = {
+        filterWarnings = {
             21 : 'type qualifiers are meaningless in this declaration',
             68 : 'integer conversion resulted in a change of sign',
             111 : 'statement is unreachable',
@@ -667,7 +674,7 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
             }
 
         if GetOption('filterWarn'):
-            env.Append(CCFLAGS = ["-wd%s" % (",".join([str(k) for k in ignoreWarnings.keys()]))])
+            env.Append(CCFLAGS = ["-wd%s" % (",".join([str(k) for k in filterWarnings.keys()]))])
         # Workaround intel bug; cf. RHL's intel bug report 580167
         env.Append(LINKFLAGS = ["-Wl,-no_compact_unwind", "-wd,11015"])
         
