@@ -60,6 +60,10 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     state.env['CPPPATH'] = []
     state.env['LIBPATH'] = []
     state.env['XCPPPATH'] = []
+    state.env['_CPPINCFLAGS'] = \
+        "$( ${_concat(INCPREFIX, CPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)}"\
+        " ${_concat(INCPREFIX, XCPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)} $)"
+    state.env['_SWIGINCFLAGS'] = state.env['_CPPINCFLAGS'].replace("CPPPATH", "SWIGPATH")
     if not state.env.GetOption("clean") and not state.env.GetOption("help"):
         packages.configure(state.env, check=state.env.GetOption("checkDependencies"))
         for target in state.env.libs:
@@ -96,16 +100,19 @@ class Configuration(object):
     # @brief Initialize the configuration object.
     #
     # @param cfgFile             The name of the calling .cfg file, usually just passed in with the special
-    #                            variable __file__.  This will be parsed to extract the package name and root.
+    #                            variable __file__.  This will be parsed to extract the package name and
+    #                            root.
     # @param headers             A list of headers provided by the package, to be used in autoconf-style
     #                            tests.
     # @param libs                A list or dictionary of libraries provided by the package.  If a dictionary
-    #                            is provided, libs["main"] should contain a list of regular libraries provided
-    #                            by the library.  Other keys are "python" and "test", which refer to libraries
-    #                            that are only linked against compiled Python modules and unit tests,
-    #                            respectively.  If a list is provided, the list is used as "main".  These are
-    #                            used both for autoconf-style tests and to support env.getLibs(...), which
-    #                            recursively computes the libraries a package must be linked with.
+    #                            is provided, libs["main"] should contain a list of regular libraries
+    #                            provided
+    #                            by the library.  Other keys are "python" and "test", which refer to
+    #                            libraries that are only linked against compiled Python modules and unit
+    #                            tests, respectively.  If a list is provided, the list is used as "main".
+    #                            These are used both for autoconf-style tests and to support
+    #                            env.getLibs(...), which recursively computes the libraries a package
+    #                            must be linked with.
     # @param hasSwigFiles        If True, the package provides SWIG interface files in "<root>/python".
     # @param hasDoxygenInclude   If True, the package provides a Doxygen include file with the
     #                            name "<root>/doc/<name>.inc".
@@ -148,6 +155,20 @@ class Configuration(object):
             "headers": tuple(headers),
             "libs": tuple(self.libs["main"])
             }
+
+    ##
+    # @brief Add custom SCons configuration tests to the Configure Context passed to the
+    #        configure() method.
+    #
+    # This needs to be done up-front so we can pass in a dictionary of custom tests when
+    # calling env.Configure(), and use the same configure context for all packages.
+    #
+    # @param tests     A dictionary to add custom tests to.  This will be passed as the
+    #                  custom_tests argument to env.Configure().
+    ##
+    def addCustomTests(self, tests):
+        pass
+        
     ##
     # @brief Update an SCons environment to make use of the package.
     #
@@ -163,8 +184,6 @@ class Configuration(object):
     #                  the packages dict.
     ##
     def configure(self, conf, packages, check=False, build=True):
-        """
-        """
         assert(not (check and build))
         conf.env.PrependUnique(**self.paths)
         state.log.info("Configuring package '%s'." % self.name)
@@ -218,7 +237,6 @@ class ExternalConfiguration(Configuration):
     def __init__(self, cfgFile, headers=(), libs=None):
         Configuration.__init__(self, cfgFile, headers, libs, hasSwigFiles=False,
                                hasDoxygenTag=False, hasDoxygenInclude=False)
-        # XCPPPATHS is like CPPPATHS, but we add it to CCFLAGS manually after 
         self.paths["XCPPPATH"] = self.paths["CPPPATH"]
         del self.paths["CPPPATH"]
 
@@ -252,6 +270,7 @@ class PackageTree(object):
     def __init__(self, primaryName):
         self.upsDirs = state.env.upsDirs
         self.packages = collections.OrderedDict()
+        self.customTests = {}
         self.primary = self._tryImport(primaryName)
         if self.primary is None: state.log.fail("Failed to load primary package configuration.")
         for dependency in self.primary.dependencies.get("required", ()):
@@ -267,8 +286,7 @@ class PackageTree(object):
 
     ## @brief Configure the entire dependency tree in order. and return an updated environment."""
     def configure(self, env, check=False):
-        
-        conf = env.Configure()
+        conf = env.Configure(custom_tests=self.customTests)
         for name, module in self.packages.iteritems():
             if module is None:
                 state.log.info("Skipping missing optional package %s." % name)
@@ -277,8 +295,7 @@ class PackageTree(object):
                 state.log.fail("%s was found but did not pass configuration checks." % name)
         self.primary.config.configure(conf, packages=self.packages, check=False, build=True)
         env.AppendUnique(SWIGPATH=env["CPPPATH"])
-        xccflags = [env["INCPREFIX"] + i + env["INCSUFFIX"] for i in env["XCPPPATH"]]
-        env.Append(CCFLAGS=xccflags, SWIGFLAGS=xccflags)
+        env.AppendUnique(XSWIGPATH=env["XCPPPATH"])
         env = conf.Finish()
         return env
 
@@ -317,6 +334,8 @@ class PackageTree(object):
                 if not hasattr(module, "config") or not isinstance(module.config, Configuration):
                     state.log.warn("Configuration module for package '%s' lacks a config object." % name)
                     return
+                else:
+                    module.config.addCustomTests(self.customTests)
                 return module
         state.log.warn("Failed to import configuration for package '%s'." % name)
 
