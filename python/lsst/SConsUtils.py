@@ -634,13 +634,17 @@ def MakeEnv(eups_product, versionString=None, dependencies=[],
 
     if env.whichCc == "clang":
         env.Append(CCFLAGS = ['-Wall'])
+        env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-mno-fused-madd$", o)]
+
         ignoreWarnings = {
             "unused-function" : 'boost::regex has functions in anon namespaces in headers',
             }
         filterWarnings = {
             "char-subscripts" : 'seems innocous enough, and is used by boost',
             "constant-logical-operand" : "Used by eigen 2.0.15. Should get this fixed",
-            "mismatched-tags" : "mixed class and struct.  Used by gcc 4.2 RTL",
+            "parentheses" : "equality comparison with extraneous parentheses",
+            "mismatched-tags" : "mixed class and struct.  Used by gcc 4.2 RTL and eigen 2.0.15",
+            "shorten-64-to-32" : "implicit conversion loses integer precision",
             }
 
         for k in ignoreWarnings.keys():
