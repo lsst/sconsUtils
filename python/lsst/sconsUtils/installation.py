@@ -300,7 +300,10 @@ def InstallEups(env, dest, files=[], presetup=""):
         for i in build_obj:
             env.AlwaysBuild(i)
 
-            cmd = "eups expandbuild -i --version %s %s" % (env['version'], str(i))
+            cmd = "eups expandbuild -i --version %s " % env['version']
+            if env.has_key('baseversion'):
+                cmd += " --repoversion %s " % env['baseversion']
+            cmd += str(i)
             env.AddPostAction(i, env.Action("%s" %(cmd), cmd, ENV = os.environ))
 
         for i in table_obj:
