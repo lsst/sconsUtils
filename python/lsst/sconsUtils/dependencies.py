@@ -12,6 +12,7 @@ import collections
 import imp
 import sys
 import SCons.Script
+import eups
 from SCons.Script.SConscript import SConsEnvironment
 
 from . import installation
@@ -117,10 +118,21 @@ class Configuration(object):
     # @param hasDoxygenInclude   If True, the package provides a Doxygen include file with the
     #                            name "<root>/doc/<name>.inc".
     # @param hasDoxygenTag       If True, the package generates a Doxygen TAG file.
+    # @param eupsProduct         Name of the EUPS product for the package, if different from the name of the
+    #                            .cfg file.
     ##
     def __init__(self, cfgFile, headers=(), libs=None, hasSwigFiles=True,
-                 hasDoxygenInclude=False, hasDoxygenTag=True):
+                 hasDoxygenInclude=False, hasDoxygenTag=True, eupsProduct=None):
         self.name, self.root = self.parseFilename(cfgFile)
+        if eupsProduct is None:
+            eupsProduct = self.name
+        self.eupsProduct = eupsProduct
+        productDir = eups.productDir(eups.productDir(self.eupsProduct))
+        if productDir is None:
+            state.log.warn("Could not find EUPS product dir for '%s'; using %s." 
+                           % (self.eupsProduct, self.root))
+        else:
+            self.root = productDir
         self.paths = {
             # Sequence of include path for headers provided by this package
             "CPPPATH": [os.path.join(self.root, "include")],

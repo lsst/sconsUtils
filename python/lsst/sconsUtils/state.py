@@ -252,7 +252,7 @@ def _configureCommon():
                 CXX = re.sub(r"^clang", "clang++", CC)
             else:
                 utils.log.fail("Unrecognised compiler:%s" % env['cc'])
-            env0 = SCons.Script.Enviroment()
+            env0 = SCons.Script.Environment()
             if CC and env['CC'] == env0['CC']:
                 env['CC'] = CC
             if CC and env['CXX'] == env0['CXX']:
