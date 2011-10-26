@@ -317,7 +317,7 @@ def _configureCommon():
             }
         for k in ignoreWarnings.keys():
             env.Append(CCFLAGS = ["-Wno-%s" % k])
-        if GetOption('filterWarn'):
+        if env.GetOption('filterWarn'):
             for k in filterWarnings.keys():
                 env.Append(CCFLAGS = ["-Wno-%s" % k])
     elif env.whichCc == "gcc":
