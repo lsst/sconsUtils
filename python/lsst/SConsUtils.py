@@ -1268,15 +1268,16 @@ def getVersion(env, versionString):
                 version = env['baseversion'] + "+" + version
     elif versionString.lower() in ("hg", "mercurial"):
         # Mercurial (hg).
-        try:
-            version = hg.guessVersionName()
-        except RuntimeError, e:
-            if env['force']:
-                version = "unknown"
-            else:
-                print >> sys.stderr, \
-                      "%s\nFound problem with hg version; update or specify force=True to proceed" %e
-                sys.exit(1)
+        if env.installing or env.declaring:
+            try:
+                version = hg.guessVersionName()
+            except RuntimeError, e:
+                if env['force']:
+                    version = "unknown"
+                else:
+                    print >> sys.stderr, \
+                          "%s\nFound problem with hg version; update or specify force=True to proceed" %e
+                    sys.exit(1)
 
     env["version"] = version
     return version
