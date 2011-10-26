@@ -280,7 +280,7 @@ class PackageTree(object):
     # such that configuration can proceed in iteration order.
     ##
     def __init__(self, primaryName):
-        self.upsDirs = state.env.upsDirs
+        self.cfgPath = state.env.cfgPath
         self.packages = collections.OrderedDict()
         self.customTests = {}
         self.primary = self._tryImport(primaryName)
@@ -335,7 +335,7 @@ class PackageTree(object):
 
     def _tryImport(self, name):
         """Search for and import an individual configuration module from file."""
-        for path in self.upsDirs:
+        for path in self.cfgPath:
             filename = os.path.join(path, name + ".cfg")
             if os.path.exists(filename):
                 state.log.info("Using configuration for package '%s' at '%s'." % (name, filename))

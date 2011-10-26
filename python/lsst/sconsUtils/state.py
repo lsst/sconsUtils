@@ -112,8 +112,11 @@ def _initEnvironment():
     if EUPS_LOCK_PID is not None:
         ourEnv['EUPS_LOCK_PID'] = EUPS_LOCK_PID
         
-    # Add all EUPS directories
-    upsDirs = []
+    # Add all setup EUPS directories to LSST_CFG_PATH
+    cfgPath = []
+    LSST_CFG_PATH = os.environ.get("LSST_CFG_PATH")
+    if LSST_CFG_PATH is not None:
+        cfgPath.extend(LSST_CFG_PATH.split(":"))
     for k in filter(lambda x: re.search(r"_DIR$", x), os.environ.keys()):
         p = re.search(r"^(.*)_DIR$", k).groups()[0]
         try:
@@ -124,7 +127,7 @@ def _initEnvironment():
         if os.environ.has_key(varname):
             ourEnv[varname] = os.environ[varname]
             ourEnv[k] = os.environ[k]
-            upsDirs.append(os.path.join(os.environ[k], "ups"))
+            cfgPath.append(os.path.join(os.environ[k], "ups"))
     #
     # Add any values marked as export=FOO=XXX[,GOO=YYY] to ourEnv
     #
@@ -137,7 +140,7 @@ def _initEnvironment():
         del SCons.Script.ARGUMENTS[opt]
     global env
     env = SCons.Script.Environment(ENV=ourEnv, variables=opts, tools=["default"])
-    env.upsDirs = upsDirs
+    env.cfgPath = cfgPath
     #
     # We don't want "lib" inserted at the beginning of loadable module names;
     # we'll import them under their given names.
