@@ -246,8 +246,8 @@ class ExternalConfiguration(Configuration):
     #                 autoconf-style tests and to support env.getLibs(...), which recursively computes
     #                 the libraries a package must be linked with.
     ##
-    def __init__(self, cfgFile, headers=(), libs=None):
-        Configuration.__init__(self, cfgFile, headers, libs, hasSwigFiles=False,
+    def __init__(self, cfgFile, headers=(), libs=None, eupsProduct=None):
+        Configuration.__init__(self, cfgFile, headers, libs, eupsProduct=eupsProduct, hasSwigFiles=False,
                                hasDoxygenTag=False, hasDoxygenInclude=False)
         self.paths["XCPPPATH"] = self.paths["CPPPATH"]
         del self.paths["CPPPATH"]
