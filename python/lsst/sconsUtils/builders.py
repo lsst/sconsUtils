@@ -60,6 +60,7 @@ def SourcesForSharedLibrary(self, files):
     files = [SCons.Script.File(file) for file in files]
 
     if not (self.get("optFiles") or self.get("noOptFiles")):
+        files.sort()
         return files
 
     if self.get("optFiles"):
@@ -98,6 +99,7 @@ def SourcesForSharedLibrary(self, files):
 
         sources.append(ccFile)
 
+    sources.sort()
     return sources
     
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

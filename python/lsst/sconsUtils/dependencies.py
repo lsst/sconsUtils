@@ -127,7 +127,7 @@ class Configuration(object):
         if eupsProduct is None:
             eupsProduct = self.name
         self.eupsProduct = eupsProduct
-        productDir = eups.productDir(eups.productDir(self.eupsProduct))
+        productDir = eups.productDir(self.eupsProduct)
         if productDir is None:
             state.log.warn("Could not find EUPS product dir for '%s'; using %s." 
                            % (self.eupsProduct, self.root))

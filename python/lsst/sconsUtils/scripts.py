@@ -297,8 +297,6 @@ class BasicSConscript(object):
     #  @param swigSrc          Additional source files to be compiled into SWIG modules, as a
     #                          dictionary; each key must be an entry in swigNames, and each
     #                          value a list of additional source files.
-    #
-    #  @return a tuple of (ccExamples, swigMods)
     ##
     @staticmethod
     def examples(ccExamples=None, swigNames=None, swigSrc=None):
@@ -319,15 +317,17 @@ class BasicSConscript(object):
                           if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc]
         state.log.info("SWIG modules for examples: %s" % swigFiles)
         state.log.info("C++ examples: %s" % ccExamples)
+        results = []
         for ccExample in ccExamples:
-            state.env.Program(ccExample, LIBS=state.env.getLibs("main"))
+            results.extend(state.env.Program(ccExample, LIBS=state.env.getLibs("main")))
         swigMods = []
         for name, src in swigSrc.iteritems():
-            swigMods.extend(
+            results.extend(
                 state.env.SwigLoadableModule("_" + name, src, LIBS=state.env.getLibs("main python"))
                 )
-        result = ccExamples + swigMods
-        state.targets["examples"].extend(result)
-        return result
+        for result in results:
+            state.env.Depends(result, state.targets["lib"])
+        state.targets["examples"].extend(results)
+        return results
 
 ## @}
