@@ -35,6 +35,8 @@ def _getFileBase(node):
 ##
 class BasicSConstruct(object):
 
+    _initializing = False
+
     ##
     # @brief Convenience function to replace standard SConstruct boilerplate.
     #
@@ -50,7 +52,7 @@ class BasicSConstruct(object):
     def __new__(cls, packageName, versionString, eupsProduct=None, eupsProductPath=None, cleanExt=None,
                 defaults=("lib", "python", "tests"), subDirs=None, ignoreRegex=None):
         cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt)
-        cls.finish(defaults, subDirs, ignoreRegex)
+        #cls.finish(defaults, subDirs, ignoreRegex)
         return state.env
 
     ##
@@ -71,8 +73,11 @@ class BasicSConstruct(object):
     #
     #  @returns an SCons Environment object (which is also available as lsst.sconsUtils.env).
     ##
-    @staticmethod
-    def initialize(packageName, versionString, eupsProduct=None, eupsProductPath=None, cleanExt=None):
+    @classmethod
+    def initialize(cls, packageName, versionString, eupsProduct=None, eupsProductPath=None, cleanExt=None):
+        if cls._initializing:
+            raise RuntimeError("Recursion detected; an SConscript file should not call BasicSConstruct.")
+        cls._initializing = True
         if cleanExt is None:
             cleanExt = r"*~ core *.so *.os *.o *.pyc *.pkgc"
         dependencies.configure(packageName, versionString, eupsProduct, eupsProductPath)
@@ -81,7 +86,9 @@ class BasicSConstruct(object):
         for root, dirs, files in os.walk("."):
             dirs = [d for d in dirs if (not d.startswith('.'))]
             if "SConscript" in files:
+                state.log.info("Using Sconscript at %s/SConscript" % root)
                 SCons.Script.SConscript(os.path.join(root, "SConscript"))
+        cls._initializing = False
 
     ##
     # @brief Convenience function to replace standard SConstruct boilerplate (step 2).

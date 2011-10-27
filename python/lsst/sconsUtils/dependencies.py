@@ -35,6 +35,7 @@ from . import state
 # @return an SCons Environment object (which is also available as lsst.sconsUtils.env).
 ##
 def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath=None):
+    state.log.info("Setting up environment to build package '%s'." % packageName)
     if eupsProduct is None:
         eupsProduct = packageName
     state.env['eupsProduct'] = eupsProduct
@@ -283,6 +284,7 @@ class PackageTree(object):
         self.cfgPath = state.env.cfgPath
         self.packages = collections.OrderedDict()
         self.customTests = {}
+        self._current = set([primaryName])
         self.primary = self._tryImport(primaryName)
         if self.primary is None: state.log.fail("Failed to load primary package configuration.")
         for dependency in self.primary.dependencies.get("required", ()):
@@ -353,23 +355,31 @@ class PackageTree(object):
 
     def _recurse(self, name):
         """Recursively load a dependency."""
+        if name in self._current:
+            state.log.fail("Detected recursive dependency involving package '%s'" % name)
+        else:
+            self._current.add(name)
         if name in self.packages:
+            self._current.remove(name)
             return self.packages[name] is not None
         module = self._tryImport(name)
         if module is None:
             self.packages[name] = None
+            self._current.remove(name)
             return False
         for dependency in module.dependencies.get("required", ()):
             if not self._recurse(dependency):
                 # We can't configure this package because a required dependency wasn't found.
                 # But this package might itself be optional, so we don't die yet.
                 self.packages[name] = None
+                self._current.remove(name)
                 state.log.warn("Could not load all dependencies for package '%s'." % name)
                 return False
         for dependency in module.dependencies.get("optional", ()):
             self._recurse(dependency)
         # This comes last to ensure the ordering puts all dependencies first.
         self.packages[name] = module
+        self._current.remove(name)
         return True
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
