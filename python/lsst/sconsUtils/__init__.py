@@ -1,3 +1,9 @@
+# Explain what happens when you try to import outside scons
+try:
+    import SCons.Script
+except ImportError:
+    raise ImportError("lsst.sconsUtils cannot be imported outside an scons script.")
+
 # Pull some names into the package namespace
 from .dependencies import configure, Configuration, ExternalConfiguration
 from .state import env, opts, log, targets
