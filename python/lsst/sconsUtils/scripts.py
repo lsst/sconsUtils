@@ -76,7 +76,7 @@ class BasicSConstruct(object):
     @classmethod
     def initialize(cls, packageName, versionString, eupsProduct=None, eupsProductPath=None, cleanExt=None):
         if cls._initializing:
-            raise RuntimeError("Recursion detected; an SConscript file should not call BasicSConstruct.")
+            state.log.fail("Recursion detected; an SConscript file should not call BasicSConstruct.")
         cls._initializing = True
         if cleanExt is None:
             cleanExt = r"*~ core *.so *.os *.o *.pyc *.pkgc"
