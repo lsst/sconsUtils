@@ -33,7 +33,7 @@ def SwigLoadableModule(self, target, source, **keywords):
     # which is illegal.  This flag tells g++ about the sin
     #
     try:
-        if myenv.isGcc:
+        if myenv.whichCc == "gcc":
             myenv.Append(CCFLAGS = ["-fno-strict-aliasing",])
     except AttributeError:
         pass
