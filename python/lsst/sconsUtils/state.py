@@ -116,7 +116,7 @@ def _initEnvironment():
     cfgPath = []
     for root in os.environ.get("LSST_CFG_PATH", []):
         for base, dirs, files in os.walk(root):
-            dirs = [d for in dirs if not d.startswith(".")]
+            dirs = [d for d in dirs if not d.startswith(".")]
             cfgPath.append(base)
     for k in filter(lambda x: re.search(r"_DIR$", x), os.environ.keys()):
         p = re.search(r"^(.*)_DIR$", k).groups()[0]

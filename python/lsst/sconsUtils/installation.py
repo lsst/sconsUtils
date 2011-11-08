@@ -14,6 +14,7 @@ from SCons.Script.SConscript import SConsEnvironment
 
 from .vcs import svn
 from .vcs import hg
+from .vcs import git
 
 from . import state
 from .utils import memberOf
@@ -85,7 +86,18 @@ def getVersion(env, versionString):
                 version = "unknown"
             else:
                 state.log.fail(
-                    "%s\nFound problem with hg version; update or specify force=True to proceed" % e
+                    "%s\nFound problem with hg version; update or specify force=True to proceed" % err
+                    )
+    elif versionString.lower() in ("git",):
+        # git.
+        try:
+            version = git.guessVersionName()
+        except RuntimeError as err:
+            if env['force']:
+                version = "unknown"
+            else:
+                state.log.fail(
+                    "%s\nFound problem with git version; update or specify force=True to proceed" % err
                     )
     state.log.flush()
     env["version"] = version
