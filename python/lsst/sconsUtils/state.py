@@ -112,11 +112,12 @@ def _initEnvironment():
     if EUPS_LOCK_PID is not None:
         ourEnv['EUPS_LOCK_PID'] = EUPS_LOCK_PID
         
-    # Add all setup EUPS directories to LSST_CFG_PATH
+    # Recursively walk LSST_CFG_PATH and add all setup EUPS directories to cfgPath.
     cfgPath = []
-    LSST_CFG_PATH = os.environ.get("LSST_CFG_PATH")
-    if LSST_CFG_PATH is not None:
-        cfgPath.extend(LSST_CFG_PATH.split(":"))
+    for root in os.environ.get("LSST_CFG_PATH", []):
+        for base, dirs, files in os.walk(root):
+            dirs = [d for in dirs if not d.startswith(".")]
+            cfgPath.append(base)
     for k in filter(lambda x: re.search(r"_DIR$", x), os.environ.keys()):
         p = re.search(r"^(.*)_DIR$", k).groups()[0]
         try:
