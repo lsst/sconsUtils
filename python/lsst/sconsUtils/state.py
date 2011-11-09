@@ -240,6 +240,18 @@ def _configureCommon():
                 context.Result(key)
                 return key
         return "unknown"
+    def SizeofLongIs8(context):
+        """Checks whether sizeof(long) == 8"""
+        context.Message("Checking whether sizeof(long) == 8 ...")
+        result = context.TryCompile("""
+            #define STATIC_ASSERT(pred) switch(0) { case 0: case pred: ; }
+            int main(int argc, char **argv) {
+                STATIC_ASSERT(sizeof(long) == 8)
+                return 0;
+            }
+        """, ".c")
+        context.Result(result)
+        return result
     if env.GetOption("clean") or env.GetOption("no_exec") or env.GetOption("help") :
         env.whichCc = "unknown"         # who cares? We're cleaning/not execing, not building
     else:
@@ -261,8 +273,12 @@ def _configureCommon():
                 env['CC'] = CC
             if CC and env['CXX'] == env0['CXX']:
                 env['CXX'] = CXX
-        conf = env.Configure(custom_tests = {'ClassifyCc' : ClassifyCc})
+        conf = env.Configure(custom_tests = {
+            'ClassifyCc' : ClassifyCc,
+            'SizeofLongIs8' : SizeofLongIs8
+        })
         env.whichCc = conf.ClassifyCc()
+        env.sizeofLongIs8 = conf.SizeofLongIs8()
         conf.Finish()
     #
     # Compiler flags; CCFLAGS => C and C++
