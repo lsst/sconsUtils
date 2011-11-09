@@ -54,6 +54,8 @@ def _initOptions():
                            help="Specify the install destination")
     SCons.Script.AddOption('--setenv', dest='setenv', action='store_true', default=False,
                            help="Treat arguments such as Foo=bar as defining construction variables")
+    SCons.Script.AddOption('--tag', dest='tag', action='store', default=None,
+                           help="Declare product with this eups tag")
     SCons.Script.AddOption('--verbose', dest='verbose', action='store_true', default=False,
                            help="Print additional messages for debugging.")
     SCons.Script.AddOption('--traceback', dest='traceback', action='store_true', default=False,
@@ -90,7 +92,7 @@ def _initVariables():
                                   allowed_values=('0', '1', '2', '3')),
         SCons.Script.EnumVariable('profile', 'Compile/link for profiler', 0, 
                                   allowed_values=('0', '1', 'pg', 'gcov')),
-        ('version', 'Specify the current version', None),
+        ('version', 'Specify the version to declare', None),
         ('baseversion', 'Specify the current base version', None),
         ('optFiles', "Specify a list of files that SHOULD be optimized", None),
         ('noOptFiles', "Specify a list of files that should NOT be optimized", None)
@@ -311,13 +313,18 @@ def _configureCommon():
     #
     if env.whichCc == "clang":
         env.Append(CCFLAGS = ['-Wall'])
+        env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-mno-fused-madd$", o)]
+
         ignoreWarnings = {
             "unused-function" : 'boost::regex has functions in anon namespaces in headers',
             }
         filterWarnings = {
             "char-subscripts" : 'seems innocous enough, and is used by boost',
             "constant-logical-operand" : "Used by eigen 2.0.15. Should get this fixed",
-            "mismatched-tags" : "mixed class and struct.  Used by gcc 4.2 RTL",
+            "mismatched-tags" : "mixed class and struct.  Used by gcc 4.2 RTL and eigen 2.0.15",
+            "parentheses" : "equality comparison with extraneous parentheses",
+            "shorten-64-to-32" : "implicit conversion loses integer precision",
+            "self-assign" : "x = x",
             }
         for k in ignoreWarnings.keys():
             env.Append(CCFLAGS = ["-Wno-%s" % k])
