@@ -11,6 +11,7 @@ import shutil
 
 import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
+import eups.lock
 
 from .vcs import svn
 from .vcs import hg
@@ -142,6 +143,8 @@ def Declare(self, products=None):
 
     if "undeclare" in SCons.Script.COMMAND_LINE_TARGETS and not self.GetOption("silent"):
         state.log.warn("'scons undeclare' is deprecated; please use 'scons declare -c' instead")
+
+    acts = []
     if \
            "declare" in SCons.Script.COMMAND_LINE_TARGETS or \
            "undeclare" in SCons.Script.COMMAND_LINE_TARGETS or \
@@ -194,17 +197,23 @@ def Declare(self, products=None):
                         command += " %s %s" % (product, version)
 
                     current += [command + " --current"]
+
+                    if self.GetOption("tag"):
+                        command += " --tag=%s" % self.GetOption("tag")
+
                     declare += [command]
 
         if current:
-            self.Command("current", "", action=current)
+            acts += self.Command("current", "", action=current)
         if declare:
             if "current" in SCons.Script.COMMAND_LINE_TARGETS:
-                self.Command("declare", "", action="") # current will declare it for us
+                acts += self.Command("declare", "", action="") # current will declare it for us
             else:
-                self.Command("declare", "", action=declare)
+                acts += self.Command("declare", "", action=declare)
         if undeclare:
-            self.Command("undeclare", "", action=undeclare)
+            acts += self.Command("undeclare", "", action=undeclare)
+
+    return acts
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -279,8 +288,9 @@ def InstallDir(self, prefix, dir, ignoreRegex=r"(~$|\.pyc$|\.os?$)", recursive=T
 @memberOf(SConsEnvironment)
 def InstallEups(env, dest, files=[], presetup=""):
 
+    acts = []
     if not env.installing:
-        return []
+        return acts
 
     if env.GetOption("clean"):
         print >> sys.stderr, "Removing", dest
@@ -302,12 +312,20 @@ def InstallEups(env, dest, files=[], presetup=""):
 
         buildFiles = filter(lambda f: re.search(r"\.build$", f), files)
         build_obj = env.Install(dest, buildFiles)
+        acts += build_obj
         
         tableFiles = filter(lambda f: re.search(r"\.table$", f), files)
         table_obj = env.Install(dest, tableFiles)
+        acts += table_obj
 
         miscFiles = filter(lambda f: not re.search(r"\.(build|table)$", f), files)
         misc_obj = env.Install(dest, miscFiles)
+        acts += misc_obj
+
+        path = eups.Eups.setEupsPath()
+        if path:
+            locks = eups.lock.takeLocks("setup", path, eups.lock.LOCK_SH)
+            env["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", -1)
 
         for i in build_obj:
             env.AlwaysBuild(i)
@@ -316,7 +334,8 @@ def InstallEups(env, dest, files=[], presetup=""):
             if env.has_key('baseversion'):
                 cmd += " --repoversion %s " % env['baseversion']
             cmd += str(i)
-            env.AddPostAction(i, env.Action("%s" %(cmd), cmd, ENV = os.environ))
+
+            env.AddPostAction(build_obj, env.Action("%s" %(cmd), cmd))
 
         for i in table_obj:
             env.AlwaysBuild(i)
@@ -326,9 +345,11 @@ def InstallEups(env, dest, files=[], presetup=""):
                 cmd += presetup + " "
             cmd += str(i)
 
-            env.AddPostAction(i, env.Action("%s" %(cmd), cmd, ENV = os.environ))
+            act = env.Command("table", "", env.Action("%s" %(cmd), cmd, ENV = os.environ))
+            acts += act
+            env.Depends(act, i)
 
-    return dest
+    return acts
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
