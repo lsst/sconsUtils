@@ -262,6 +262,76 @@ class ExternalConfiguration(Configuration):
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 ##
+# @brief A configuration test that checks whether a C compiler supports
+#        a particular flag.
+#
+# @param context  Configuration context.
+# @param flag     Flag to test, e.g. "-fvisibility-inlines-hidden".
+# @param append   Automatically append the flag to context.env["CCFLAGS"]
+#                 if the compiler supports it?
+##
+def CustomCFlagCheck(context, flag, append=True):
+    context.Message("Checking if C compiler supports " + flag + " flag ")
+    ccflags = context.env["CCFLAGS"];
+    context.env.Append(CCFLAGS = flag)
+    result = context.TryCompile("int main(int argc, char **argv) { return 0; }", ".c")
+    context.Result(result)
+    if not append or not result:
+        context.env.Replace(CCFLAGS = ccflags)
+    return result
+
+##
+# @brief A configuration test that checks whether a C++ compiler supports
+#        a particular flag.
+#
+# @param context  Configuration context.
+# @param flag     Flag to test, e.g. "-fvisibility-inlines-hidden".
+# @param append   Automatically append the flag to context.env["CXXFLAGS"]
+#                 if the compiler supports it?
+##
+def CustomCppFlagCheck(context, flag, append=True):
+    context.Message("Checking if C++ compiler supports " + flag + " flag ")
+    cxxflags = context.env["CXXFLAGS"];
+    context.env.Append(CXXFLAGS = flag)
+    result = context.TryCompile("int main(int argc, char **argv) { return 0; }", ".cc")
+    context.Result(result)
+    if not append or not result:
+        context.env.Replace(CXXFLAGS = cxxflags)
+    return result
+
+##
+# @brief A configuration test that checks whether the given source code
+#        compiles.
+# @param context    Configuration context.
+# @param message    Message disaplyed on console prior to running the test.
+# @param source     Source code to compile.
+# param  extension  Identifies the language of the source code. Use ".c" for C, and ".cc"
+#                   for C++ (the default).
+##
+def CustomCompileCheck(context, message, source, extension=".cc"):
+    context.Message(message)
+    result = context.TryCompile(source, extension)
+    context.Result(result)
+    return result
+
+##
+# @brief A configuration test that checks whether the given source code
+#        compiles and links.
+# @param context    Configuration context.
+# @param message    Message disaplyed on console prior to running the test.
+# @param source     Source code to compile.
+# param  extension  Identifies the language of the source code. Use ".c" for C, and ".cc"
+#                   for C++ (the default).
+##
+def CustomLinkCheck(context, message, source, extension=".cc"):
+    context.Message(message)
+    result = context.TryLink(source, extension)
+    context.Result(result)
+    return result
+
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+##
 # @brief A class for loading and managing the dependency tree of a package, as defined by its
 #        configuration module (.cfg) file.
 #
@@ -289,7 +359,12 @@ class PackageTree(object):
     def __init__(self, primaryName):
         self.cfgPath = state.env.cfgPath
         self.packages = collections.OrderedDict()
-        self.customTests = {}
+        self.customTests = {
+            "CustomCFlagCheck" : CustomCFlagCheck,
+            "CustomCppFlagCheck" : CustomCppFlagCheck,
+            "CustomCompileCheck" : CustomCompileCheck,
+            "CustomLinkCheck" : CustomLinkCheck,
+            }
         self._current = set([primaryName])
         self.primary = self._tryImport(primaryName)
         if self.primary is None: state.log.fail("Failed to load primary package configuration.")
