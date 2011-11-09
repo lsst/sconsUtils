@@ -35,7 +35,8 @@ from . import state
 # @return an SCons Environment object (which is also available as lsst.sconsUtils.env).
 ##
 def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath=None):
-    state.log.info("Setting up environment to build package '%s'." % packageName)
+    if not state.env.GetOption("no_progress"):
+        state.log.info("Setting up environment to build package '%s'." % packageName)
     if eupsProduct is None:
         eupsProduct = packageName
     state.env['eupsProduct'] = eupsProduct
