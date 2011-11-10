@@ -108,6 +108,8 @@ def _initEnvironment():
         'LD_LIBRARY_PATH' : os.environ.get("LD_LIBRARY_PATH"),
         'SHELL' : os.environ.get("SHELL"), # needed by eups
         'TMPDIR' : os.environ.get("TMPDIR"), # needed by eups
+        'TEMP': os.environ.get("TEMP"), # needed to use os.tmpdir in tests sensibly
+        'TMP': os.environ.get("TMP"),   # needed to use os.tmpdir in tests sensibly
         }
 
     EUPS_LOCK_PID = os.environ.get("EUPS_LOCK_PID") # needed by eups
