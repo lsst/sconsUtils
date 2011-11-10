@@ -100,21 +100,12 @@ def _initVariables():
 
 def _initEnvironment():
     """Construction and basic setup of the state.env variable."""
-    ourEnv = {
-        'EUPS_DIR' : os.environ.get("EUPS_DIR"),
-        'EUPS_PATH' : os.environ.get("EUPS_PATH"),
-        'PATH' : os.environ.get("PATH"),
-        'DYLD_LIBRARY_PATH' : os.environ.get("DYLD_LIBRARY_PATH"),
-        'LD_LIBRARY_PATH' : os.environ.get("LD_LIBRARY_PATH"),
-        'SHELL' : os.environ.get("SHELL"), # needed by eups
-        'TMPDIR' : os.environ.get("TMPDIR"), # needed by eups
-        'TEMP': os.environ.get("TEMP"), # needed to use os.tmpdir in tests sensibly
-        'TMP': os.environ.get("TMP"),   # needed to use os.tmpdir in tests sensibly
-        }
 
-    EUPS_LOCK_PID = os.environ.get("EUPS_LOCK_PID") # needed by eups
-    if EUPS_LOCK_PID is not None:
-        ourEnv['EUPS_LOCK_PID'] = EUPS_LOCK_PID
+    ourEnv = {}
+    for key in ('EUPS_DIR', 'EUPS_PATH', 'PATH' ,'DYLD_LIBRARY_PATH', 'LD_LIBRARY_PATH',
+                'SHELL', 'TMPDIR', 'TEMP', 'TMP', 'EUPS_LOCK_PID'):
+        if key in os.environ:
+            ourEnv[key] = os.environ[key]
         
     # Recursively walk LSST_CFG_PATH and add all setup EUPS directories to cfgPath.
     cfgPath = []
