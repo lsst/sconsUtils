@@ -1420,6 +1420,7 @@ def Declare(self, products=None):
             if "current" in COMMAND_LINE_TARGETS:
                 self.Command("declare", "", action="") # current will declare it for us
             else:
+                print declare
                 self.Command("declare", "", action=declare)
         if undeclare:
             self.Command("undeclare", "", action=undeclare)
@@ -1515,14 +1516,11 @@ env.InstallEups(os.path.join(env['prefix'], "ups"), presetup={"sconsUtils" : env
 
         miscFiles = filter(lambda f: not re.search(r"\.(build|table)$", f), files)
         misc_obj = env.Install(dest, miscFiles)
-            
+
         for i in build_obj:
             env.AlwaysBuild(i)
 
-            cmd = "eups expandbuild -i --version %s " % env['version']
-            if env.has_key('baseversion'):
-                cmd += " --repoversion %s " % env['baseversion']
-            cmd += str(i)
+            cmd = "eups expandbuild -i --version %s %s" % (env['version'], str(i))
             env.AddPostAction(i, Action("%s" %(cmd), cmd, ENV = os.environ))
 
         for i in table_obj:
