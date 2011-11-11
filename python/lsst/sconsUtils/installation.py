@@ -330,7 +330,7 @@ def InstallEups(env, dest, files=[], presetup=""):
         for i in build_obj:
             env.AlwaysBuild(i)
 
-            cmd = "eups expandbuild -i --version %s " % os.environ.get("EUPS_LOCK_PID", -1)
+            cmd = "eups expandbuild -i --version %s " % env['version']
             if env.has_key('baseversion'):
                 cmd += " --repoversion %s " % env['baseversion']
             cmd += str(i)
