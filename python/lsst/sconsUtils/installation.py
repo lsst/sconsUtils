@@ -171,7 +171,7 @@ def Declare(self, products=None):
 
             if "EUPS_DIR" in os.environ.keys():
                 self['ENV']['PATH'] += os.pathsep + "%s/bin" % (os.environ["EUPS_DIR"])
-                self["ENV"]["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", -1)
+                self["ENV"]["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", "-1")
                 if "undeclare" in SCons.Script.COMMAND_LINE_TARGETS or self.GetOption("clean"):
                     if version:
                         command = "eups undeclare --flavor %s %s %s" % \
@@ -325,7 +325,7 @@ def InstallEups(env, dest, files=[], presetup=""):
         path = eups.Eups.setEupsPath()
         if path:
             locks = eups.lock.takeLocks("setup", path, eups.lock.LOCK_SH)
-            env["ENV"]["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", -1)
+            env["ENV"]["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", "-1")
 
         for i in build_obj:
             env.AlwaysBuild(i)
