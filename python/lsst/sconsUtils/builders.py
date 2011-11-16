@@ -12,6 +12,8 @@ import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
 
 from .utils import memberOf
+from .installation import determineVersion
+from . import state
 
 ## @brief Like SharedLibrary, but don't insist that all symbols are resolved
 @memberOf(SConsEnvironment)
@@ -435,27 +437,32 @@ def Doxygen(self, config, **kw):
     return builder(self, config)
 
 @memberOf(SConsEnvironment)
-def VersionModule(self, filename):
+def VersionModule(self, filename, versionString=None):
+    if versionString is None:
+        versionString = "git"
     def makeVersionModule(target, source, env):
-        # We don't use env['version'] here, because that would allow
-        # command-line arguments to override the actual git version,
-        # which is what we want to track.
-        from .vcs import git
         try:
-            repoversion = git.guessVersionName()
-        except RuntimeError:
-            # The above won't work if this isn't a working copy (e.g. a
-            # tarball made by 'git archive').  in that case, we have to
-            # fall back to the command line, from which we strip the +N.
-            repoversion = env["version"].split("+")[0]
+            version = determineVersion(state.env, versionString)
+        except RuntimeError as err:
+            version = "unknown"
         outFile = open(target[0].abspath, "w")
-        outFile.write("__version__ = '%s'\n" % env["version"])
-        outFile.write("dependencies = {\n")
+        parts = version.split("+")
+        outFile.write("__version__ = '%s'\n" % parts[0])
+        try:
+            info = tuple(int(v) for v in parts[0].split("."))
+            outFile.write("__version_info__ = %r\n" % (info,))
+        except ValueError:
+            pass
+        if len(parts) > 1:
+            outFile.write("__rebuild_version__ = '%s'\n" % parts[1])
+        outFile.write("__dependency_versions__ = {\n")
         for name, mod in env.dependencies.packages.iteritems():
             if mod is None:
                 outFile.write("    '%s': None,\n" % name)
             elif hasattr(mod, "getVersion"):
-                outFile.write("    '%s': '%s',\b" % (name, mod.getVersion()))
+                outFile.write("    '%s': '%s',\n" % (name, mod.getVersion()))
+            elif hasattr(mod.config, "version"):
+                outFile.write("    '%s': '%s',\n" % (name, mod.config.version))
             else:
                 outFile.write("    '%s': 'unknown',\n" % name)
         outFile.write("}\n")

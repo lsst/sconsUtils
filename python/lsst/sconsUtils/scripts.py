@@ -48,9 +48,11 @@ class BasicSConstruct(object):
     # This returns the sconsUtils.env Environment object rather than
     # a BasicSConstruct instance (which would be useless).
     ##
-    def __new__(cls, packageName, versionString, eupsProduct=None, eupsProductPath=None, cleanExt=None,
-                defaultTargets=("lib", "python", "tests"), subDirs=None, ignoreRegex=None):
-        cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt)
+    def __new__(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None, cleanExt=None,
+                defaultTargets=("lib", "python", "tests"), subDirs=None, ignoreRegex=None,
+                buildVersionModule=True):
+        cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt,
+                       buildVersionModule)
         cls.finish(defaultTargets, subDirs, ignoreRegex)
         return state.env
 
@@ -64,16 +66,18 @@ class BasicSConstruct(object):
     #
     #  @param packageName          Name of the package being built; must correspond to a .cfg file in ups/.
     #  @param versionString        Version-control system string to be parsed for version information
-    #                              ($HeadURL$ for SVN).
+    #                              ($HeadURL$ for SVN).  Defaults to "git" if not set or None.
     #  @param eupsProduct          Name of the EUPS product being built.  Defaults to and is almost always
     #                              the name of the package.
     #  @param eupsProductPath      An alternate directory where the package should be installed.
     #  @param cleanExt             Whitespace delimited sequence of globs for files to remove with --clean.
+    #  @param buildVersionModule   If True, build a version.py module at python/lsst/<package>/version.py.
     #
     #  @returns an SCons Environment object (which is also available as lsst.sconsUtils.env).
     ##
     @classmethod
-    def initialize(cls, packageName, versionString, eupsProduct=None, eupsProductPath=None, cleanExt=None):
+    def initialize(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None,
+                   cleanExt=None, buildVersionModule=True):
         if cls._initializing:
             state.log.fail("Recursion detected; an SConscript file should not call BasicSConstruct.")
         cls._initializing = True
@@ -91,6 +95,11 @@ class BasicSConstruct(object):
                 state.log.info("Using Sconscript at %s/SConscript" % root)
                 SCons.Script.SConscript(os.path.join(root, "SConscript"))
         cls._initializing = False
+        if buildVersionModule:
+            state.targets["python"].extend(
+                state.env.VersionModule("python/lsst/%s/version.py" % "/".join(packageName.split("_")))
+            )
+        return state.env
 
     ##
     # @brief Convenience function to replace standard SConstruct boilerplate (step 2).

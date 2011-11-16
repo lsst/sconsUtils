@@ -44,16 +44,10 @@ def makeProductPath(env, pathFormat):
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 ## @brief Set a version ID from env, or a version control ID string ($name$ or $HeadURL$)
-def getVersion(env, versionString):
-
+def determineVersion(env, versionString):
     version = "unknown"
-
     if env.has_key('version'):
         version = env['version']
-        if env.has_key('baseversion') and \
-                not version.startswith(env['baseversion']):
-            utils.log.warn("Explicit version %s is incompatible with baseversion %s"
-                           % (version, env['baseversion']))
     elif not versionString:
         version = "unknown"
     elif re.search(r"^[$]Name:\s+", versionString):
@@ -65,49 +59,28 @@ def getVersion(env, versionString):
         # SVN.  Guess the tagname from the last part of the directory
         HeadURL = re.search(r"^[$]HeadURL:\s+(.*)", versionString).group(1)
         HeadURL = os.path.split(HeadURL)[0]
-        if env.installing or env.declaring:
-            try:
-                version = svn.guessVersionName(HeadURL)
-            except RuntimeError as err:
-                if env['force']:
-                    version = "unknown"
-                else:
-                    state.log.fail(
-                        "%s\nFound problem with svn revision number; update or specify force=True to proceed"
-                        % err
-                        )
-            if env.has_key('baseversion'):
-                version = env['baseversion'] + "+" + version
+        version = svn.guessVersionName(HeadURL)
     elif versionString.lower() in ("hg", "mercurial"):
         # Mercurial (hg).
-        try:
-            version = hg.guessVersionName()
-        except RuntimeError as err:
-            if env['force']:
-                version = "unknown"
-            else:
-                state.log.fail(
-                    "%s\nFound problem with hg version; update or specify force=True to proceed" % err
-                    )
+        version = hg.guessVersionName()
     elif versionString.lower() in ("git",):
         # git.
-        try:
-            version = git.guessVersionName()
-        except RuntimeError as err:
-            if env['force']:
-                version = "unknown"
-            else:
-                state.log.fail(
-                    "%s\nFound problem with git version; update or specify force=True to proceed" % err
-                    )
-    state.log.flush()
-    env["version"] = version
+        version = git.guessVersionName()
     return version
 
 ## @brief Set a prefix based on the EUPS_PATH, the product name, and a versionString from cvs or svn.
 def setPrefix(env, versionString, eupsProductPath=None):
+    try:
+        env['version'] = determineVersion(env, versionString)
+    except RuntimeError as err:
+        if env['force']:
+            env['version'] = "unknown"
+        else:
+            state.log.fail(
+                "%s\nFound problem with svn revision number; update or specify force=True to proceed"
+                % err
+            )
     if eupsProductPath:
-        getVersion(env, versionString)
         eupsPrefix = makeProductPath(env, eupsProductPath)
     elif env.has_key('eupsPath') and env['eupsPath']:
         eupsPrefix = env['eupsPath']
@@ -117,11 +90,11 @@ def setPrefix(env, versionString, eupsProductPath=None):
         prodPath = env['eupsProduct']
         if env.has_key('eupsProductPath') and env['eupsProductPath']:
             prodPath = env['eupsProductPath']
-        eupsPrefix = os.path.join(eupsPrefix, prodPath, getVersion(env, versionString))
+        eupsPrefix = os.path.join(eupsPrefix, prodPath, env["version"])
     else:
         eupsPrefix = None
     if env.has_key('prefix'):
-        if getVersion(env, versionString) != "unknown" and eupsPrefix and eupsPrefix != env['prefix']:
+        if env['version'] != "unknown" and eupsPrefix and eupsPrefix != env['prefix']:
             print >> sys.stderr, "Ignoring prefix %s from EUPS_PATH" % eupsPrefix
         return makeProductPath(env, env['prefix'])
     elif env.has_key('eupsPath') and env['eupsPath']:

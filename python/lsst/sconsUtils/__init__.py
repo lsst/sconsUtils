@@ -6,7 +6,7 @@ except ImportError:
 
 # Try to import the generated version module.
 try:
-    from .version import __version__
+    from .version import *
 except:
     __version__ = "unknown"
 
