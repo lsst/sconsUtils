@@ -460,4 +460,6 @@ def VersionModule(self, filename):
                 outFile.write("    '%s': 'unknown',\n" % name)
         outFile.write("}\n")
         outFile.close()
-    return self.Command(filename, [], makeVersionModule)
+    result = self.Command(filename, [], makeVersionModule)
+    self.AlwaysBuild(result)
+    return result
