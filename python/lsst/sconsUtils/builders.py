@@ -448,13 +448,19 @@ def VersionModule(self, filename, versionString=None):
         outFile = open(target[0].abspath, "w")
         parts = version.split("+")
         outFile.write("__version__ = '%s'\n" % parts[0])
+        names = ["__version__"]
         try:
             info = tuple(int(v) for v in parts[0].split("."))
             outFile.write("__version_info__ = %r\n" % (info,))
+            names.append("__version_info__")
         except ValueError:
             pass
         if len(parts) > 1:
-            outFile.write("__rebuild_version__ = '%s'\n" % parts[1])
+            try:
+                outFile.write("__rebuild_version__ = %s\n" % int(parts[1]))
+                names.append("__rebuild_version__")
+            except ValueError:
+                pass
         outFile.write("__dependency_versions__ = {\n")
         for name, mod in env.dependencies.packages.iteritems():
             if mod is None:
@@ -466,6 +472,8 @@ def VersionModule(self, filename, versionString=None):
             else:
                 outFile.write("    '%s': 'unknown',\n" % name)
         outFile.write("}\n")
+        names.append("__dependency_versions__")
+        outFile.write("__all__ = %r\n" % (tuple(names),))
         outFile.close()
     result = self.Command(filename, [], makeVersionModule)
     self.AlwaysBuild(result)
