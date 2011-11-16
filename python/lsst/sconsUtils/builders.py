@@ -436,7 +436,7 @@ def Doxygen(self, config, **kw):
 
 @memberOf(SConsEnvironment)
 def VersionModule(self, filename):
-    def action(target, source, env):
+    def makeVersionModule(target, source, env):
         # We don't use env['version'] here, because that would allow
         # command-line arguments to override the actual git version,
         # which is what we want to track.
@@ -449,7 +449,7 @@ def VersionModule(self, filename):
             # fall back to the command line, from which we strip the +N.
             repoversion = env["version"].split("+")[0]
         outFile = open(target[0].abspath, "w")
-        outFile.write("__version__ = '%s'" % env["repoversion"])
+        outFile.write("__version__ = '%s'\n" % env["version"])
         outFile.write("dependencies = {\n")
         for name, mod in env.dependencies.packages.iteritems():
             if mod is None:
@@ -460,4 +460,4 @@ def VersionModule(self, filename):
                 outFile.write("    '%s': 'unknown',\n" % name)
         outFile.write("}\n")
         outFile.close()
-    return self.Command(filename, [], action)
+    return self.Command(filename, [], makeVersionModule)
