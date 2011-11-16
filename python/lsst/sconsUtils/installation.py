@@ -73,11 +73,10 @@ def setPrefix(env, versionString, eupsProductPath=None):
     try:
         env['version'] = determineVersion(env, versionString)
     except RuntimeError as err:
-        if env['force']:
-            env['version'] = "unknown"
-        else:
+        env['version'] = "unknown"
+        if env.installing or env.declaring and not env['force']:
             state.log.fail(
-                "%s\nFound problem with svn revision number; update or specify force=True to proceed"
+                "%s\nFound problem with version number; update or specify force=True to proceed"
                 % err
             )
     if eupsProductPath:
