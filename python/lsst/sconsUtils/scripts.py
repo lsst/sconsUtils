@@ -83,7 +83,10 @@ class BasicSConstruct(object):
         state.env.BuildETags()
         state.env.CleanTree(cleanExt)
         for root, dirs, files in os.walk("."):
-            dirs = [d for d in dirs if (not d.startswith('.'))]
+            if "SConstruct" in files and root != ".":
+                dirs[:] = []
+                continue
+            dirs[:] = [d for d in dirs if (not d.startswith('.'))]
             if "SConscript" in files:
                 state.log.info("Using Sconscript at %s/SConscript" % root)
                 SCons.Script.SConscript(os.path.join(root, "SConscript"))
