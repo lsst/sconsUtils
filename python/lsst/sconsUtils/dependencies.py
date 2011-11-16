@@ -134,11 +134,11 @@ class Configuration(object):
         version, eupsPathDir, productDir, table, flavor = eups.Eups().findSetupVersion(self.eupsProduct)
         if version is not None:
             self.version = version
-        else:
-            productDir = eups.productDir(self.eupsProduct)
         if productDir is None:
-            state.log.warn("Could not find EUPS product dir for '%s'; using %s." 
-                           % (self.eupsProduct, self.root))
+            productDir = eups.productDir(self.eupsProduct)
+            if productDir is None:
+                state.log.warn("Could not find EUPS product dir for '%s'; using %s." 
+                               % (self.eupsProduct, self.root))
         else:
             self.root = productDir
         self.doxygen = {
