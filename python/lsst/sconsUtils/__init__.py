@@ -4,6 +4,12 @@ try:
 except ImportError:
     raise ImportError("lsst.sconsUtils cannot be imported outside an scons script.")
 
+# Try to import the generated version module.
+try:
+    from .version import __version__
+except:
+    __version__ = "unknown"
+
 # Pull some names into the package namespace
 from .dependencies import configure, Configuration, ExternalConfiguration
 from .state import env, opts, log, targets

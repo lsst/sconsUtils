@@ -433,3 +433,31 @@ def Doxygen(self, config, **kw):
             kw[k] = defaults[k]
     builder = DoxygenBuilder(**kw)
     return builder(self, config)
+
+@memberOf(SConsEnvironment)
+def VersionModule(self, filename):
+    def action(target, source, env):
+        # We don't use env['version'] here, because that would allow
+        # command-line arguments to override the actual git version,
+        # which is what we want to track.
+        from .vcs import git
+        try:
+            repoversion = git.guessVersionName()
+        except RuntimeError:
+            # The above won't work if this isn't a working copy (e.g. a
+            # tarball made by 'git archive').  in that case, we have to
+            # fall back to the command line, from which we strip the +N.
+            repoversion = env["version"].split("+")[0]
+        outFile = open(target[0].abspath, "w")
+        outFile.write("__version__ = '%s'" % env["repoversion"])
+        outFile.write("dependencies = {\n")
+        for name, mod in env.dependencies.packages.iteritems():
+            if mod is None:
+                outFile.write("    '%s': None,\n" % name)
+            elif hasattr(mod, "getVersion"):
+                outFile.write("    '%s': '%s',\b" % (name, mod.getVersion()))
+            else:
+                outFile.write("    '%s': 'unknown',\n" % name)
+        outFile.write("}\n")
+        outFile.close()
+    return self.Command(filename, [], action)
