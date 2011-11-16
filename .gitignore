@@ -1,1 +1,9 @@
+.sconsign.dblite
+config.log
+.sconf_temp
+*.o
+*.os
+*.so
+*.cfgc
+*.pyc
 python/lsst/sconsUtils/version.py
