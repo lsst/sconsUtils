@@ -446,9 +446,11 @@ def VersionModule(self, filename, versionString=None):
         except RuntimeError as err:
             version = "unknown"
         outFile = open(target[0].abspath, "w")
-        parts = version.split("+")
-        outFile.write("__version__ = '%s'\n" % parts[0])
         names = ["__version__"]
+        outFile.write("__version__ = '%s'\n" % version)
+        parts = version.split("+")
+        outFile.write("__repo_version__ = '%s'\n" % parts[0])
+        names.append("__repo_version__")
         try:
             info = tuple(int(v) for v in parts[0].split("."))
             outFile.write("__version_info__ = %r\n" % (info,))
