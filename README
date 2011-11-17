@@ -1,4 +1,18 @@
 Complaints to Robert Lupton: rhl@astro.princeton.edu
 
+...or Jim Bosch: jbosch@astro.princeton.edu
+
 For installation instructions, see
 	http://dev.lsstcorp.org/trac/wiki/InstallingScons
+
+
+Why this package uses comments instead of docstrings:
+
+  One can only import this package through an SCons script
+  (otherwise various scons modules it imports aren't
+  available on sys.path).  So there's really no way to
+  inspect it interactively and look at the docstrings.
+  On the other hand, we can get much prettier Doxygen
+  outputs by putting Doxygen markup commands in comments
+  (Doxygen ignores markup in docstrings), and we expect
+  people to look at the Doxygen output for help.

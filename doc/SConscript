@@ -1,0 +1,3 @@
+# -*- python -*-
+from lsst.sconsUtils import scripts
+scripts.BasicSConscript.doc(inputs=["#python"], excludes=["#python/lsst/sconsUtils/deprecated.py"])

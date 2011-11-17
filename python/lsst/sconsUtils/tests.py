@@ -1,44 +1,55 @@
-"""Control which tests run, and how"""
+##
+#  @file tests.py
+#
+#  Control which tests run, and how.
+##
 
 import glob, os, re, sys
-from SCons.Script import *              # So that this file has the same namespace as SConstruct/SConscript
+from SCons.Script import *    # So that this file has the same namespace as SConstruct/SConscript
+from . import state
 
+##
+#  @brief A class to control unit tests.
+#
+#  This class is unchanged from previous versions of sconsUtils, but it will now generally
+#  be called via scripts.BasicSConscript.tests().
+##
 class Control(object):
     _IGNORE = "IGNORE"
     _EXPECT_FAILURE = "EXPECT_FAILURE"
-    
-    def __init__(self, env, ignoreList=None, expectedFailures=None, args=None, tmpDir=".tests", verbose=False):
-        """Create an object to run tests
 
-        env should be an environment from scons;
-
-        ignoreList is a list of tests that should Not be run --- useful in conjunction
-        with glob patterns.  If a file is listed as "@fileName", the @ is stripped and
-        we don't bother to check if fileName exists (useful for machine-generated files)
-
-        expectedFalures is a dictionary; the keys are tests that are
-        known to fail; the values are strings to print.
-
-        args is a dictionary with testnames as keys, and argument strings as values.
-        As scons always runs from the top-level directory, tests has to fiddle with
-        paths.  If an argument is a file this is done automatically; if it's e.g.
-        just a basename then you have to tell tests that it's really (part of a)
-        filename by prefixing the name by "file:".
-
-        tmpDir is the location of the test outputs;
-
-        verbose is how chatty you want the test code to be.
-
-        E.g.
-tests = lsst.tests.Control(env,
-                           args={
-                           "MaskIO_1" :      "data/871034p_1_MI_msk.fits",
-                           "MaskedImage_1" : "file:data/871034p_1_MI foo",
-                           }),
-                           ignoreList=["Measure_1"],
-                           expectedFailures={"BBox_1": "Problem with single-pixel BBox"}
-                           )
-        """
+    ##
+    #  @brief Create an object to run tests
+    #
+    #  @param               An SCons Environment (almost always lsst.sconsUtils.env).
+    #  @param ignoreList    A list of tests that should NOT be run --- useful in conjunction
+    #                       with glob patterns.  If a file is listed as "@fileName", the @ is stripped and
+    #                       we don't bother to check if fileName exists (useful for machine-generated files).
+    #  @param expectedFalures   A dictionary; the keys are tests that are known to fail; the values
+    #                           are strings to print.
+    #  @param args          A dictionary with testnames as keys, and argument strings as values.
+    #                       As scons always runs from the top-level directory, tests has to fiddle with
+    #                       paths.  If an argument is a file this is done automatically; if it's e.g.
+    #                       just a basename then you have to tell tests that it's really (part of a)
+    #                       filename by prefixing the name by "file:".
+    #
+    #  @param tmpDir        The location of the test outputs.
+    #  @param verbose       How chatty you want the test code to be.
+    #
+    #  @code
+    #  tests = lsst.tests.Control(
+    #      env,
+    #      args={
+    #           "MaskIO_1" :      "data/871034p_1_MI_msk.fits",
+    #           "MaskedImage_1" : "file:data/871034p_1_MI foo",
+    #      },
+    #      ignoreList=["Measure_1"],
+    #      expectedFailures={"BBox_1": "Problem with single-pixel BBox"}
+    # )
+    # @endcode
+    ##
+    def __init__(self, env, ignoreList=None, expectedFailures=None, args=None,
+                 tmpDir=".tests", verbose=False):
         env.AppendENVPath('PYTHONPATH', os.environ['PYTHONPATH'])
 
         self._env = env
@@ -55,7 +66,7 @@ tests = lsst.tests.Control(env,
                     f = f[1:]
                 else:
                     if not os.path.exists(f):
-                        print >> sys.stderr, "You're ignoring a non-existent file, %s" % f
+                        state.log.warn("You're ignoring a non-existent file, %s" % f)
                 self._info[f] = (self._IGNORE, None)
 
         if expectedFailures:
@@ -108,13 +119,11 @@ tests = lsst.tests.Control(env,
                    "false", "failed"
 
     def run(self, fileGlob):
-        if not isinstance(fileGlob, str): # env.Glob() returns an instance, but isinstance(fileGlob, 'instance') fails
+        if not isinstance(fileGlob, basestring): # env.Glob() returns an scons Node
             fileGlob = str(fileGlob)
-
         targets = []
         if not self.runExamples:
             return targets
-
         for f in glob.glob(fileGlob):
             interpreter = ""            # interpreter to run test, if needed
 
@@ -127,7 +136,6 @@ tests = lsst.tests.Control(env,
                 continue
 
             target = os.path.join(self._tmpDir, f)
-            targets += [target]
 
             args = []
             for a in self.args(f).split(" "):
@@ -147,7 +155,7 @@ tests = lsst.tests.Control(env,
             (should_pass, passedMsg, should_fail, failedMsg) = self.messages(f)
 
             expandedArgs = " ".join(args)
-            self._env.Command(target, f, """
+            result = self._env.Command(target, f, """
             @rm -f ${TARGET}.failed;
             @printf "%%s" 'running ${SOURCES}... ';
             @echo $SOURCES %s > $TARGET; echo >> $TARGET;
@@ -159,6 +167,8 @@ tests = lsst.tests.Control(env,
                echo "%s"; \
             fi;
             """ % (expandedArgs, interpreter, expandedArgs, should_pass, passedMsg, should_fail, failedMsg))
+
+            targets.extend(result)
 
             self._env.Alias(os.path.basename(target), target)
 
