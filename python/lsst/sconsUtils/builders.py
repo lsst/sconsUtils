@@ -465,8 +465,6 @@ def VersionModule(self, filename, versionString=None):
         for name, mod in env.dependencies.packages.iteritems():
             if mod is None:
                 outFile.write("    '%s': None,\n" % name)
-            elif hasattr(mod, "getVersion"):
-                outFile.write("    '%s': '%s',\n" % (name, mod.getVersion()))
             elif hasattr(mod.config, "version"):
                 outFile.write("    '%s': '%s',\n" % (name, mod.config.version))
             else:

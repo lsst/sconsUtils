@@ -101,6 +101,13 @@ class Configuration(object):
         name, ext = os.path.splitext(file)
         return name, os.path.abspath(os.path.join(dir, ".."))
 
+    @staticmethod
+    def getEupsData(eupsProduct):
+        version, eupsPathDir, productDir, table, flavor = eups.Eups().findSetupVersion(eupsProduct)
+        if productDir is None:
+            productDir = eups.productDir(eupsProduct)
+        return version, productDir    
+
     ##
     # @brief Initialize the configuration object.
     #
@@ -131,14 +138,12 @@ class Configuration(object):
         if eupsProduct is None:
             eupsProduct = self.name
         self.eupsProduct = eupsProduct
-        version, eupsPathDir, productDir, table, flavor = eups.Eups().findSetupVersion(self.eupsProduct)
+        version, productDir = self.getEupsData(self.eupsProduct)
         if version is not None:
             self.version = version
         if productDir is None:
-            productDir = eups.productDir(self.eupsProduct)
-            if productDir is None:
-                state.log.warn("Could not find EUPS product dir for '%s'; using %s." 
-                               % (self.eupsProduct, self.root))
+            state.log.warn("Could not find EUPS product dir for '%s'; using %s." 
+                           % (self.eupsProduct, self.root))
         else:
             self.root = productDir
         self.doxygen = {
