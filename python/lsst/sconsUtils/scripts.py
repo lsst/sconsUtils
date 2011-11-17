@@ -49,11 +49,11 @@ class BasicSConstruct(object):
     # a BasicSConstruct instance (which would be useless).
     ##
     def __new__(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None, cleanExt=None,
-                defaultTargets=("lib", "python", "tests"), subDirs=None, ignoreRegex=None,
+                defaultTargets=("lib", "python", "tests"), subDirList=None, ignoreRegex=None,
                 buildVersionModule=True):
         cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt,
                        buildVersionModule)
-        cls.finish(defaultTargets, subDirs, ignoreRegex)
+        cls.finish(defaultTargets, subDirList, ignoreRegex)
         return state.env
 
     ##
@@ -128,7 +128,7 @@ class BasicSConstruct(object):
                 if os.path.isdir(path) and not path.startswith("."):
                     subDirList.append(path)
         install = state.env.InstallLSST(state.env["prefix"],
-                                        [subDir for subDir in subDirList if os.path.exists(subDir)],
+                                        [subDir for subDir in subDirList],
                                         ignoreRegex=ignoreRegex)
         for name, target in state.targets.iteritems():
             state.env.Requires(install, target)
