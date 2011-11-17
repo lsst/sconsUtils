@@ -135,7 +135,8 @@ class BasicSConstruct(object):
             state.env.Alias(name, target)
         state.env.Declare()
         #defaultTargets = tuple(state.targets[t] for t in defaultTargets)
-        state.env.Default(defaultTargets)
+        state.env.Default(defaultTargets + state.targets["version"])
+        state.env.Requires(state.targets["tests"], state.targets["version"])
         state.env.Decider("MD5-timestamp") # if timestamps haven't changed, don't do MD5 checks
 
 ##
