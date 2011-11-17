@@ -86,19 +86,19 @@ class BasicSConstruct(object):
         dependencies.configure(packageName, versionString, eupsProduct, eupsProductPath)
         state.env.BuildETags()
         state.env.CleanTree(cleanExt)
+        if buildVersionModule:
+            state.targets["version"] \
+                = state.env.VersionModule("python/lsst/%s/version.py" % "/".join(packageName.split("_")))
         for root, dirs, files in os.walk("."):
             if "SConstruct" in files and root != ".":
                 dirs[:] = []
                 continue
             dirs[:] = [d for d in dirs if (not d.startswith('.'))]
+            dirs.sort() # happy coincidence that include < libs < python < tests
             if "SConscript" in files:
                 state.log.info("Using Sconscript at %s/SConscript" % root)
                 SCons.Script.SConscript(os.path.join(root, "SConscript"))
         cls._initializing = False
-        if buildVersionModule:
-            state.targets["python"].extend(
-                state.env.VersionModule("python/lsst/%s/version.py" % "/".join(packageName.split("_")))
-            )
         return state.env
 
     ##
@@ -300,7 +300,7 @@ class BasicSConscript(object):
         pyList = [control.run(str(node)) for node in pyList]
         for pyTest in pyList:
             state.env.Depends(pyTest, swigMods)
-            state.env.Depends(pyTest, "#python")
+            state.env.Depends(pyTest, state.targets["python"])
         result = ccList + pyList
         state.targets["tests"].extend(result)
         return result
