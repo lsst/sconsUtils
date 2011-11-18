@@ -109,7 +109,7 @@ def _initEnvironment():
         
     # Recursively walk LSST_CFG_PATH and add all setup EUPS directories to cfgPath.
     cfgPath = []
-    for root in os.environ.get("LSST_CFG_PATH", []):
+    for root in ":".split(os.environ.get("LSST_CFG_PATH", "")):
         for base, dirs, files in os.walk(root):
             dirs = [d for d in dirs if not d.startswith(".")]
             cfgPath.append(base)
