@@ -109,10 +109,6 @@ def _initEnvironment():
         
     # Recursively walk LSST_CFG_PATH and add all setup EUPS directories to cfgPath.
     cfgPath = []
-    for root in os.environ.get("LSST_CFG_PATH", "").split(":"):
-        for base, dirs, files in os.walk(root):
-            dirs = [d for d in dirs if not d.startswith(".")]
-            cfgPath.append(base)
     for k in filter(lambda x: re.search(r"_DIR$", x), os.environ.keys()):
         p = re.search(r"^(.*)_DIR$", k).groups()[0]
         try:
@@ -124,6 +120,11 @@ def _initEnvironment():
             ourEnv[varname] = os.environ[varname]
             ourEnv[k] = os.environ[k]
             cfgPath.append(os.path.join(os.environ[k], "ups"))
+
+    for root in os.environ.get("LSST_CFG_PATH", "").split(":"):
+        for base, dirs, files in os.walk(root):
+            dirs = [d for d in dirs if not d.startswith(".")]
+            cfgPath.append(base)
     #
     # Add any values marked as export=FOO=XXX[,GOO=YYY] to ourEnv
     #
