@@ -33,7 +33,7 @@ SCons.Script.EnsureSConsVersion(2, 1, 0)
 #  Targets should be added by calling extend() or using += on the dict values, to keep the lists of
 #  targets from turning into lists-of-lists.
 ##
-targets = {"doc": [], "tests": [], "lib": [], "python": [], "examples": [], "include": []}
+targets = {"doc": [], "tests": [], "lib": [], "python": [], "examples": [], "include": [], "version": []}
 
 ## @cond INTERNAL
 

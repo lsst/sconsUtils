@@ -49,11 +49,11 @@ class BasicSConstruct(object):
     # a BasicSConstruct instance (which would be useless).
     ##
     def __new__(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None, cleanExt=None,
-                defaultTargets=("lib", "python", "tests"), subDirs=None, ignoreRegex=None,
+                defaultTargets=("lib", "python", "tests"), subDirList=None, ignoreRegex=None,
                 buildVersionModule=True):
         cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt,
                        buildVersionModule)
-        cls.finish(defaultTargets, subDirs, ignoreRegex)
+        cls.finish(defaultTargets, subDirList, ignoreRegex)
         return state.env
 
     ##
@@ -86,19 +86,19 @@ class BasicSConstruct(object):
         dependencies.configure(packageName, versionString, eupsProduct, eupsProductPath)
         state.env.BuildETags()
         state.env.CleanTree(cleanExt)
+        if buildVersionModule:
+            state.targets["version"] \
+                = state.env.VersionModule("python/lsst/%s/version.py" % "/".join(packageName.split("_")))
         for root, dirs, files in os.walk("."):
             if "SConstruct" in files and root != ".":
                 dirs[:] = []
                 continue
             dirs[:] = [d for d in dirs if (not d.startswith('.'))]
+            dirs.sort() # happy coincidence that include < libs < python < tests
             if "SConscript" in files:
                 state.log.info("Using Sconscript at %s/SConscript" % root)
                 SCons.Script.SConscript(os.path.join(root, "SConscript"))
         cls._initializing = False
-        if buildVersionModule:
-            state.targets["python"].extend(
-                state.env.VersionModule("python/lsst/%s/version.py" % "/".join(packageName.split("_")))
-            )
         return state.env
 
     ##
@@ -128,14 +128,15 @@ class BasicSConstruct(object):
                 if os.path.isdir(path) and not path.startswith("."):
                     subDirList.append(path)
         install = state.env.InstallLSST(state.env["prefix"],
-                                        [subDir for subDir in subDirList if os.path.exists(subDir)],
+                                        [subDir for subDir in subDirList],
                                         ignoreRegex=ignoreRegex)
         for name, target in state.targets.iteritems():
             state.env.Requires(install, target)
             state.env.Alias(name, target)
         state.env.Declare()
         #defaultTargets = tuple(state.targets[t] for t in defaultTargets)
-        state.env.Default(defaultTargets)
+        state.env.Default(defaultTargets + state.targets["version"])
+        state.env.Requires(state.targets["tests"], state.targets["version"])
         state.env.Decider("MD5-timestamp") # if timestamps haven't changed, don't do MD5 checks
 
 ##
@@ -300,7 +301,7 @@ class BasicSConscript(object):
         pyList = [control.run(str(node)) for node in pyList]
         for pyTest in pyList:
             state.env.Depends(pyTest, swigMods)
-            state.env.Depends(pyTest, "#python")
+            state.env.Depends(pyTest, state.targets["python"])
         result = ccList + pyList
         state.targets["tests"].extend(result)
         return result
