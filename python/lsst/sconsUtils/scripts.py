@@ -50,9 +50,9 @@ class BasicSConstruct(object):
     ##
     def __new__(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None, cleanExt=None,
                 defaultTargets=("lib", "python", "tests"), subDirList=None, ignoreRegex=None,
-                buildVersionModule=True):
+                versionModuleName="python/lsst/%s/version.py"):
         cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt,
-                       buildVersionModule)
+                       versionModuleName)
         cls.finish(defaultTargets, subDirList, ignoreRegex)
         return state.env
 
@@ -71,13 +71,14 @@ class BasicSConstruct(object):
     #                              the name of the package.
     #  @param eupsProductPath      An alternate directory where the package should be installed.
     #  @param cleanExt             Whitespace delimited sequence of globs for files to remove with --clean.
-    #  @param buildVersionModule   If True, build a version.py module at python/lsst/<package>/version.py.
+    #  @param versionModuleName    If non-None, builds a version.py module as this file; '%s' is replaced with
+    #                              the name of the package.
     #
     #  @returns an SCons Environment object (which is also available as lsst.sconsUtils.env).
     ##
     @classmethod
     def initialize(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None,
-                   cleanExt=None, buildVersionModule=True):
+                   cleanExt=None, versionModuleName="python/lsst/%s/version.py"):
         if cls._initializing:
             state.log.fail("Recursion detected; an SConscript file should not call BasicSConstruct.")
         cls._initializing = True
@@ -86,9 +87,12 @@ class BasicSConstruct(object):
         dependencies.configure(packageName, versionString, eupsProduct, eupsProductPath)
         state.env.BuildETags()
         state.env.CleanTree(cleanExt)
-        if buildVersionModule:
-            state.targets["version"] \
-                = state.env.VersionModule("python/lsst/%s/version.py" % "/".join(packageName.split("_")))
+        if versionModuleName is not None:
+            try:
+                versionModuleName = versionModuleName % "/".join(packageName.split("_"))
+            except TypeError:
+                pass
+            state.targets["version"] = state.env.VersionModule(versionModuleName)
         for root, dirs, files in os.walk("."):
             if "SConstruct" in files and root != ".":
                 dirs[:] = []
