@@ -11,6 +11,7 @@ import shutil
 
 import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
+import eups.lock
 
 from .vcs import svn
 from .vcs import hg
@@ -43,16 +44,10 @@ def makeProductPath(env, pathFormat):
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 ## @brief Set a version ID from env, or a version control ID string ($name$ or $HeadURL$)
-def getVersion(env, versionString):
-
+def determineVersion(env, versionString):
     version = "unknown"
-
     if env.has_key('version'):
         version = env['version']
-        if env.has_key('baseversion') and \
-                not version.startswith(env['baseversion']):
-            utils.log.warn("Explicit version %s is incompatible with baseversion %s"
-                           % (version, env['baseversion']))
     elif not versionString:
         version = "unknown"
     elif re.search(r"^[$]Name:\s+", versionString):
@@ -64,49 +59,27 @@ def getVersion(env, versionString):
         # SVN.  Guess the tagname from the last part of the directory
         HeadURL = re.search(r"^[$]HeadURL:\s+(.*)", versionString).group(1)
         HeadURL = os.path.split(HeadURL)[0]
-        if env.installing or env.declaring:
-            try:
-                version = svn.guessVersionName(HeadURL)
-            except RuntimeError as err:
-                if env['force']:
-                    version = "unknown"
-                else:
-                    state.log.fail(
-                        "%s\nFound problem with svn revision number; update or specify force=True to proceed"
-                        % err
-                        )
-            if env.has_key('baseversion'):
-                version = env['baseversion'] + "+" + version
+        version = svn.guessVersionName(HeadURL)
     elif versionString.lower() in ("hg", "mercurial"):
         # Mercurial (hg).
-        try:
-            version = hg.guessVersionName()
-        except RuntimeError as err:
-            if env['force']:
-                version = "unknown"
-            else:
-                state.log.fail(
-                    "%s\nFound problem with hg version; update or specify force=True to proceed" % err
-                    )
+        version = hg.guessVersionName()
     elif versionString.lower() in ("git",):
         # git.
-        try:
-            version = git.guessVersionName()
-        except RuntimeError as err:
-            if env['force']:
-                version = "unknown"
-            else:
-                state.log.fail(
-                    "%s\nFound problem with git version; update or specify force=True to proceed" % err
-                    )
-    state.log.flush()
-    env["version"] = version
+        version = git.guessVersionName()
     return version
 
 ## @brief Set a prefix based on the EUPS_PATH, the product name, and a versionString from cvs or svn.
 def setPrefix(env, versionString, eupsProductPath=None):
+    try:
+        env['version'] = determineVersion(env, versionString)
+    except RuntimeError as err:
+        env['version'] = "unknown"
+        if env.installing or env.declaring and not env['force']:
+            state.log.fail(
+                "%s\nFound problem with version number; update or specify force=True to proceed"
+                % err
+            )
     if eupsProductPath:
-        getVersion(env, versionString)
         eupsPrefix = makeProductPath(env, eupsProductPath)
     elif env.has_key('eupsPath') and env['eupsPath']:
         eupsPrefix = env['eupsPath']
@@ -116,11 +89,11 @@ def setPrefix(env, versionString, eupsProductPath=None):
         prodPath = env['eupsProduct']
         if env.has_key('eupsProductPath') and env['eupsProductPath']:
             prodPath = env['eupsProductPath']
-        eupsPrefix = os.path.join(eupsPrefix, prodPath, getVersion(env, versionString))
+        eupsPrefix = os.path.join(eupsPrefix, prodPath, env["version"])
     else:
         eupsPrefix = None
     if env.has_key('prefix'):
-        if getVersion(env, versionString) != "unknown" and eupsPrefix and eupsPrefix != env['prefix']:
+        if env['version'] != "unknown" and eupsPrefix and eupsPrefix != env['prefix']:
             print >> sys.stderr, "Ignoring prefix %s from EUPS_PATH" % eupsPrefix
         return makeProductPath(env, env['prefix'])
     elif env.has_key('eupsPath') and env['eupsPath']:
@@ -142,6 +115,8 @@ def Declare(self, products=None):
 
     if "undeclare" in SCons.Script.COMMAND_LINE_TARGETS and not self.GetOption("silent"):
         state.log.warn("'scons undeclare' is deprecated; please use 'scons declare -c' instead")
+
+    acts = []
     if \
            "declare" in SCons.Script.COMMAND_LINE_TARGETS or \
            "undeclare" in SCons.Script.COMMAND_LINE_TARGETS or \
@@ -168,7 +143,7 @@ def Declare(self, products=None):
 
             if "EUPS_DIR" in os.environ.keys():
                 self['ENV']['PATH'] += os.pathsep + "%s/bin" % (os.environ["EUPS_DIR"])
-
+                self["ENV"]["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", "-1")
                 if "undeclare" in SCons.Script.COMMAND_LINE_TARGETS or self.GetOption("clean"):
                     if version:
                         command = "eups undeclare --flavor %s %s %s" % \
@@ -194,17 +169,23 @@ def Declare(self, products=None):
                         command += " %s %s" % (product, version)
 
                     current += [command + " --current"]
+
+                    if self.GetOption("tag"):
+                        command += " --tag=%s" % self.GetOption("tag")
+
                     declare += [command]
 
         if current:
-            self.Command("current", "", action=current)
+            acts += self.Command("current", "", action=current)
         if declare:
             if "current" in SCons.Script.COMMAND_LINE_TARGETS:
-                self.Command("declare", "", action="") # current will declare it for us
+                acts += self.Command("declare", "", action="") # current will declare it for us
             else:
-                self.Command("declare", "", action=declare)
+                acts += self.Command("declare", "", action=declare)
         if undeclare:
-            self.Command("undeclare", "", action=undeclare)
+            acts += self.Command("undeclare", "", action=undeclare)
+
+    return acts
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -279,8 +260,9 @@ def InstallDir(self, prefix, dir, ignoreRegex=r"(~$|\.pyc$|\.os?$)", recursive=T
 @memberOf(SConsEnvironment)
 def InstallEups(env, dest, files=[], presetup=""):
 
+    acts = []
     if not env.installing:
-        return []
+        return acts
 
     if env.GetOption("clean"):
         print >> sys.stderr, "Removing", dest
@@ -302,12 +284,20 @@ def InstallEups(env, dest, files=[], presetup=""):
 
         buildFiles = filter(lambda f: re.search(r"\.build$", f), files)
         build_obj = env.Install(dest, buildFiles)
+        acts += build_obj
         
         tableFiles = filter(lambda f: re.search(r"\.table$", f), files)
         table_obj = env.Install(dest, tableFiles)
+        acts += table_obj
 
         miscFiles = filter(lambda f: not re.search(r"\.(build|table)$", f), files)
         misc_obj = env.Install(dest, miscFiles)
+        acts += misc_obj
+
+        path = eups.Eups.setEupsPath()
+        if path:
+            locks = eups.lock.takeLocks("setup", path, eups.lock.LOCK_SH)
+            env["ENV"]["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", "-1")
 
         for i in build_obj:
             env.AlwaysBuild(i)
@@ -316,7 +306,8 @@ def InstallEups(env, dest, files=[], presetup=""):
             if env.has_key('baseversion'):
                 cmd += " --repoversion %s " % env['baseversion']
             cmd += str(i)
-            env.AddPostAction(i, env.Action("%s" %(cmd), cmd, ENV = os.environ))
+
+            env.AddPostAction(build_obj, env.Action("%s" %(cmd), cmd))
 
         for i in table_obj:
             env.AlwaysBuild(i)
@@ -326,9 +317,11 @@ def InstallEups(env, dest, files=[], presetup=""):
                 cmd += presetup + " "
             cmd += str(i)
 
-            env.AddPostAction(i, env.Action("%s" %(cmd), cmd, ENV = os.environ))
+            act = env.Command("table", "", env.Action("%s" %(cmd), cmd))
+            acts += act
+            env.Depends(act, i)
 
-    return dest
+    return acts
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 

@@ -1,0 +1,12 @@
+.sconsign.dblite
+config.log
+.sconf_temp
+*.o
+*.os
+*.so
+*.cfgc
+*.pyc
+python/lsst/sconsUtils/version.py
+doc/html
+doc/doxygen.conf
+doc/sconsUtils.tag

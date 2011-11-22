@@ -12,6 +12,8 @@ import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
 
 from .utils import memberOf
+from .installation import determineVersion
+from . import state
 
 ## @brief Like SharedLibrary, but don't insist that all symbols are resolved
 @memberOf(SConsEnvironment)
@@ -438,3 +440,46 @@ def Doxygen(self, config, **kw):
             kw[k] = defaults[k]
     builder = DoxygenBuilder(**kw)
     return builder(self, config)
+
+@memberOf(SConsEnvironment)
+def VersionModule(self, filename, versionString=None):
+    if versionString is None:
+        versionString = "git"
+    def makeVersionModule(target, source, env):
+        try:
+            version = determineVersion(state.env, versionString)
+        except RuntimeError as err:
+            version = "unknown"
+        outFile = open(target[0].abspath, "w")
+        names = ["__version__"]
+        outFile.write("__version__ = '%s'\n" % version)
+        parts = version.split("+")
+        outFile.write("__repo_version__ = '%s'\n" % parts[0])
+        names.append("__repo_version__")
+        try:
+            info = tuple(int(v) for v in parts[0].split("."))
+            outFile.write("__version_info__ = %r\n" % (info,))
+            names.append("__version_info__")
+        except ValueError:
+            pass
+        if len(parts) > 1:
+            try:
+                outFile.write("__rebuild_version__ = %s\n" % int(parts[1]))
+                names.append("__rebuild_version__")
+            except ValueError:
+                pass
+        outFile.write("__dependency_versions__ = {\n")
+        for name, mod in env.dependencies.packages.iteritems():
+            if mod is None:
+                outFile.write("    '%s': None,\n" % name)
+            elif hasattr(mod.config, "version"):
+                outFile.write("    '%s': '%s',\n" % (name, mod.config.version))
+            else:
+                outFile.write("    '%s': 'unknown',\n" % name)
+        outFile.write("}\n")
+        names.append("__dependency_versions__")
+        outFile.write("__all__ = %r\n" % (tuple(names),))
+        outFile.close()
+    result = self.Command(filename, [], makeVersionModule)
+    self.AlwaysBuild(result)
+    return result

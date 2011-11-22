@@ -35,9 +35,12 @@ from . import state
 # @return an SCons Environment object (which is also available as lsst.sconsUtils.env).
 ##
 def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath=None):
-    state.log.info("Setting up environment to build package '%s'." % packageName)
+    if not state.env.GetOption("no_progress"):
+        state.log.info("Setting up environment to build package '%s'." % packageName)
     if eupsProduct is None:
         eupsProduct = packageName
+    if versionString is None:
+        versionString = "git"
     state.env['eupsProduct'] = eupsProduct
     state.env['packageName'] = packageName
     #
@@ -98,6 +101,13 @@ class Configuration(object):
         name, ext = os.path.splitext(file)
         return name, os.path.abspath(os.path.join(dir, ".."))
 
+    @staticmethod
+    def getEupsData(eupsProduct):
+        version, eupsPathDir, productDir, table, flavor = eups.Eups().findSetupVersion(eupsProduct)
+        if productDir is None:
+            productDir = eups.productDir(eupsProduct)
+        return version, productDir    
+
     ##
     # @brief Initialize the configuration object.
     #
@@ -128,7 +138,9 @@ class Configuration(object):
         if eupsProduct is None:
             eupsProduct = self.name
         self.eupsProduct = eupsProduct
-        productDir = eups.productDir(self.eupsProduct)
+        version, productDir = self.getEupsData(self.eupsProduct)
+        if version is not None:
+            self.version = version
         if productDir is None:
             state.log.warn("Could not find EUPS product dir for '%s'; using %s." 
                            % (self.eupsProduct, self.root))
@@ -432,7 +444,7 @@ class PackageTree(object):
                 else:
                     module.config.addCustomTests(self.customTests)
                 return module
-        state.log.warn("Failed to import configuration for package '%s'." % name)
+        state.log.warn("Failed to import configuration for optional package '%s'." % name)
 
     def _recurse(self, name):
         """Recursively load a dependency."""

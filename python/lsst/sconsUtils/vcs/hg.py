@@ -17,7 +17,7 @@ def guessVersionName():
     idents = os.popen("hg id").readline()
     ident = re.split(r"\s+", idents)
     if re.search(r"\+", ident[0]):
-        raise RuntimeError("Error with hg version: uncommited changes")
+        raise RuntimeError("Error with hg version: uncommitted changes")
     if ident[1] == "tip":
         return ident[0]
     return ident[1]

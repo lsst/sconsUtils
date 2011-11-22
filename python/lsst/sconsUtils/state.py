@@ -33,7 +33,7 @@ SCons.Script.EnsureSConsVersion(2, 1, 0)
 #  Targets should be added by calling extend() or using += on the dict values, to keep the lists of
 #  targets from turning into lists-of-lists.
 ##
-targets = {"doc": [], "tests": [], "lib": [], "python": [], "examples": [], "include": []}
+targets = {"doc": [], "tests": [], "lib": [], "python": [], "examples": [], "include": [], "version": []}
 
 ## @cond INTERNAL
 
@@ -54,6 +54,8 @@ def _initOptions():
                            help="Specify the install destination")
     SCons.Script.AddOption('--setenv', dest='setenv', action='store_true', default=False,
                            help="Treat arguments such as Foo=bar as defining construction variables")
+    SCons.Script.AddOption('--tag', dest='tag', action='store', default=None,
+                           help="Declare product with this eups tag")
     SCons.Script.AddOption('--verbose', dest='verbose', action='store_true', default=False,
                            help="Print additional messages for debugging.")
     SCons.Script.AddOption('--traceback', dest='traceback', action='store_true', default=False,
@@ -90,7 +92,7 @@ def _initVariables():
                                   allowed_values=('0', '1', '2', '3')),
         SCons.Script.EnumVariable('profile', 'Compile/link for profiler', 0, 
                                   allowed_values=('0', '1', 'pg', 'gcov')),
-        ('version', 'Specify the current version', None),
+        ('version', 'Specify the version to declare', None),
         ('baseversion', 'Specify the current base version', None),
         ('optFiles', "Specify a list of files that SHOULD be optimized", None),
         ('noOptFiles', "Specify a list of files that should NOT be optimized", None)
@@ -98,26 +100,15 @@ def _initVariables():
 
 def _initEnvironment():
     """Construction and basic setup of the state.env variable."""
-    ourEnv = {
-        'EUPS_DIR' : os.environ.get("EUPS_DIR"),
-        'EUPS_PATH' : os.environ.get("EUPS_PATH"),
-        'PATH' : os.environ.get("PATH"),
-        'DYLD_LIBRARY_PATH' : os.environ.get("DYLD_LIBRARY_PATH"),
-        'LD_LIBRARY_PATH' : os.environ.get("LD_LIBRARY_PATH"),
-        'SHELL' : os.environ.get("SHELL"), # needed by eups
-        'TMPDIR' : os.environ.get("TMPDIR"), # needed by eups
-        }
 
-    EUPS_LOCK_PID = os.environ.get("EUPS_LOCK_PID") # needed by eups
-    if EUPS_LOCK_PID is not None:
-        ourEnv['EUPS_LOCK_PID'] = EUPS_LOCK_PID
+    ourEnv = {}
+    for key in ('EUPS_DIR', 'EUPS_PATH', 'PATH' ,'DYLD_LIBRARY_PATH', 'LD_LIBRARY_PATH',
+                'SHELL', 'TMPDIR', 'TEMP', 'TMP', 'EUPS_LOCK_PID'):
+        if key in os.environ:
+            ourEnv[key] = os.environ[key]
         
     # Recursively walk LSST_CFG_PATH and add all setup EUPS directories to cfgPath.
     cfgPath = []
-    for root in os.environ.get("LSST_CFG_PATH", []):
-        for base, dirs, files in os.walk(root):
-            dirs = [d for d in dirs if not d.startswith(".")]
-            cfgPath.append(base)
     for k in filter(lambda x: re.search(r"_DIR$", x), os.environ.keys()):
         p = re.search(r"^(.*)_DIR$", k).groups()[0]
         try:
@@ -129,6 +120,11 @@ def _initEnvironment():
             ourEnv[varname] = os.environ[varname]
             ourEnv[k] = os.environ[k]
             cfgPath.append(os.path.join(os.environ[k], "ups"))
+
+    for root in os.environ.get("LSST_CFG_PATH", "").split(":"):
+        for base, dirs, files in os.walk(root):
+            dirs = [d for d in dirs if not d.startswith(".")]
+            cfgPath.append(base)
     #
     # Add any values marked as export=FOO=XXX[,GOO=YYY] to ourEnv
     #
@@ -311,13 +307,18 @@ def _configureCommon():
     #
     if env.whichCc == "clang":
         env.Append(CCFLAGS = ['-Wall'])
+        env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-mno-fused-madd$", o)]
+
         ignoreWarnings = {
             "unused-function" : 'boost::regex has functions in anon namespaces in headers',
             }
         filterWarnings = {
             "char-subscripts" : 'seems innocous enough, and is used by boost',
             "constant-logical-operand" : "Used by eigen 2.0.15. Should get this fixed",
-            "mismatched-tags" : "mixed class and struct.  Used by gcc 4.2 RTL",
+            "mismatched-tags" : "mixed class and struct.  Used by gcc 4.2 RTL and eigen 2.0.15",
+            "parentheses" : "equality comparison with extraneous parentheses",
+            "shorten-64-to-32" : "implicit conversion loses integer precision",
+            "self-assign" : "x = x",
             }
         for k in ignoreWarnings.keys():
             env.Append(CCFLAGS = ["-Wno-%s" % k])

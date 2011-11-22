@@ -48,10 +48,12 @@ class BasicSConstruct(object):
     # This returns the sconsUtils.env Environment object rather than
     # a BasicSConstruct instance (which would be useless).
     ##
-    def __new__(cls, packageName, versionString, eupsProduct=None, eupsProductPath=None, cleanExt=None,
-                defaultTargets=("lib", "python", "tests"), subDirs=None, ignoreRegex=None):
-        cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt)
-        cls.finish(defaultTargets, subDirs, ignoreRegex)
+    def __new__(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None, cleanExt=None,
+                defaultTargets=("lib", "python", "tests"), subDirList=None, ignoreRegex=None,
+                versionModuleName="python/lsst/%s/version.py"):
+        cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt,
+                       versionModuleName)
+        cls.finish(defaultTargets, subDirList, ignoreRegex)
         return state.env
 
     ##
@@ -64,16 +66,19 @@ class BasicSConstruct(object):
     #
     #  @param packageName          Name of the package being built; must correspond to a .cfg file in ups/.
     #  @param versionString        Version-control system string to be parsed for version information
-    #                              ($HeadURL$ for SVN).
+    #                              ($HeadURL$ for SVN).  Defaults to "git" if not set or None.
     #  @param eupsProduct          Name of the EUPS product being built.  Defaults to and is almost always
     #                              the name of the package.
     #  @param eupsProductPath      An alternate directory where the package should be installed.
     #  @param cleanExt             Whitespace delimited sequence of globs for files to remove with --clean.
+    #  @param versionModuleName    If non-None, builds a version.py module as this file; '%s' is replaced with
+    #                              the name of the package.
     #
     #  @returns an SCons Environment object (which is also available as lsst.sconsUtils.env).
     ##
     @classmethod
-    def initialize(cls, packageName, versionString, eupsProduct=None, eupsProductPath=None, cleanExt=None):
+    def initialize(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None,
+                   cleanExt=None, versionModuleName="python/lsst/%s/version.py"):
         if cls._initializing:
             state.log.fail("Recursion detected; an SConscript file should not call BasicSConstruct.")
         cls._initializing = True
@@ -82,12 +87,23 @@ class BasicSConstruct(object):
         dependencies.configure(packageName, versionString, eupsProduct, eupsProductPath)
         state.env.BuildETags()
         state.env.CleanTree(cleanExt)
+        if versionModuleName is not None:
+            try:
+                versionModuleName = versionModuleName % "/".join(packageName.split("_"))
+            except TypeError:
+                pass
+            state.targets["version"] = state.env.VersionModule(versionModuleName)
         for root, dirs, files in os.walk("."):
-            dirs = [d for d in dirs if (not d.startswith('.'))]
+            if "SConstruct" in files and root != ".":
+                dirs[:] = []
+                continue
+            dirs[:] = [d for d in dirs if (not d.startswith('.'))]
+            dirs.sort() # happy coincidence that include < libs < python < tests
             if "SConscript" in files:
                 state.log.info("Using Sconscript at %s/SConscript" % root)
                 SCons.Script.SConscript(os.path.join(root, "SConscript"))
         cls._initializing = False
+        return state.env
 
     ##
     # @brief Convenience function to replace standard SConstruct boilerplate (step 2).
@@ -116,14 +132,15 @@ class BasicSConstruct(object):
                 if os.path.isdir(path) and not path.startswith("."):
                     subDirList.append(path)
         install = state.env.InstallLSST(state.env["prefix"],
-                                        [subDir for subDir in subDirList if os.path.exists(subDir)],
+                                        [subDir for subDir in subDirList],
                                         ignoreRegex=ignoreRegex)
         for name, target in state.targets.iteritems():
             state.env.Requires(install, target)
             state.env.Alias(name, target)
         state.env.Declare()
         #defaultTargets = tuple(state.targets[t] for t in defaultTargets)
-        state.env.Default(defaultTargets)
+        state.env.Default(defaultTargets + state.targets["version"])
+        state.env.Requires(state.targets["tests"], state.targets["version"])
         state.env.Decider("MD5-timestamp") # if timestamps haven't changed, don't do MD5 checks
 
 ##
@@ -288,7 +305,7 @@ class BasicSConscript(object):
         pyList = [control.run(str(node)) for node in pyList]
         for pyTest in pyList:
             state.env.Depends(pyTest, swigMods)
-            state.env.Depends(pyTest, "#python")
+            state.env.Depends(pyTest, state.targets["python"])
         result = ccList + pyList
         state.targets["tests"].extend(result)
         return result

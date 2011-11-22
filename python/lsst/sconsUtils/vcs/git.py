@@ -15,5 +15,5 @@ def guessVersionName():
     status = os.popen("git status --porcelain --untracked-files=no").readline()
     if status.strip():
         raise RuntimeError("Error with git version: uncommitted changes")
-    desc = os.popen("git describe").readline()
+    desc = os.popen("git describe --tags --always").readline()
     return desc.strip()
