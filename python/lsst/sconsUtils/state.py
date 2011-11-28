@@ -352,10 +352,31 @@ def _configureCommon():
         # Workaround intel bug; cf. RHL's intel bug report 580167
         env.Append(LINKFLAGS = ["-Wl,-no_compact_unwind", "-wd,11015"])
 
+def _saveState():
+    """Save state such as optimization level used.  The scons mailing lists were unable to tell
+    RHL how to get this back from .sconsign.dblite
+    """
+
+    import ConfigParser
+
+    config = ConfigParser.ConfigParser()
+    config.add_section('Build')
+    config.set('Build', 'cc', env.whichCc)
+    if env['opt']:
+        config.set('Build', 'opt', env['opt'])
+
+    try:
+        confFile = os.path.join(env.Dir(env["CONFIGUREDIR"]).abspath, "build.cfg")
+        with open(confFile, 'wb') as configfile:
+            config.write(configfile)
+    except Exception, e:
+        print "RHL unexpected exception in _saveState: %s" % e        
+        
 _initOptions()
 _initLog()
 _initVariables()
 _initEnvironment()
 _configureCommon()
+_saveState()
 
 ## @endcond
