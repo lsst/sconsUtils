@@ -37,11 +37,6 @@ def SwigLoadableModule(self, target, source, **keywords):
     try:
         if myenv.whichCc == "gcc":
             myenv.Append(CCFLAGS = ["-fno-strict-aliasing",])
-        if myenv.sizeofLongIs8:
-            if 'SWIGFLAGS' in keywords:
-                keywords['SWIGFLAGS'].append('-DSWIGWORDSIZE64')
-            else:
-                myenv.Append(SWIGFLAGS = ['-DSWIGWORDSIZE64'])
     except AttributeError:
         pass
     return myenv.LoadableModule(target, source, **keywords)
