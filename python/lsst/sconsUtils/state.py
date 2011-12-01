@@ -257,7 +257,7 @@ def _configureCommon():
                 env['CC'] = CC
             if CC and env['CXX'] == env0['CXX']:
                 env['CXX'] = CXX
-        conf = env.Configure(custom_tests = {'ClassifyCc' : ClassifyCc})
+        conf = env.Configure(custom_tests = {'ClassifyCc' : ClassifyCc,})
         env.whichCc = conf.ClassifyCc()
         conf.Finish()
     #
