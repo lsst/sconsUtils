@@ -1,5 +1,2 @@
-BASEVER=@VERSION.sub("\+[0-9]", "")@
-svn co @SVNROOT@/DMS/devenv/sconsUtils/tags/$BASEVER @PRODUCT@-@VERSION@ &&
-cd @PRODUCT@-@VERSION@ &&
-setup -r . sconsUtils &&
-scons opt=3 install
+@LSST BUILD@
+build_lsst @PRODUCT@ @VERSION@ @REPOVERSION@
