@@ -136,7 +136,14 @@ def _initEnvironment():
 
         del SCons.Script.ARGUMENTS[opt]
     global env
-    env = SCons.Script.Environment(ENV=ourEnv, variables=opts, tools=["default"])
+    sconsUtilsPath, thisFile = os.path.split(__file__)
+    toolPath = os.path.join(sconsUtilsPath, "tools")
+    env = SCons.Script.Environment(
+        ENV=ourEnv,
+        variables=opts,
+        toolpath=[toolPath],
+        tools=["default", "cuda"]
+    )
     env.cfgPath = cfgPath
     #
     # We don't want "lib" inserted at the beginning of loadable module names;
