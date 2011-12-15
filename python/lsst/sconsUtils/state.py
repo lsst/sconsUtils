@@ -106,21 +106,22 @@ def _initEnvironment():
                 'SHELL', 'TMPDIR', 'TEMP', 'TMP', 'EUPS_LOCK_PID'):
         if key in os.environ:
             ourEnv[key] = os.environ[key]
-        
-    # Recursively walk LSST_CFG_PATH and add all setup EUPS directories to cfgPath.
+
+    # Find and propagate EUPS environment variables.
     cfgPath = []
-    for k in filter(lambda x: re.search(r"_DIR$", x), os.environ.keys()):
-        p = re.search(r"^(.*)_DIR$", k).groups()[0]
-        try:
+    for k in os.environ.keys():
+        m = re.search(r"^(?P<name>\w+)_DIR(?P<extra>_EXTRA)?$", k)
+        if not m: continue
+        cfgPath.append(os.path.join(os.environ[k], "ups"))
+        if not m.group("extra"):
+            p = m.group("name")
             import eups
             varname = eups.utils.setupEnvNameFor(p)
-        except AttributeError:
-            varname = "SETUP_" + p      # We're running an old (<= 1.2) version of eups
-        if os.environ.has_key(varname):
-            ourEnv[varname] = os.environ[varname]
-            ourEnv[k] = os.environ[k]
-            cfgPath.append(os.path.join(os.environ[k], "ups"))
+            if os.environ.has_key(varname):
+                ourEnv[varname] = os.environ[varname]
+                ourEnv[k] = os.environ[k]
 
+    # Recursively walk LSST_CFG_PATH
     for root in os.environ.get("LSST_CFG_PATH", "").split(":"):
         for base, dirs, files in os.walk(root):
             dirs = [d for d in dirs if not d.startswith(".")]
