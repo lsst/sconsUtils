@@ -381,7 +381,8 @@ class PackageTree(object):
             }
         self._current = set([primaryName])
         if noCfgFile:
-            state.log.fail(None)
+            self.primary = None
+            return
 
         self.primary = self._tryImport(primaryName)
         if self.primary is None: state.log.fail("Failed to load primary package configuration.")
@@ -405,7 +406,8 @@ class PackageTree(object):
                 continue
             if not module.config.configure(conf, packages=self.packages, check=check, build=False):
                 state.log.fail("%s was found but did not pass configuration checks." % name)
-        self.primary.config.configure(conf, packages=self.packages, check=False, build=True)
+        if self.primary:
+            self.primary.config.configure(conf, packages=self.packages, check=False, build=True)
         env.AppendUnique(SWIGPATH=env["CPPPATH"])
         env.AppendUnique(XSWIGPATH=env["XCPPPATH"])
         env = conf.Finish()
@@ -448,7 +450,7 @@ class PackageTree(object):
                     return
                 else:
                     module.config.addCustomTests(self.customTests)
-                return module
+                return
         state.log.warn("Failed to import configuration for optional package '%s'." % name)
 
     def _recurse(self, name):
