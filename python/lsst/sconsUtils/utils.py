@@ -36,7 +36,8 @@ class Log(object):
         if self.traceback:
             raise RuntimeError(message)
         else:
-            sys.stderr.write(message + "\n")
+            if message:
+                sys.stderr.write(message + "\n")
             SCons.Script.Exit(1)
 
     def flush(self):

@@ -50,9 +50,9 @@ class BasicSConstruct(object):
     ##
     def __new__(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None, cleanExt=None,
                 defaultTargets=("lib", "python", "tests"), subDirList=None, ignoreRegex=None,
-                versionModuleName="python/lsst/%s/version.py"):
+                versionModuleName="python/lsst/%s/version.py", noCfgFile=False):
         cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt,
-                       versionModuleName)
+                       versionModuleName, noCfgFile=noCfgFile)
         cls.finish(defaultTargets, subDirList, ignoreRegex)
         return state.env
 
@@ -73,18 +73,19 @@ class BasicSConstruct(object):
     #  @param cleanExt             Whitespace delimited sequence of globs for files to remove with --clean.
     #  @param versionModuleName    If non-None, builds a version.py module as this file; '%s' is replaced with
     #                              the name of the package.
+    # @param noCfgFile             If True, this package has no .cfg file
     #
     #  @returns an SCons Environment object (which is also available as lsst.sconsUtils.env).
     ##
     @classmethod
     def initialize(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None,
-                   cleanExt=None, versionModuleName="python/lsst/%s/version.py"):
+                   cleanExt=None, versionModuleName="python/lsst/%s/version.py", noCfgFile=False):
         if cls._initializing:
             state.log.fail("Recursion detected; an SConscript file should not call BasicSConstruct.")
         cls._initializing = True
         if cleanExt is None:
             cleanExt = r"*~ core *.so *.os *.o *.pyc *.pkgc"
-        dependencies.configure(packageName, versionString, eupsProduct, eupsProductPath)
+        dependencies.configure(packageName, versionString, eupsProduct, eupsProductPath, noCfgFile)
         state.env.BuildETags()
         state.env.CleanTree(cleanExt)
         if versionModuleName is not None:

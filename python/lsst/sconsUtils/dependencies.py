@@ -31,10 +31,11 @@ from . import state
 # @param eupsProduct       Name of the EUPS product being built.  Defaults to and is almost always
 #                          the name of the package.
 # @param eupsProductPath   An alternate directory where the package should be installed.
+# @param noCfgFile         If True, this package has no .cfg file
 #
 # @return an SCons Environment object (which is also available as lsst.sconsUtils.env).
 ##
-def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath=None):
+def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath=None, noCfgFile=False):
     if not state.env.GetOption("no_progress"):
         state.log.info("Setting up environment to build package '%s'." % packageName)
     if eupsProduct is None:
@@ -58,7 +59,7 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     #
     state.log.traceback = state.env.GetOption("traceback")
     state.log.verbose = state.env.GetOption("verbose")
-    packages = PackageTree(packageName)
+    packages = PackageTree(packageName, noCfgFile=noCfgFile)
     state.log.flush() # if we've already hit a fatal error, die now.
     state.env.libs = {"main":[], "python":[], "test":[]}
     state.env.doxygen = {"tags":[], "includes":[]}
@@ -363,12 +364,13 @@ class PackageTree(object):
     # @brief Recursively load *.cfg files for packageName and all its dependencies.
     #
     # @param primaryName      The name of the primary package being built.
+    # @param noCfgFile        If True, this package has no .cfg file
     #
     # After __init__, self.primary will be set to the configuration module for the primary package,
     # and self.packages will be an OrderedDict of dependencies (excluding self.primary), ordered
     # such that configuration can proceed in iteration order.
     ##
-    def __init__(self, primaryName):
+    def __init__(self, primaryName, noCfgFile=False):
         self.cfgPath = state.env.cfgPath
         self.packages = collections.OrderedDict()
         self.customTests = {
@@ -378,6 +380,9 @@ class PackageTree(object):
             "CustomLinkCheck" : CustomLinkCheck,
             }
         self._current = set([primaryName])
+        if noCfgFile:
+            state.log.fail(None)
+
         self.primary = self._tryImport(primaryName)
         if self.primary is None: state.log.fail("Failed to load primary package configuration.")
         for dependency in self.primary.dependencies.get("required", ()):
