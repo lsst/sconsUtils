@@ -444,13 +444,13 @@ class PackageTree(object):
                 module = imp.load_source(name + "_cfg", filename)
                 if not hasattr(module, "dependencies") or not isinstance(module.dependencies, dict):
                     state.log.warn("Configuration module for package '%s' lacks a dependencies dict." % name)
-                    return
+                    return None
                 if not hasattr(module, "config") or not isinstance(module.config, Configuration):
                     state.log.warn("Configuration module for package '%s' lacks a config object." % name)
-                    return
+                    return None
                 else:
                     module.config.addCustomTests(self.customTests)
-                return
+                return module
         state.log.warn("Failed to import configuration for optional package '%s'." % name)
 
     def _recurse(self, name):
