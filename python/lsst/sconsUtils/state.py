@@ -125,7 +125,7 @@ def _initEnvironment():
     for root in os.environ.get("LSST_CFG_PATH", "").split(":"):
         for base, dirs, files in os.walk(root):
             dirs = [d for d in dirs if not d.startswith(".")]
-            cfgPath.append(base)
+            cfgPath.insert(0, base)
     #
     # Add any values marked as export=FOO=XXX[,GOO=YYY] to ourEnv
     #
