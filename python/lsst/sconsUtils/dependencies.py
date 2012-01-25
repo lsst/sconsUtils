@@ -486,7 +486,8 @@ class PackageTree(object):
                 # But this package might itself be optional, so we don't die yet.
                 self.packages[name] = None
                 self._current.remove(name)
-                state.log.warn("Could not load all dependencies for package '%s'." % name)
+                state.log.warn("Could not load all dependencies for package '%s' (missing %s)." %
+                               (name, dependency))
                 return False
         for dependency in module.dependencies.get("optional", ()):
             self._recurse(dependency)
