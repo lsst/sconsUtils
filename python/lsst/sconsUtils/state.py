@@ -335,6 +335,7 @@ def _configureCommon():
                 env.Append(CCFLAGS = ["-Wno-%s" % k])
     elif env.whichCc == "gcc":
         env.Append(CCFLAGS = ['-Wall'])
+        env.Append(CCFLAGS = ["-Wunknown-pragmas"]) # we don't want complaints about icc/clang pragmas
     elif env.whichCc == "icc":
         env.Append(CCFLAGS = ['-Wall'])
         filterWarnings = {
