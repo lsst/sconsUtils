@@ -315,6 +315,9 @@ def _configureCommon():
     #
     if env.whichCc == "clang":
         env.Append(CCFLAGS = ['-Wall'])
+        if False:                       # requires you to rebuild boost; not worth it (yet).
+            env.Append(CCFLAGS = ['-stdlib=libc++'])
+            env.Append(LINKFLAGS = ['-stdlib=libc++'])
         env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-mno-fused-madd$", o)]
 
         ignoreWarnings = {
