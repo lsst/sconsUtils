@@ -440,6 +440,18 @@ def Doxygen(self, config, **kw):
 def VersionModule(self, filename, versionString=None):
     if versionString is None:
         versionString = "git"
+
+    def calcMd5(filename):
+        try:
+            import hashlib
+            md5 = hashlib.md5("\n".join(open(filename).readlines())).hexdigest()
+        except IOError:
+            md5 = None
+
+        return md5
+
+    oldMd5 = calcMd5(filename)
+
     def makeVersionModule(target, source, env):
         try:
             version = determineVersion(state.env, versionString)
@@ -475,6 +487,11 @@ def VersionModule(self, filename, versionString=None):
         names.append("__dependency_versions__")
         outFile.write("__all__ = %r\n" % (tuple(names),))
         outFile.close()
-    result = self.Command(filename, [], makeVersionModule)
+
+        if calcMd5(target[0].abspath) != oldMd5: # only print if something's changed
+            print "makeVersionModule([\"%s\"], [])" % str(target[0])
+
+    result = self.Command(filename, [], self.Action(makeVersionModule, strfunction=lambda *args: None))
+
     self.AlwaysBuild(result)
     return result
