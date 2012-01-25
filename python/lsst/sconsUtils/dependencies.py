@@ -385,13 +385,26 @@ class PackageTree(object):
             return
 
         self.primary = self._tryImport(primaryName)
-        if self.primary is None: state.log.fail("Failed to load primary package configuration.")
+        if self.primary is None:
+            state.log.fail("Failed to load primary package configuration for %s." % primaryName)
+
+        missingDeps = []
         for dependency in self.primary.dependencies.get("required", ()):
-            if not self._recurse(dependency): state.log.fail("Failed to load required dependencies.")
+            if not self._recurse(dependency):
+                missingDeps.append(dependency)
+        if missingDeps:
+            state.log.fail("Failed to load required dependencies: \"%s\"" % '", "'.join(missingDeps))
+            
+        missingDeps = []
         for dependency in self.primary.dependencies.get("buildRequired", ()):
-            if not self._recurse(dependency): state.log.fail("Failed to load required build dependencies.")
+            if not self._recurse(dependency):
+                missingDeps.append(dependency)
+        if missingDeps:
+            state.log.fail("Failed to load required build dependencies: \"%s\"" % '", "'.join(missingDeps))
+
         for dependency in self.primary.dependencies.get("optional", ()):
             self._recurse(dependency)
+
         for dependency in self.primary.dependencies.get("buildOptional", ()):
             self._recurse(dependency)
 
