@@ -324,6 +324,7 @@ def _configureCommon():
             "unused-function" : 'boost::regex has functions in anon namespaces in headers',
             }
         filterWarnings = {
+            "attributes" : "clang pretends to be g++, but complains about g++ attributes such as flatten",
             "char-subscripts" : 'seems innocous enough, and is used by boost',
             "constant-logical-operand" : "Used by eigen 2.0.15. Should get this fixed",
             "mismatched-tags" : "mixed class and struct.  Used by gcc 4.2 RTL and eigen 2.0.15",
