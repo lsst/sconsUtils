@@ -323,8 +323,15 @@ def CustomCppFlagCheck(context, flag, append=True):
 ##
 def CustomCompileCheck(context, message, source, extension=".cc"):
     context.Message(message)
-    result = context.TryCompile(source, extension)
+
+    env = context.env
+    if (env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec")):
+        result = True
+    else:
+        result = context.TryCompile(source, extension)
+
     context.Result(result)
+
     return result
 
 ##
