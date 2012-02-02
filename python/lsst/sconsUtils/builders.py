@@ -307,10 +307,7 @@ class DoxygenBuilder(object):
             self.targets.append(SCons.Script.Dir(item))
 
     def buildConfig(self, target, source, env):
-        inConfigFile = open(source[0].abspath, "r")
         outConfigFile = open(target[0].abspath, "w")
-        outConfigFile.write(inConfigFile.read())
-        inConfigFile.close()
         for tagPath in self.useTags:
             docDir, tagFile = os.path.split(tagPath)
             htmlDir = os.path.join(docDir, "html")
@@ -348,6 +345,13 @@ class DoxygenBuilder(object):
             outConfigFile.write("GENERATE_%s = NO\n" % output.upper())
         if self.makeTag is not None:
             outConfigFile.write("GENERATE_TAGFILE = %s\n" % self.makeTag)
+        #
+        # Append the local overrides (usually doxygen.conf.in)
+        #
+        inConfigFile = open(source[0].abspath, "r")
+        outConfigFile.write(inConfigFile.read())
+
+        inConfigFile.close()
         outConfigFile.close()
 
 ##
