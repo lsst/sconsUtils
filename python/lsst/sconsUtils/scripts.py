@@ -233,7 +233,7 @@ class BasicSConscript(object):
         if projectNumber is None:
             projectNumber = state.env["version"]
         result = state.env.Doxygen(
-            "doxygen.conf.in", projectName=projectName, projectNumber=projectNumber,
+            config, projectName=projectName, projectNumber=projectNumber,
             includes=state.env.doxygen["includes"],
             useTags=state.env.doxygen["tags"],
             makeTag=(state.env["packageName"] + ".tag"),
