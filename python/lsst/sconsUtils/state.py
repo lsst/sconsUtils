@@ -50,6 +50,8 @@ def _initOptions():
                            help="Filter out a class of warnings deemed irrelevant"),
     SCons.Script.AddOption('--force', dest='force', action='store_true', default=False,
                            help="Set to force possibly dangerous behaviours")
+    SCons.Script.AddOption('--linkFarmDir', dest='linkFarmDir', action='store', default=None,
+                           help="The directory of symbolic links needed to build and use the package")
     SCons.Script.AddOption('--prefix', dest='prefix', action='store', default=False,
                            help="Specify the install destination")
     SCons.Script.AddOption('--setenv', dest='setenv', action='store_true', default=False,
@@ -244,6 +246,7 @@ def _configureCommon():
                 context.Result(key)
                 return key
         return "unknown"
+
     if env.GetOption("clean") or env.GetOption("no_exec") or env.GetOption("help") :
         env.whichCc = "unknown"         # who cares? We're cleaning/not execing, not building
     else:

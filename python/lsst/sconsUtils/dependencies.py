@@ -50,6 +50,9 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     SCons.Script.Help(state.opts.GenerateHelpText(state.env))
     state.env.installing = filter(lambda t: t == "install", SCons.Script.BUILD_TARGETS) 
     state.env.declaring = filter(lambda t: t == "declare" or t == "current", SCons.Script.BUILD_TARGETS)
+    state.env.linkFarmDir = state.env.GetOption("linkFarmDir")
+    if state.env.linkFarmDir:
+        state.env.linkFarmDir = os.path.abspath(os.path.expanduser(state.env.linkFarmDir))
     prefix = installation.setPrefix(state.env, versionString, eupsProductPath)
     state.env['prefix'] = prefix
     state.env["libDir"] = "%s/lib" % prefix
@@ -70,6 +73,13 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
         "$( ${_concat(INCPREFIX, CPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)}"\
         " ${_concat(INCPREFIX, XCPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)} $)"
     state.env['_SWIGINCFLAGS'] = state.env['_CPPINCFLAGS'].replace("CPPPATH", "SWIGPATH")
+
+    if state.env.linkFarmDir:
+        for d in [state.env.linkFarmDir, "#"]:
+            state.env.Append(CPPPATH=os.path.join(d, "include"))
+            state.env.Append(LIBPATH=os.path.join(d, "lib"))
+        state.env['SWIGPATH'] = state.env['CPPPATH']
+    
     if not state.env.GetOption("clean") and not state.env.GetOption("help"):
         packages.configure(state.env, check=state.env.GetOption("checkDependencies"))
         for target in state.env.libs:
@@ -173,16 +183,14 @@ class Configuration(object):
             self.paths["SWIGPATH"] = [os.path.join(self.root, "python")]
         else:
             self.paths["SWIGPATH"] = []
-        libPath = os.path.join(self.root, "lib")
-        if os.path.isdir(libPath):
-            self.paths["LIBPATH"] = [libPath]
-        else:
-            self.paths["LIBPATH"] = []
-        includePath = os.path.join(self.root, "include")
-        if os.path.isdir(includePath):
-            self.paths["CPPPATH"] = [includePath]
-        else:
-            self.paths["CPPPATH"] = [includePath]
+            
+        for pathName, subDir in [ ("CPPPATH", "include"), ("LIBPATH", "lib"),]:
+            pathDir = os.path.join(self.root, subDir)
+            if not state.env.linkFarmDir and os.path.isdir(pathDir):
+                self.paths[pathName] = [pathDir]
+            else:
+                self.paths[pathName] = []
+
         self.provides = {
             "headers": tuple(headers),
             "libs": tuple(self.libs["main"])
