@@ -8,6 +8,7 @@ import argparse
 
 parser = argparse.ArgumentParser(description="Tell us how scons was invoked")
 parser.add_argument('configFile', type=str, nargs="?", default=None, help='The file with the information we need')
+parser.add_argument('--quiet', '-q', action="store_true", help="Don't generate any output")
 
 args = parser.parse_args()
 dirName = "."
@@ -18,8 +19,9 @@ if not args.configFile:
    args.configFile = os.path.join(dirName, ".sconf_temp", "build.cfg")
 
 if not os.path.exists(args.configFile):
-   print >> sys.stderr, "File %s doesn't exist" % args.configFile
-   sys.exit(1)
+   if not args.quiet:
+      print >> sys.stderr, "File %s doesn't exist" % args.configFile
+      sys.exit(1)
 
 config = ConfigParser.ConfigParser()
 try:
@@ -30,4 +32,5 @@ try:
    
    print "cc=%s opt=%s" % (cc, opt)
 except Exception, e:
-   print >> sys.stderr, "File %s: error %s" % (args.configFile, e)
+   if not args.quiet:
+      print >> sys.stderr, "File %s: error %s" % (args.configFile, e)
