@@ -68,6 +68,9 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     state.env.doxygen = {"tags":[], "includes":[]}
     state.env['CPPPATH'] = []
     state.env['LIBPATH'] = []
+
+    # XCPPPATH is a new variable defined by sconsUtils - it's like CPPPATH, but the headers
+    # found there aren't treated as dependencies.  This can make scons a lot faster.
     state.env['XCPPPATH'] = []
     state.env['_CPPINCFLAGS'] = \
         "$( ${_concat(INCPREFIX, CPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)}"\
@@ -254,9 +257,9 @@ class Configuration(object):
 # Aliased as lsst.sconsUtils.ExternalConfiguration.
 #
 # ExternalConfiguration doesn't assume the package uses SWIG or Doxygen,
-# and tells SCons not to consider header files this package provides as dependencies.
-#
-# This means things SCons won't waste time looking for changes in it every time you build.
+# and tells SCons not to consider header files this package provides as dependencies
+# (by setting XCPPPATH instead of CPPPATH).  This means things SCons won't waste time
+# looking for changes in it every time you build.
 ##
 class ExternalConfiguration(Configuration):
 
