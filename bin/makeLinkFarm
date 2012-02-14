@@ -30,7 +30,7 @@ def linkFiles(dstDir, srcDir, verbose=0, force=False):
             os.symlink(fullSrc, fullDst)
 
 def main():
-    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser = argparse.ArgumentParser(description='Build a link farm to replace long -I/-L argument lists.')
     parser.add_argument('linkFarmDir', type=str, help='The directory to setup as a link farm')
     parser.add_argument('productName', type=str, help='The desired product')
 
