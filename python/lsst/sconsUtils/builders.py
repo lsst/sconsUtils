@@ -94,10 +94,10 @@ def SourcesForSharedLibrary(self, files):
     for ccFile in files:
         if optFilesRe and re.search(optFilesRe, ccFile.abspath):
             self.SharedObject(ccFile, CCFLAGS=CCFLAGS_OPT)
-            ccFile = os.path.splitext(ccFile)[0] + self["SHOBJSUFFIX"]
+            ccFile = os.path.splitext(ccFile.abspath)[0] + self["SHOBJSUFFIX"]
         elif noOptFilesRe and re.search(noOptFilesRe, ccFile.abspath):
             self.SharedObject(ccFile, CCFLAGS=CCFLAGS_NOOPT)
-            ccFile = os.path.splitext(ccFile)[0] + self["SHOBJSUFFIX"]
+            ccFile = os.path.splitext(ccFile.abspath)[0] + self["SHOBJSUFFIX"]
 
         sources.append(ccFile)
 
