@@ -256,7 +256,8 @@ class DoxygenBuilder(object):
             tagNode = SCons.Script.File(self.makeTag)
             self.makeTag = tagNode.abspath
             self.targets.append(tagNode)
-        config = env.Command(target=outConfigNode, source=inConfigNode, action=self.buildConfig)
+        config = env.Command(target=outConfigNode, source=inConfigNode if os.path.exists(config) else None,
+                             action=self.buildConfig)
         env.AlwaysBuild(config)
         doc = env.Command(target=self.targets, source=self.sources,
                           action="doxygen %s" % outConfigNode.abspath)
@@ -348,10 +349,10 @@ class DoxygenBuilder(object):
         #
         # Append the local overrides (usually doxygen.conf.in)
         #
-        inConfigFile = open(source[0].abspath, "r")
-        outConfigFile.write(inConfigFile.read())
+        if len(source) > 0:
+            with open(source[0].abspath, "r") as inConfigFile:
+                outConfigFile.write(inConfigFile.read())
 
-        inConfigFile.close()
         outConfigFile.close()
 
 ##
