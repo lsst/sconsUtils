@@ -30,8 +30,8 @@ if os.path.exists(args.configFile):
    try:
       config.read(args.configFile)
 
-      cc = config.get("Build", cc)
-      opt = config.get("Build", 'opt', opt)
+      cc = config.get("Build", 'cc')
+      opt = config.get("Build", 'opt', 'opt')
    except Exception, e:
       if not args.quiet:
          print >> sys.stderr, "File %s: error %s" % (args.configFile, e)
