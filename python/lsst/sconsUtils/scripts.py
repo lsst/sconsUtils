@@ -124,7 +124,7 @@ class BasicSConstruct(object):
     #  @returns an SCons Environment object (which is also available as lsst.sconsUtils.env).
     ##
     @staticmethod
-    def finish(defaultTargets=("lib", "python", "tests", "version"), subDirList=None, ignoreRegex=None):
+    def finish(defaultTargets=("lib", "python", "tests"), subDirList=None, ignoreRegex=None):
         if ignoreRegex is None:
             ignoreRegex = r"(~$|\.pyc$|^\.svn$|\.o|\.os$)"
         if subDirList is None:
@@ -141,6 +141,8 @@ class BasicSConstruct(object):
         state.env.Requires(state.targets["python"], state.targets["version"])
         state.env.Declare()
         state.env.Default(defaultTargets)
+        if "version" in state.targets:
+            state.env.Default(state.targets["version"])
         state.env.Requires(state.targets["tests"], state.targets["version"])
         state.env.Decider("MD5-timestamp") # if timestamps haven't changed, don't do MD5 checks
 
