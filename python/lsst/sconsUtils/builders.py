@@ -421,8 +421,10 @@ class DoxygenBuilder(object):
 ##
 @memberOf(SConsEnvironment)
 def Doxygen(self, config, **kw):
+    inputs = [d for d in ["#doc", "#include", "#python", "#src"]
+              if os.path.exists(SCons.Script.Entry(d).abspath)]
     defaults = {
-        "inputs": ["#doc", "#include", "#python", "#src"],
+        "inputs": inputs,
         "recursive": True, 
         "patterns": ["*.h", "*.cc", "*.py", "*.dox"],
         "outputs": ["html",],
