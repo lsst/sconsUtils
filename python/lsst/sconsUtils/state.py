@@ -105,7 +105,7 @@ def _initEnvironment():
 
     ourEnv = {}
     for key in ('EUPS_DIR', 'EUPS_PATH', 'PATH' ,'DYLD_LIBRARY_PATH', 'LD_LIBRARY_PATH',
-                'SHELL', 'TMPDIR', 'TEMP', 'TMP', 'EUPS_LOCK_PID'):
+                'SHELL', 'TMPDIR', 'TEMP', 'TMP', 'EUPS_LOCK_PID', 'XPA_PORT'):
         if key in os.environ:
             ourEnv[key] = os.environ[key]
 

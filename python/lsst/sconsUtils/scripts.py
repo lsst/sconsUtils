@@ -49,7 +49,8 @@ class BasicSConstruct(object):
     # a BasicSConstruct instance (which would be useless).
     ##
     def __new__(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None, cleanExt=None,
-                defaultTargets=("lib", "python", "tests"), subDirList=None, ignoreRegex=None,
+                defaultTargets=("lib", "python", "tests", "examples", "doc"),
+                subDirList=None, ignoreRegex=None,
                 versionModuleName="python/lsst/%s/version.py", noCfgFile=False):
         cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt,
                        versionModuleName, noCfgFile=noCfgFile)
@@ -124,7 +125,8 @@ class BasicSConstruct(object):
     #  @returns an SCons Environment object (which is also available as lsst.sconsUtils.env).
     ##
     @staticmethod
-    def finish(defaultTargets=("lib", "python", "tests", "version"), subDirList=None, ignoreRegex=None):
+    def finish(defaultTargets=("lib", "python", "tests", "examples", "doc"),
+               subDirList=None, ignoreRegex=None):
         if ignoreRegex is None:
             ignoreRegex = r"(~$|\.pyc$|^\.svn$|\.o|\.os$)"
         if subDirList is None:
@@ -141,6 +143,8 @@ class BasicSConstruct(object):
         state.env.Requires(state.targets["python"], state.targets["version"])
         state.env.Declare()
         state.env.Default(defaultTargets)
+        if "version" in state.targets:
+            state.env.Default(state.targets["version"])
         state.env.Requires(state.targets["tests"], state.targets["version"])
         state.env.Decider("MD5-timestamp") # if timestamps haven't changed, don't do MD5 checks
 
