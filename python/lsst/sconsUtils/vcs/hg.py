@@ -15,8 +15,15 @@ def guessVersionName():
     """Guess a version name"""
     idents = os.popen("hg id").readline()
     ident = re.split(r"\s+", idents)
+    if len(ident) == 0:
+        raise RuntimeError("Unable to determine hg version")
+
     if re.search(r"\+", ident[0]):
         raise RuntimeError("Error with hg version: uncommitted changes")
+
+    if len(ident) == 1:
+        # Somehow, this is all we've got...
+        return ident[0]
 
     # Prefer tag name to branch name; branch names get printed in parens
     index = 1
