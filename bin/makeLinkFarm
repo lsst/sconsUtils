@@ -30,9 +30,17 @@ def linkFiles(dstDir, srcDir, verbose=0, force=False):
             os.symlink(fullSrc, fullDst)
 
 def main():
-    parser = argparse.ArgumentParser(description='Build a link farm to replace long -I/-L argument lists.')
+    parser = argparse.ArgumentParser(description='''Build a link farm to replace long -I/-L argument lists.
+All the bin, include files, and libraries for all the dependencies of the specified product are linked into
+    linkFarmDir/bin, linkFarmDir/include, or linkFarmDir/lib
+as appropriate.  Note that the setup dependencies are used, so you can say e.g.
+$ setup pipe_tasks
+$ setup -r ~/LSST/afw
+$ makeLinkFarm /tmp/linkFarm pipe_tasks
+creates a link farm for your current selection of products.
+''')
     parser.add_argument('linkFarmDir', type=str, help='The directory to setup as a link farm')
-    parser.add_argument('productName', type=str, help='The desired product')
+    parser.add_argument('productName', type=str, help='The desired product (must be setup)')
 
     parser.add_argument('--force', '-f', action='store_true', help="Force creation of farm even if it exists")
     parser.add_argument('--verbose', '-v', action='count', help="Be chatty")
