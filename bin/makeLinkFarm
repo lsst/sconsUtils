@@ -48,7 +48,7 @@ def main():
     #
     # create the link farm
     #
-    for d in ["include", "lib"]:
+    for d in ["bin", "include", "lib"]:
         d = os.path.join(linkFarmDir, d)
         if not os.path.exists(d):
             os.makedirs(d)
@@ -65,12 +65,18 @@ def main():
         if not pd:                      # no product
             continue
         
+        binDir = os.path.join(pd, "bin")
         incDir = os.path.join(pd, "include")
         libDir = os.path.join(pd, "lib")
 
         if args.verbose:
-            if args.verbose > 1 or os.path.exists(incDir) or os.path.exists(libDir):
+            if args.verbose > 1 or \
+                    os.path.exists(binDir) or os.path.exists(incDir) or os.path.exists(libDir):
                 print "%-15s %s" % (productName, pd)
+
+        if os.path.exists(binDir):
+            fullDstDir = os.path.join(linkFarmDir, "bin")
+            linkFiles(fullDstDir, binDir, args.verbose, args.force)
 
         if os.path.exists(incDir):
             fullDstDir = os.path.join(linkFarmDir, "include")
