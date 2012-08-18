@@ -330,6 +330,7 @@ def _configureCommon():
             "attributes" : "clang pretends to be g++, but complains about g++ attributes such as flatten",
             "char-subscripts" : 'seems innocous enough, and is used by boost',
             "constant-logical-operand" : "Used by eigen 2.0.15. Should get this fixed",
+            "format-security" : "format string is not a string literal",
             "mismatched-tags" : "mixed class and struct.  Used by gcc 4.2 RTL and eigen 2.0.15",
             "parentheses" : "equality comparison with extraneous parentheses",
             "shorten-64-to-32" : "implicit conversion loses integer precision",
