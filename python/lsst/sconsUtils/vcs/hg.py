@@ -13,6 +13,11 @@ import os, re
 #
 def guessVersionName():
     """Guess a version name"""
+    version = "unknown"
+    if not os.path.exists(".hg"):
+        state.log.warn("Cannot guess version without .hg directory; will be set to '%s'." % version)
+        return version
+
     idents = os.popen("hg id").readline()
     ident = re.split(r"\s+", idents)
     if len(ident) == 0:
@@ -35,3 +40,20 @@ def guessVersionName():
         return ident[0]
 
     return ident[index]
+
+def guessFingerprint():
+    """Return (fingerprint, modified) where fingerprint is the repository's SHA1"""
+    fingerprint, modified = "0x0", False
+    if not os.path.exists(".hg"):
+        state.log.warn("Cannot guess fingerprint without .hg directory; will be set to '%s'." % fingerprint)
+    else:
+        idents = os.popen("hg id").readline()
+        ident = re.split(r"\s+", idents)
+        if len(ident) == 0:
+            raise RuntimeError("Unable to determine hg version")
+
+        fingerprint = os.popen("hg ident --id").readline().strip()
+        if re.search(r"\+", ident[0]):
+            modified = True
+
+    return fingerprint, modified
