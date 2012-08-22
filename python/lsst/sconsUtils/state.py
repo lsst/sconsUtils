@@ -236,7 +236,7 @@ def _configureCommon():
         """Return a string identifing the compiler in use"""
         versionStrings = {"Free Software Foundation" : "gcc",
                           "Intel Corporation" : "icc",
-                          "Apple clang version" : "clang"
+                          "clang version" : "clang"
                           }
         context.Message("Checking who built the CC compiler...")
         for string, key in versionStrings.items():
