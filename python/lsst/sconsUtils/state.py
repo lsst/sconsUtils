@@ -62,6 +62,8 @@ def _initOptions():
                            help="Print additional messages for debugging.")
     SCons.Script.AddOption('--traceback', dest='traceback', action='store_true', default=False,
                            help="Print full exception tracebacks when errors occur.")
+    SCons.Script.AddOption('--c++11', dest='cxx11', action='store_true', default=False,
+                           help="Enable C++11 compiler extensions.")
 
 def _initLog():
     from . import utils
@@ -97,7 +99,7 @@ def _initVariables():
         ('version', 'Specify the version to declare', None),
         ('baseversion', 'Specify the current base version', None),
         ('optFiles', "Specify a list of files that SHOULD be optimized", None),
-        ('noOptFiles', "Specify a list of files that should NOT be optimized", None)
+        ('noOptFiles', "Specify a list of files that should NOT be optimized", None),
         )
 
 def _initEnvironment():
@@ -285,6 +287,21 @@ def _configureCommon():
     elif env['profile'] == 'gcov':
         env.Append(CCFLAGS = '--coverage')
         env.Append(LINKFLAGS = '--coverage')
+
+    #
+    # Do we want to use C++11 compiler extensions?
+    #
+    if not (env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec")):
+        if env.GetOption("cxx11"):
+            if env.whichCc == "clang" or env.whichCc == "icc":
+                log.debug("Enabling C++11 extensions")
+                env.Append(CCFLAGS = '-std=c++0x')
+            elif env.whichCc == 'gcc':
+                log.debug("Enabling C++11 extensions")
+                env.Append(CCFLAGS = '-std=gnu++0x')
+            else:
+                log.warn("C++11 extensions could not be enabled for compiler %r" % env.whichCc)
+
     #
     # Is C++'s TR1 available?  If not, use e.g. #include "lsst/tr1/foo.h"
     #
