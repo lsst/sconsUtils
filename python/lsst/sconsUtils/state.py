@@ -294,14 +294,12 @@ def _configureCommon():
     if not (env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec")):
         if env.GetOption("cxx11"):
             if env.whichCc == "clang" or env.whichCc == "icc":
-                log.debug("Enabling C++11 extensions")
                 env.Append(CCFLAGS = '-std=c++0x')
             elif env.whichCc == 'gcc':
-                log.debug("Enabling C++11 extensions")
                 env.Append(CCFLAGS = '-std=gnu++0x')
             else:
-                log.warn("C++11 extensions could not be enabled for compiler %r" % env.whichCc)
-
+                log.fail("C++11 extensions could not be enabled for compiler %r" % env.whichCc)
+            log.info("Enabling C++11 extensions")
     #
     # Is C++'s TR1 available?  If not, use e.g. #include "lsst/tr1/foo.h"
     #
