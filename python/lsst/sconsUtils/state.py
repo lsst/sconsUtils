@@ -62,6 +62,8 @@ def _initOptions():
                            help="Print additional messages for debugging.")
     SCons.Script.AddOption('--traceback', dest='traceback', action='store_true', default=False,
                            help="Print full exception tracebacks when errors occur.")
+    SCons.Script.AddOption('--c++11', dest='cxx11', action='store_true', default=False,
+                           help="Enable C++11 compiler extensions.")
 
 def _initLog():
     from . import utils
@@ -97,7 +99,7 @@ def _initVariables():
         ('version', 'Specify the version to declare', None),
         ('baseversion', 'Specify the current base version', None),
         ('optFiles', "Specify a list of files that SHOULD be optimized", None),
-        ('noOptFiles', "Specify a list of files that should NOT be optimized", None)
+        ('noOptFiles', "Specify a list of files that should NOT be optimized", None),
         )
 
 def _initEnvironment():
@@ -236,7 +238,7 @@ def _configureCommon():
         """Return a string identifing the compiler in use"""
         versionStrings = {"Free Software Foundation" : "gcc",
                           "Intel Corporation" : "icc",
-                          "Apple clang version" : "clang"
+                          "clang version" : "clang"
                           }
         context.Message("Checking who built the CC compiler...")
         for string, key in versionStrings.items():
@@ -285,6 +287,21 @@ def _configureCommon():
     elif env['profile'] == 'gcov':
         env.Append(CCFLAGS = '--coverage')
         env.Append(LINKFLAGS = '--coverage')
+
+    #
+    # Do we want to use C++11 compiler extensions?
+    #
+    if not (env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec")):
+        if env.GetOption("cxx11"):
+            if env.whichCc == "clang":
+                env.Append(CCFLAGS = '-std=c++11')
+            elif env.whichCc == "icc":
+                env.Append(CCFLAGS = '-std=c++0x')
+            elif env.whichCc == 'gcc':
+                env.Append(CCFLAGS = '-std=gnu++0x')
+            else:
+                log.fail("C++11 extensions could not be enabled for compiler %r" % env.whichCc)
+            log.info("Enabling C++11 extensions")
     #
     # Is C++'s TR1 available?  If not, use e.g. #include "lsst/tr1/foo.h"
     #
