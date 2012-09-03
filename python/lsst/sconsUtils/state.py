@@ -293,7 +293,9 @@ def _configureCommon():
     #
     if not (env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec")):
         if env.GetOption("cxx11"):
-            if env.whichCc == "clang" or env.whichCc == "icc":
+            if env.whichCc == "clang":
+                env.Append(CCFLAGS = '-std=c++11')
+            elif env.whichCc == "icc":
                 env.Append(CCFLAGS = '-std=c++0x')
             elif env.whichCc == 'gcc':
                 env.Append(CCFLAGS = '-std=gnu++0x')
