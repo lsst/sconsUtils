@@ -66,7 +66,7 @@ def determineVersion(env, versionString):
     elif versionString.lower() in ("git",):
         # git.
         version = git.guessVersionName()
-    return version
+    return version.replace("/", "_")
 
 ## @brief Set a prefix based on the EUPS_PATH, the product name, and a versionString from cvs or svn.
 def setPrefix(env, versionString, eupsProductPath=None):
