@@ -475,8 +475,12 @@ class PackageTree(object):
         for path in paths:
             filename = os.path.join(path, name + ".cfg")
             if os.path.exists(filename):
+                try:
+                    module = imp.load_source(name + "_cfg", filename)
+                except Exception, e:
+                    state.log.warn("Error loading configuration %s (%s)" % (filename, e))
+                    continue
                 state.log.info("Using configuration for package '%s' at '%s'." % (name, filename))
-                module = imp.load_source(name + "_cfg", filename)
                 if not hasattr(module, "dependencies") or not isinstance(module.dependencies, dict):
                     state.log.warn("Configuration module for package '%s' lacks a dependencies dict." % name)
                     return None
