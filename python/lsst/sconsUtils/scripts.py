@@ -141,7 +141,8 @@ class BasicSConstruct(object):
             state.env.Requires(install, target)
             state.env.Alias(name, target)
         state.env.Requires(state.targets["python"], state.targets["version"])
-        state.env.Declare()
+        declarer = state.env.Declare()
+        state.env.Requires(declarer, install) # Ensure declaration fires after installation available
         state.env.Default(defaultTargets)
         if "version" in state.targets:
             state.env.Default(state.targets["version"])
