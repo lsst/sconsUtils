@@ -477,8 +477,8 @@ class PackageTree(object):
             if os.path.exists(filename):
                 try:
                     module = imp.load_source(name + "_cfg", filename)
-                except:
-                    state.log.warn("Error loading configuration %s" % filename)
+                except Exception, e:
+                    state.log.warn("Error loading configuration %s (%s)" % (filename, e))
                     continue
                 state.log.info("Using configuration for package '%s' at '%s'." % (name, filename))
                 if not hasattr(module, "dependencies") or not isinstance(module.dependencies, dict):
