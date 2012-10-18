@@ -6,11 +6,9 @@
 # the supported svn/python packages
 #
 import os, re
+from .. import state
+from .. import utils
 
-
-#
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-#
 def guessVersionName():
     """Guess a version name"""
     version = "unknown"
@@ -18,7 +16,7 @@ def guessVersionName():
         state.log.warn("Cannot guess version without .hg directory; will be set to '%s'." % version)
         return version
 
-    idents = os.popen("hg id").readline()
+    idents = utils.runExternal("hg id", fatal=True)
     ident = re.split(r"\s+", idents)
     if len(ident) == 0:
         raise RuntimeError("Unable to determine hg version")
@@ -47,12 +45,12 @@ def guessFingerprint():
     if not os.path.exists(".hg"):
         state.log.warn("Cannot guess fingerprint without .hg directory; will be set to '%s'." % fingerprint)
     else:
-        idents = os.popen("hg id").readline()
+        idents = utils.runExternal("hg id", fatal=True)
         ident = re.split(r"\s+", idents)
         if len(ident) == 0:
             raise RuntimeError("Unable to determine hg version")
 
-        fingerprint = os.popen("hg ident --id").readline().strip()
+        fingerprint = utils.runExternal("hg ident --id", fatal=True).strip()
         if re.search(r"\+", ident[0]):
             modified = True
 

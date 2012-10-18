@@ -6,7 +6,7 @@
 
 import sys
 import warnings
-
+import subprocess
 import SCons.Script
 
 ##
@@ -44,6 +44,25 @@ class Log(object):
         sys.stderr.flush()
 
 ##
+#  @brief Safe wrapper for running external programs, reading stdout, and sanitizing error messages.
+##
+def runExternal(cmd, fatal=False, msg=None):
+    if msg is None:
+        try:
+            msg = "Error running %s" % cmd.split()[0]
+        except:
+            msg = "Error running external command"
+    process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    if process.returncode != 0:
+        if fatal:
+            raise RuntimeError("%s: %s" % (msg, stderr))
+        else:
+            from . import state # can't import at module scope due to circular dependency
+            state.log.warn("%s: %s" % (msg, stderr))
+    return stdout
+
+##
 #  @brief A Python decorator that injects functions into a class.
 #
 #  For example:
@@ -72,3 +91,4 @@ def memberOf(cls, name=None):
             setattr(scope, kw["name"], member)
         return member
     return nested
+
