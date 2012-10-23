@@ -45,6 +45,8 @@ class Log(object):
 
 ##
 #  @brief Safe wrapper for running external programs, reading stdout, and sanitizing error messages.
+#
+#  Note that the entire program output is returned, not just a single line.
 ##
 def runExternal(cmd, fatal=False, msg=None):
     if msg is None:
