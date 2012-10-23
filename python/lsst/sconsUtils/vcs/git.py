@@ -32,8 +32,8 @@ def guessFingerprint():
         status = utils.runExternal("git status --porcelain --untracked-files=no", fatal=True)
         if status.strip():
             modified = True
-        status = utils.runExternal("git rev-parse HEAD", fatal=False)
+        output = utils.runExternal("git rev-parse HEAD", fatal=False)
 
-        fingerprint = status.strip()
+        fingerprint = output.strip()
 
     return fingerprint, modified
