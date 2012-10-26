@@ -306,6 +306,7 @@ class BasicSConscript(object):
         state.log.info("SWIG modules for tests: %s" % s(swigFileList))
         state.log.info("Python tests: %s" % s(pyList))
         state.log.info("C++ tests: %s" % s(ccList))
+        state.log.info("Files that will not be built: %s" % noBuildList)
         state.log.info("Ignored tests: %s" % ignoreList)
         control = tests.Control(state.env, ignoreList=ignoreList, args=args, verbose=True)
         for ccTest in ccList:
