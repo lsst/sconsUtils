@@ -279,7 +279,7 @@ class BasicSConscript(object):
               ignoreList=None, noBuildList=None,
               args=None):
         if noBuildList is None:
-            noBuildList = ()
+            noBuildList = []
         if swigNameList is None:
             swigFileList = Glob("*.i")
             swigNameList = [_getFileBase(node) for node in swigFileList]
