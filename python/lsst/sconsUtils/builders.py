@@ -495,7 +495,7 @@ def VersionModule(self, filename, versionString=None):
                 info = tuple(int(v) for v in parts[0].split("."))
                 what = "__version_info__"
                 names.append(what)
-                outFile.write("%s = %r\n" % (what, nfo,))
+                outFile.write("%s = %r\n" % (what, info))
             except ValueError:
                 pass
 
