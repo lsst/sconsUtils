@@ -258,23 +258,28 @@ class BasicSConscript(object):
     #  run when their results might have changed, but may result in them being re-run more often
     #  than necessary.
     #
-    #  @param pyList          A sequence of Python tests to run (including .py extensions).
+    #  @param pyList           A sequence of Python tests to run (including .py extensions).
     #                          Defaults to a *.py glob of the tests directory, minus any
     #                          files corresponding to the SWIG modules in swigFileList.
-    #  @param ccList          A sequence of C++ unit tests to run (including .cc extensions).
+    #  @param ccList           A sequence of C++ unit tests to run (including .cc extensions).
     #                          Defaults to a *.cc glob of the tests directory, minus any
     #                          files that end with *_wrap.cc and files present in swigSrc.
-    #  @param swigNameList        A sequence of SWIG modules to build (NOT including .i extensions).
+    #  @param swigNameList     A sequence of SWIG modules to build (NOT including .i extensions).
     #  @param swigSrc          Additional source files to be compiled into SWIG modules, as a
     #                          dictionary; each key must be an entry in swigNameList, and each
     #                          value a list of additional source files.
     #  @param ignoreList       List of ignored tests to be passed to tests.Control (note that
     #                          ignored tests will be built, but not run).
+    #  @param nobuildList      List of tests that should not even be built.
     #  @param args             A dictionary of program arguments for tests, passed directly
     #                          to tests.Control.
     ##
     @staticmethod
-    def tests(pyList=None, ccList=None, swigNameList=None, swigSrc=None, ignoreList=None, args=None):
+    def tests(pyList=None, ccList=None, swigNameList=None, swigSrc=None,
+              ignoreList=None, noBuildList=None,
+              args=None):
+        if noBuildList is None:
+            noBuildList = []
         if swigNameList is None:
             swigFileList = Glob("*.i")
             swigNameList = [_getFileBase(node) for node in swigFileList]
@@ -288,16 +293,20 @@ class BasicSConscript(object):
             allSwigSrc.update(str(element) for element in src)
             src.append(node)
         if pyList is None:
-            pyList = [node for node in Glob("*.py") if _getFileBase(node) not in swigNameList]
+            pyList = [node for node in Glob("*.py")
+                      if _getFileBase(node) not in swigNameList
+                      and os.path.basename(str(node)) not in noBuildList]
         if ccList is None:
             ccList = [node for node in Glob("*.cc") 
-                       if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc]
+                      if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc
+                      and os.path.basename(str(node)) not in noBuildList]
         if ignoreList is None:
             ignoreList = []
         s = lambda l: [str(i) for i in l]
         state.log.info("SWIG modules for tests: %s" % s(swigFileList))
         state.log.info("Python tests: %s" % s(pyList))
         state.log.info("C++ tests: %s" % s(ccList))
+        state.log.info("Files that will not be built: %s" % noBuildList)
         state.log.info("Ignored tests: %s" % ignoreList)
         control = tests.Control(state.env, ignoreList=ignoreList, args=args, verbose=True)
         for ccTest in ccList:

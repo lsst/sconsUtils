@@ -68,6 +68,22 @@ def determineVersion(env, versionString):
         version = git.guessVersionName()
     return version.replace("/", "_")
 
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+## @brief Return a unique fingerprint for a version (e.g. an SHA1); return None if unavailable
+def getFingerprint(versionString):
+    if versionString.lower() in ("hg", "mercurial"):
+        fingerprint, modified = hg.guessFingerprint()
+    elif versionString.lower() in ("git",):
+        fingerprint, modified = git.guessFingerprint()
+    else:
+        fingerprint, modified = None, False
+
+    if fingerprint and modified:
+        fingerprint += " *"
+
+    return fingerprint
+
 ## @brief Set a prefix based on the EUPS_PATH, the product name, and a versionString from cvs or svn.
 def setPrefix(env, versionString, eupsProductPath=None):
     try:
