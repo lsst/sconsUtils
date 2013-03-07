@@ -490,7 +490,9 @@ class PackageTree(object):
                 else:
                     module.config.addCustomTests(self.customTests)
                 return module
-        state.log.info("Failed to import configuration for optional package '%s'." % name)
+        state.log.info("Failed to import configuration for package '%s'; search path was:" % name)
+        for path in paths:
+            state.log.info("    %r" % path)
 
     def _recurse(self, name):
         """Recursively load a dependency."""
