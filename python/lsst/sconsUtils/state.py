@@ -330,8 +330,6 @@ def _configureCommon():
     if env['opt']:
         env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-O(\d|s)$", o)]
         env.MergeFlags('-O%d' % int(env['opt']))
-        if env.whichCc == "clang":
-            env.Append(LINKFLAGS = ['-lpthread'])
     #
     # Set compiler-specific warning flags.
     #
