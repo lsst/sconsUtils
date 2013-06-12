@@ -502,8 +502,8 @@ def VersionModule(self, filename, versionString=None):
             if len(parts) > 1:
                 try:
                     what = "__rebuild_version__"
-                    names.append(what)
                     outFile.write("%s = %s\n" % (what, int(parts[1])))
+                    names.append(what)
                 except ValueError:
                     pass
 
