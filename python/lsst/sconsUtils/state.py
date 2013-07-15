@@ -393,6 +393,9 @@ def _saveState():
     RHL how to get this back from .sconsign.dblite
     """
 
+    if env.GetOption("clean"):
+        return
+
     import ConfigParser
 
     config = ConfigParser.ConfigParser()
@@ -406,7 +409,7 @@ def _saveState():
         with open(confFile, 'wb') as configfile:
             config.write(configfile)
     except Exception, e:
-        print "RHL unexpected exception in _saveState: %s" % e        
+        log.warn("RHL unexpected exception in _saveState: %s" % e)
         
 _initOptions()
 _initLog()
