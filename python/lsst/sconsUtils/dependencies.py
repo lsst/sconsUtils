@@ -143,10 +143,13 @@ class Configuration(object):
     # @param hasDoxygenInclude   If True, the package provides a Doxygen include file with the
     #                            name "<root>/doc/<name>.inc".
     # @param hasDoxygenTag       If True, the package generates a Doxygen TAG file.
+    # @param includeFileDirs     List of directories that should be searched for include files
+    # @param libFileDirs         List of directories that should be searched for libraries
     # @param eupsProduct         Name of the EUPS product for the package, if different from the name of the
     #                            .cfg file.
     ##
     def __init__(self, cfgFile, headers=(), libs=None, hasSwigFiles=True,
+                 includeFileDirs=["include",], libFileDirs=["lib",],
                  hasDoxygenInclude=False, hasDoxygenTag=True, eupsProduct=None):
         self.name, self.root = self.parseFilename(cfgFile)
         if eupsProduct is None:
@@ -186,13 +189,18 @@ class Configuration(object):
             self.paths["SWIGPATH"] = [os.path.join(self.root, "python")]
         else:
             self.paths["SWIGPATH"] = []
+
+        for pathName, subDirs in [("CPPPATH", includeFileDirs),
+                                  ("LIBPATH", libFileDirs),]:
+            self.paths[pathName] = []
+
+            if state.env.linkFarmDir:
+                continue
             
-        for pathName, subDir in [ ("CPPPATH", "include"), ("LIBPATH", "lib"),]:
-            pathDir = os.path.join(self.root, subDir)
-            if not state.env.linkFarmDir and os.path.isdir(pathDir):
-                self.paths[pathName] = [pathDir]
-            else:
-                self.paths[pathName] = []
+            for subDir in subDirs:
+                pathDir = os.path.join(self.root, subDir)
+                if os.path.isdir(pathDir):
+                    self.paths[pathName].append(pathDir)
 
         self.provides = {
             "headers": tuple(headers),
