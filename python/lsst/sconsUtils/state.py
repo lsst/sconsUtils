@@ -409,7 +409,7 @@ def _saveState():
         with open(confFile, 'wb') as configfile:
             config.write(configfile)
     except Exception, e:
-        log.warn("RHL unexpected exception in _saveState: %s" % e)
+        log.warn("Unexpected exception in _saveState: %s" % e)
         
 _initOptions()
 _initLog()
