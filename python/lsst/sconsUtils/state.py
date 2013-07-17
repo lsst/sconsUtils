@@ -293,6 +293,9 @@ def _configureCommon():
     # Do we want to use C++11 compiler extensions?
     #
     if not (env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec")):
+        if env.whichCc == 'gcc':
+            env.Append(CFLAGS = '-std=c99')
+
         if env.GetOption("cxx11"):
             if env.whichCc == "clang":
                 env.Append(CCFLAGS = '-std=c++11')
