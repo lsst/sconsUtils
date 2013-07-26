@@ -153,7 +153,7 @@ def filesToTag(root=None, fileRegex=None, ignoreDirs=None):
 def BuildETags(env, root=None, fileRegex=None, ignoreDirs=None):
     toTag = filesToTag(root, fileRegex, ignoreDirs)
     if toTag:
-        return env.Command("TAGS", files, "etags -o $TARGET $SOURCES")
+        return env.Command("TAGS", toTag, "etags -o $TARGET $SOURCES")
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
