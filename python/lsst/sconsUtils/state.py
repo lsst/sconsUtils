@@ -268,6 +268,9 @@ def _configureCommon():
                 CC = env['cc']
                 CXX = re.sub(r"^clang", "clang++", CC)
                 env.Append(CXXFLAGS = ["-ftemplate-depth-256"])
+            elif re.search(r"^cc( |$)", env['cc']):
+                CC = env['cc']
+                CXX = re.sub(r"^cc", "c++", CC)
             else:
                 utils.log.fail("Unrecognised compiler:%s" % env['cc'])
             env0 = SCons.Script.Environment()
