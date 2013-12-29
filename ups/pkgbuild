@@ -1,7 +1,0 @@
-#!/bin/bash
-
-. "$EUPS_DIR/lib/eupspkg/functions"
-
-REPOSITORY="git://git.lsstcorp.org/LSST/DMS/devenv/$PRODUCT.git"
-
-"$@"
