@@ -117,7 +117,10 @@ def _initEnvironment():
         m = re.search(r"^(?P<name>\w+)_DIR(?P<extra>_EXTRA)?$", k)
         if not m: continue
         cfgPath.append(os.path.join(os.environ[k], "ups"))
-        if not m.group("extra"):
+        if m.group("extra"):
+            cfgPath.append(os.environ[k])
+        else:
+            cfgPath.append(os.path.join(os.environ[k], "ups"))
             p = m.group("name")
             import eups
             varname = eups.utils.setupEnvNameFor(p)
@@ -264,6 +267,7 @@ def _configureCommon():
             elif re.search(r"^clang( |$)", env['cc']):
                 CC = env['cc']
                 CXX = re.sub(r"^clang", "clang++", CC)
+                env.Append(CXXFLAGS = ["-ftemplate-depth-256"])
             else:
                 utils.log.fail("Unrecognised compiler:%s" % env['cc'])
             env0 = SCons.Script.Environment()
