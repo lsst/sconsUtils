@@ -296,7 +296,7 @@ def InstallEups(env, dest, files=[], presetup=""):
         files = [str(f) for f in files] # in case the user used Glob not glob.glob
         files += glob.glob(os.path.join("ups", "*.build")) + glob.glob(os.path.join("ups","*.table")) \
             + glob.glob(os.path.join("ups", "*.cfg")) \
-            + glob.glob(os.path.join("ups", "pkgbuild"))
+            + glob.glob(os.path.join("ups", "eupspkg*"))
         files = list(set(files))        # remove duplicates
 
         buildFiles = filter(lambda f: re.search(r"\.build$", f), files)
@@ -307,7 +307,7 @@ def InstallEups(env, dest, files=[], presetup=""):
         table_obj = env.Install(dest, tableFiles)
         acts += table_obj
 
-        eupspkgFiles = filter(lambda f: f == "pkgbuild", files)
+        eupspkgFiles = filter(lambda f: re.search(r"^eupspkg", f), files)
         eupspkg_obj = env.Install(dest, eupspkgFiles)
         acts += eupspkg_obj
 
