@@ -449,11 +449,11 @@ class PackageTree(object):
             self.primary.config.configure(conf, packages=self.packages, check=False, build=True)
         env.AppendUnique(SWIGPATH=env["CPPPATH"])
         env.AppendUnique(XSWIGPATH=env["XCPPPATH"])
-	# reverse the order of libraries in env.libs, so libraries that fulfil a dependency
-	# of another appear after it. required by the linker to successfully resolve symbols
-	# in static libraries.
-	for target in env.libs:
-		env.libs[target].reverse()
+        # reverse the order of libraries in env.libs, so libraries that fulfill a dependency
+        # of another appear after it. required by the linker to successfully resolve symbols
+        # in static libraries.
+        for target in env.libs:
+                env.libs[target].reverse()
         env = conf.Finish()
         return env
 
