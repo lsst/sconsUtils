@@ -285,8 +285,8 @@ def _configureCommon():
     #
     ARCHFLAGS = os.environ.get("ARCHFLAGS", env.get('archflags'))
     if ARCHFLAGS:
-        env.Append(CCFLAGS = [ARCHFLAGS])
-        env.Append(LINKFLAGS = [ARCHFLAGS])
+        env.Append(CCFLAGS = [ARCHFLAGS.split()])
+        env.Append(LINKFLAGS = [ARCHFLAGS.split()])
     # We'll add warning and optimisation options last
     if env['profile'] == '1' or env['profile'] == "pg":
         env.Append(CCFLAGS = ['-pg'])
