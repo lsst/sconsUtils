@@ -221,7 +221,6 @@ class DirectoryInstaller(object):
         self.recursive = recursive
 
     def __call__(self, target, source, env):
-        results = []
         prefix = os.path.abspath(os.path.join(target[0].abspath, ".."))
         destpath = os.path.join(target[0].abspath)
         if not os.path.isdir(destpath):
