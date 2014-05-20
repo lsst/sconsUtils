@@ -13,7 +13,6 @@
 ##
 
 import SCons.Script
-import sys
 import os.path
 import re
 
@@ -136,13 +135,11 @@ def _initEnvironment():
     #
     # Add any values marked as export=FOO=XXX[,GOO=YYY] to ourEnv
     #
-    opt = "export"
-    if SCons.Script.ARGUMENTS.has_key(opt):
-        for kv in ARGUMENTS[opt].split(','):
+    exportVal = SCons.Script.ARGUMENTS.pop("export", None)
+    if exportVal:
+        for kv in exportVal.split(','):
             k, v = kv.split('=')
             ourEnv[k] = v
-
-        del SCons.Script.ARGUMENTS[opt]
     global env
     sconsUtilsPath, thisFile = os.path.split(__file__)
     toolPath = os.path.join(sconsUtilsPath, "tools")
@@ -271,7 +268,7 @@ def _configureCommon():
                 CC = env['cc']
                 CXX = re.sub(r"^cc", "c++", CC)
             else:
-                utils.log.fail("Unrecognised compiler:%s" % env['cc'])
+                log.fail("Unrecognised compiler:%s" % env['cc'])
             env0 = SCons.Script.Environment()
             if CC and env['CC'] == env0['CC']:
                 env['CC'] = CC

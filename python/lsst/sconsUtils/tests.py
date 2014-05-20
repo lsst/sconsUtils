@@ -21,7 +21,7 @@ class Control(object):
     ##
     #  @brief Create an object to run tests
     #
-    #  @param               An SCons Environment (almost always lsst.sconsUtils.env).
+    #  @param env           An SCons Environment (almost always lsst.sconsUtils.env).
     #  @param ignoreList    A list of tests that should NOT be run --- useful in conjunction
     #                       with glob patterns.  If a file is listed as "@fileName", the @ is stripped and
     #                       we don't bother to check if fileName exists (useful for machine-generated files).

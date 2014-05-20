@@ -467,7 +467,7 @@ def VersionModule(self, filename, versionString=None):
     def makeVersionModule(target, source, env):
         try:
             version = determineVersion(state.env, versionString)
-        except RuntimeError as err:
+        except RuntimeError:
             version = "unknown"
         parts = version.split("+")
 
