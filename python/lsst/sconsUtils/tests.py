@@ -160,18 +160,18 @@ class Control(object):
             @printf "%%s" 'running ${SOURCES}... ';
             @echo $SOURCES %s > $TARGET; echo >> $TARGET;
             @if %s $SOURCES %s >> $TARGET 2>&1; then \
+               if ! %s; then mv $TARGET ${TARGET}.failed; fi; \
                echo "%s"; \
-               if ! %s; then mv $TARGET ${TARGET}.failed; exit 1; fi; \
             else \
+               if ! %s; then mv $TARGET ${TARGET}.failed; fi; \
                echo "%s"; \
-               if ! %s; then mv $TARGET ${TARGET}.failed; exit 1; fi; \
             fi;
-            """ % (expandedArgs, interpreter, expandedArgs, passedMsg, should_pass, failedMsg, should_fail))
+            """ % (expandedArgs, interpreter, expandedArgs, should_pass, passedMsg, should_fail, failedMsg))
 
             targets.extend(result)
 
             self._env.Alias(os.path.basename(target), target)
 
             self._env.Clean(target, self._tmpDir)
-        
+
         return targets

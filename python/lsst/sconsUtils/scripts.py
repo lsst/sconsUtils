@@ -148,6 +148,28 @@ class BasicSConstruct(object):
             state.env.Default(state.targets["version"])
         state.env.Requires(state.targets["tests"], state.targets["version"])
         state.env.Decider("MD5-timestamp") # if timestamps haven't changed, don't do MD5 checks
+        #
+        # Just before scons exits check if any of the tests failed.
+        #
+        def __checkTestStatus( target, source, env ):
+            """See if any tests failed"""
+            import glob
+            nFailed = len(glob.glob(os.path.join(os.getcwd(), "tests", ".tests", "*.failed")))
+            if nFailed > 0:
+                raise SCons.Errors.BuildError(errstr="%d tests failed" % nFailed)
+
+        checkTestStatus_command = state.env.Command('checkTestStatus', [], __checkTestStatus)
+
+        state.env.Depends(checkTestStatus_command, BUILD_TARGETS) # this is why the check runs last
+        state.env.Default(checkTestStatus_command)
+        state.env.AlwaysBuild(checkTestStatus_command)
+        #
+        # We don't want to clutter up the output with our check for failed tests
+        #
+        def print_cmd_line(s, target, source, env):
+            if not s.startswith("__checkTestStatus"):
+                sys.stdout.write(s + "\n")
+        state.env['PRINT_CMD_LINE_FUNC'] = print_cmd_line
 
 ##
 # @brief A scope-only class for SConscript-replacement convenience functions.
