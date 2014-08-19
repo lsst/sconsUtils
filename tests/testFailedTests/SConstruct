@@ -1,0 +1,7 @@
+# -*- python -*-
+#
+# Setup our environment
+#
+from lsst.sconsUtils import scripts, targets, env
+scripts.BasicSConstruct.initialize(packageName="testFailedTest")
+scripts.BasicSConstruct.finish()
