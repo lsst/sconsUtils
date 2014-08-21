@@ -149,28 +149,25 @@ class BasicSConstruct(object):
         state.env.Requires(state.targets["tests"], state.targets["version"])
         state.env.Decider("MD5-timestamp") # if timestamps haven't changed, don't do MD5 checks
         #
-        # Just before scons exits check if any of the tests failed.
+        # Check if any of the tests failed by looking for *.failed files.
+        # Perform this test just before scons exits
+        #
+        # N.b. the test is written in sh not python as then we can use @ to suppress output
         #
         if "tests" in [str(t) for t in BUILD_TARGETS]:
-            def __checkTestStatus( target, source, env ):
-                """See if any tests failed"""
-                import glob
-                nFailed = len(glob.glob(os.path.join(os.getcwd(), "tests", ".tests", "*.failed")))
-                if nFailed > 0:
-                    raise SCons.Errors.BuildError(errstr="%d tests failed" % nFailed)
-
-            checkTestStatus_command = state.env.Command('checkTestStatus', [], __checkTestStatus)
+            testsDir = os.path.join(os.getcwd(), "tests", ".tests")
+            checkTestStatus_command = state.env.Command('checkTestStatus', [], """
+                @ if [ -d %s ]; then \
+                      nfail=`find %s -name \*.failed | wc -l | sed -e 's/ //g'`; \
+                      if [ $$nfail -gt 0 ]; then \
+                          echo "$$nfail tests failed" >&2; exit 1; \
+                      fi; \
+                  fi; \
+            """ % (testsDir, testsDir))
 
             state.env.Depends(checkTestStatus_command, BUILD_TARGETS) # this is why the check runs last
             BUILD_TARGETS.extend(checkTestStatus_command)
             state.env.AlwaysBuild(checkTestStatus_command)
-            #
-            # We don't want to clutter up the output with our check for failed tests
-            #
-            def print_cmd_line(s, target, source, env):
-                if not s.startswith("__checkTestStatus"):
-                    sys.stdout.write(s + "\n")
-            state.env['PRINT_CMD_LINE_FUNC'] = print_cmd_line
 
 ##
 # @brief A scope-only class for SConscript-replacement convenience functions.
