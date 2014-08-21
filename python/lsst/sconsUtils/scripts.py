@@ -148,6 +148,26 @@ class BasicSConstruct(object):
             state.env.Default(state.targets["version"])
         state.env.Requires(state.targets["tests"], state.targets["version"])
         state.env.Decider("MD5-timestamp") # if timestamps haven't changed, don't do MD5 checks
+        #
+        # Check if any of the tests failed by looking for *.failed files.
+        # Perform this test just before scons exits
+        #
+        # N.b. the test is written in sh not python as then we can use @ to suppress output
+        #
+        if "tests" in [str(t) for t in BUILD_TARGETS]:
+            testsDir = os.path.join(os.getcwd(), "tests", ".tests")
+            checkTestStatus_command = state.env.Command('checkTestStatus', [], """
+                @ if [ -d %s ]; then \
+                      nfail=`find %s -name \*.failed | wc -l | sed -e 's/ //g'`; \
+                      if [ $$nfail -gt 0 ]; then \
+                          echo "$$nfail tests failed" >&2; exit 1; \
+                      fi; \
+                  fi; \
+            """ % (testsDir, testsDir))
+
+            state.env.Depends(checkTestStatus_command, BUILD_TARGETS) # this is why the check runs last
+            BUILD_TARGETS.extend(checkTestStatus_command)
+            state.env.AlwaysBuild(checkTestStatus_command)
 
 ##
 # @brief A scope-only class for SConscript-replacement convenience functions.

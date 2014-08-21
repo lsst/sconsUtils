@@ -173,5 +173,5 @@ class Control(object):
             self._env.Alias(os.path.basename(target), target)
 
             self._env.Clean(target, self._tmpDir)
-        
+
         return targets

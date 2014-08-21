@@ -1,0 +1,17 @@
+# -*- python -*-
+import os
+import shutil
+import subprocess
+import eups
+from lsst.sconsUtils import env, scripts, targets
+
+scripts.BasicSConscript.tests()
+
+if env.GetOption('clean'):
+    dirName = os.path.join(eups.productDir("sconsUtils"), "tests", "testFailedTests")
+    subprocess.call("cd %s; setup -r .; scons -Qc > /dev/null 2>&1" % dirName, shell=True)
+
+    try:
+        shutil.rmtree(os.path.join(dirName, "python"))
+    except OSError:
+        pass

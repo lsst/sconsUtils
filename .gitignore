@@ -10,3 +10,6 @@ python/lsst/sconsUtils/version.py
 doc/html
 doc/doxygen.conf
 doc/sconsUtils.tag
+tests/.tests
+tests/testFailedTests/python
+tests/testFailedTests/tests/.tests
