@@ -15,6 +15,7 @@
 import SCons.Script
 import os.path
 import re
+import eupsForScons
 
 SCons.Script.EnsureSConsVersion(2, 1, 0)
 
@@ -121,8 +122,7 @@ def _initEnvironment():
         else:
             cfgPath.append(os.path.join(os.environ[k], "ups"))
             p = m.group("name")
-            import eups
-            varname = eups.utils.setupEnvNameFor(p)
+            varname = eupsForScons.utils.setupEnvNameFor(p)
             if os.environ.has_key(varname):
                 ourEnv[varname] = os.environ[varname]
                 ourEnv[k] = os.environ[k]
@@ -219,15 +219,7 @@ def _initEnvironment():
     #
     # We need a binary name, not just "Posix"
     #
-    try:
-        import eups
-        env['eupsFlavor'] = eups.flavor()
-    except:
-        log.warn("Unable to import eups; guessing flavor")
-        if env['PLATFORM'] == "posix":
-            env['eupsFlavor'] = os.uname()[0].title()
-        else:
-            env['eupsFlavor'] = env['PLATFORM'].title()
+    env['eupsFlavor'] = eupsForScons.flavor()
 
 def _configureCommon():
     """Configuration checks for the compiler, platform, and standard libraries."""
