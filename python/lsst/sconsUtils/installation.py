@@ -315,13 +315,13 @@ def InstallEups(env, dest, files=[], presetup=""):
 
         try:
             import eups.lock
-        except ImportError:
-            state.log.warn("Unable to import eups; not locking")
 
             path = eups.Eups.setEupsPath()
             if path:
                 locks = eups.lock.takeLocks("setup", path, eups.lock.LOCK_SH)
                 env["ENV"]["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", "-1")
+        except ImportError:
+            state.log.warn("Unable to import eups; not locking")
 
         for i in build_obj:
             env.AlwaysBuild(i)
