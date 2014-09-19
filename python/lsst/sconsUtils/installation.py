@@ -11,7 +11,6 @@ import shutil
 
 import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
-import eups.lock
 
 from .vcs import svn
 from .vcs import hg
@@ -314,10 +313,15 @@ def InstallEups(env, dest, files=[], presetup=""):
         misc_obj = env.Install(dest, miscFiles)
         acts += misc_obj
 
-        path = eups.Eups.setEupsPath()
-        if path:
-            locks = eups.lock.takeLocks("setup", path, eups.lock.LOCK_SH)
-            env["ENV"]["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", "-1")
+        try:
+            import eups.lock
+
+            path = eups.Eups.setEupsPath()
+            if path:
+                locks = eups.lock.takeLocks("setup", path, eups.lock.LOCK_SH)
+                env["ENV"]["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", "-1")
+        except ImportError:
+            state.log.warn("Unable to import eups; not locking")
 
         for i in build_obj:
             env.AlwaysBuild(i)

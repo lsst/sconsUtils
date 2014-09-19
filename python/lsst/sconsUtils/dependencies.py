@@ -12,7 +12,7 @@ import collections
 import imp
 import sys
 import SCons.Script
-import eups
+import eupsForScons
 from SCons.Script.SConscript import SConsEnvironment
 
 from . import installation
@@ -117,9 +117,9 @@ class Configuration(object):
 
     @staticmethod
     def getEupsData(eupsProduct):
-        version, eupsPathDir, productDir, table, flavor = eups.Eups().findSetupVersion(eupsProduct)
+        version, eupsPathDir, productDir, table, flavor = eupsForScons.Eups().findSetupVersion(eupsProduct)
         if productDir is None:
-            productDir = eups.productDir(eupsProduct)
+            productDir = eupsForScons.productDir(eupsProduct)
         return version, productDir    
 
     ##

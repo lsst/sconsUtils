@@ -210,19 +210,19 @@ def CleanTree(self, files, dir=".", recurse=True, verbose=False):
 ## @brief Return a product's PRODUCT_DIR, or None
 @memberOf(SConsEnvironment)
 def ProductDir(env, product):
-    import eups
+    import eupsForScons
     global _productDirs
     try:
         _productDirs
     except:
         try:
-            _productDirs = eups.productDir()
+            _productDirs = eupsForScons.productDir()
         except TypeError:               # old version of eups (pre r18588)
             _productDirs = None
     if _productDirs:
         pdir = _productDirs.get(product)
     else:
-        pdir = eups.productDir(product)
+        pdir = eupsForScons.productDir(product)
     if pdir == "none":
         pdir = None
     return pdir
