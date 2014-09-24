@@ -47,9 +47,15 @@ class SconsUtilsTestCase(unittest.TestCase):
         pass
 
     def testCheckErrorCode(self):
-        self.assertTrue(subprocess.call("""cd %s/tests/testFailedTests
+        self.assertTrue(subprocess.call("""
+                                           . %s/bin/setups.sh
+                                           cd %s/tests/testFailedTests
                                            setup -r .
-                                           scons > /dev/null 2>&1""" % eups.productDir("sconsUtils"),
+                                           scons > /dev/null 2>&1
+        """ % (
+                                               eups.productDir("eups"),
+                                               eups.productDir("sconsUtils")
+                                           ),
                                         shell=True), "Failed to detect failed tests")
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
