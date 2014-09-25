@@ -11,10 +11,10 @@
 # These are all initialized when the module is imported, but may be modified by other code
 # (particularly dependencies.configure()).
 ##
+import os
+import re
 
 import SCons.Script
-import os.path
-import re
 import eupsForScons
 
 SCons.Script.EnsureSConsVersion(2, 1, 0)
@@ -227,20 +227,27 @@ def _configureCommon():
     # Is the C compiler really gcc/g++?
     #
     def ClassifyCc(context):
-        """Return a string identifing the compiler in use"""
-        versionStrings = {"Free Software Foundation" : "gcc",
-                          "Intel Corporation" : "icc",
-                          "clang version" : "clang",
-                          "LLVM" : "clang",
-                          }
+        """Return a pair of string identifying the compiler in use
+
+        @return (compiler, version) as a pair of strings, or ("unknown", "unknown") if unknown
+        """
+        versionNameList = (
+            (r"\(GCC\) +([0-9.a-zA-Z]+) ", "gcc"),
+            (r"LLVM +version +([0-9.a-zA-Z]+) ", "clang"), # clang on Mac
+            (r"clang +version +([0-9.a-zA-Z]+) ", "clang"), # clang on linux
+            (r"\(ICC\) +([0-9.a-zA-Z]+) ", "icc"),
+        )
+
         context.Message("Checking who built the CC compiler...")
-        for string, key in versionStrings.items():
-            action = r"$CC --version | grep '%s' > $TARGET" % string
-            result = context.TryAction(SCons.Script.Action(action))
-            if result[0]:
-                context.Result(key)
-                return key
-        return "unknown"
+        result = context.TryAction(SCons.Script.Action(r"$CC --version > $TARGET"))
+        ccVersDumpOK, ccVersDump = result[0:2]
+        if ccVersDumpOK:
+            for reStr, compilerName in versionNameList:
+                match = re.search(reStr, ccVersDump)
+                if match:
+                    compilerVersion = match.groups()[0]
+                    return (compilerName, compilerVersion)
+        return ("unknown", "unknown")
 
     if env.GetOption("clean") or env.GetOption("no_exec") or env.GetOption("help") :
         env.whichCc = "unknown"         # who cares? We're cleaning/not execing, not building
@@ -267,7 +274,8 @@ def _configureCommon():
             if CC and env['CXX'] == env0['CXX']:
                 env['CXX'] = CXX
         conf = env.Configure(custom_tests = {'ClassifyCc' : ClassifyCc,})
-        env.whichCc = conf.ClassifyCc()
+        env.whichCc, env.ccVersion = conf.ClassifyCc()
+        log.info("CC is %s version %s" % (env.whichCc, env.ccVersion))
         conf.Finish()
     #
     # Compiler flags; CCFLAGS => C and C++
@@ -291,20 +299,27 @@ def _configureCommon():
         if env.whichCc == 'gcc':
             env.Append(CFLAGS = '-std=c99')
 
-        if env.GetOption("cxx11"):
+        if env.GetOption("cxx11"): # command-line argument c++11
             if env.whichCc == "clang":
-                env.Append(CCFLAGS = '-std=c++11')
+                env.Append(CXXFLAGS = '-std=c++11')
             elif env.whichCc == "icc":
-                env.Append(CCFLAGS = '-std=c++0x')
+                env.Append(CXXFLAGS = '-std=c++0x')
             elif env.whichCc == 'gcc':
-                env.Append(CCFLAGS = '-std=gnu++0x')
+                versMajor, versMinor = [int(val) for val in env.ccVersion.split(".")[0:2]]
+                if versMajor == 4 and versMinor <= 6:
+                    # gcc 4.6 and earlier do not support -std=c++11
+                    env.Append(CXXFLAGS = '-std=c++0x')
+                else:
+                    # gcc 4.7 and later support -std=c++11 and may use c++0x to mean c++14
+                    # (gcc 3 is not supported, so let it fail)
+                    env.Append(CXXFLAGS = '-std=c++11')
             else:
                 log.fail("C++11 extensions could not be enabled for compiler %r" % env.whichCc)
             log.info("Enabling C++11 extensions")
         else:
             if env.whichCc == 'clang':
                 # make clang's template depth for C++98/03 equal to GCC's (900)
-	        env.Append(CCFLAGS = ["-ftemplate-depth-900"])
+                env.Append(CCFLAGS = ["-ftemplate-depth-900"])
 
     #
     # Is C++'s TR1 available?  If not, use e.g. #include "lsst/tr1/foo.h"
