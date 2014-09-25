@@ -11,12 +11,11 @@
 # These are all initialized when the module is imported, but may be modified by other code
 # (particularly dependencies.configure()).
 ##
-
-import SCons.Script
 import os
 import re
+
+import SCons.Script
 import eupsForScons
-import subprocess
 
 SCons.Script.EnsureSConsVersion(2, 1, 0)
 
@@ -240,13 +239,14 @@ def _configureCommon():
         )
 
         context.Message("Checking who built the CC compiler...")
-        ccVal = os.environ["CC"]
-        ccVersDump = subprocess.check_output((ccVal, "--version"))
-        for reStr, compilerName in versionNameList:
-            match = re.search(reStr, ccVersDump)
-            if match:
-                compilerVersion = match.groups()[0]
-                return (compilerName, compilerVersion)
+        result = context.TryAction(SCons.Script.Action(r"$CC --version > $TARGET"))
+        ccVersDumpOK, ccVersDump = result[0:2]
+        if ccVersDumpOK:
+            for reStr, compilerName in versionNameList:
+                match = re.search(reStr, ccVersDump)
+                if match:
+                    compilerVersion = match.groups()[0]
+                    return (compilerName, compilerVersion)
         return ("unknown", "unknown")
 
     if env.GetOption("clean") or env.GetOption("no_exec") or env.GetOption("help") :
@@ -306,9 +306,12 @@ def _configureCommon():
                 env.Append(CXXFLAGS = '-std=c++0x')
             elif env.whichCc == 'gcc':
                 versMajor, versMinor = [int(val) for val in env.ccVersion.split(".")[0:2]]
-                if versMajor == 4 and versMinor < 6:
+                if versMajor == 4 and versMinor <= 6:
+                    # gcc 4.6 and earlier do not support -std=c++11
                     env.Append(CXXFLAGS = '-std=c++0x')
                 else:
+                    # gcc 4.7 and later support -std=c++11 and may use c++0x to mean c++14
+                    # (gcc 3 is not supported, so let it fail)
                     env.Append(CXXFLAGS = '-std=c++11')
             else:
                 log.fail("C++11 extensions could not be enabled for compiler %r" % env.whichCc)
