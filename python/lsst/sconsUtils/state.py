@@ -300,6 +300,9 @@ def _configureCommon():
             env.Append(CFLAGS = '-std=c99')
 
         if env.GetOption("cxx11"): # command-line argument c++11
+            # boost and Eigen use register, but it's deprecated in C++11
+            env.Append(CCFLAGS = ["-Wno-deprecated-register"])
+
             if env.whichCc == "clang":
                 env.Append(CXXFLAGS = '-std=c++11')
             elif env.whichCc == "icc":
