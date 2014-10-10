@@ -15,6 +15,7 @@ import os
 import re
 
 import SCons.Script
+import SCons.Conftest
 import eupsForScons
 
 SCons.Script.EnsureSConsVersion(2, 1, 0)
@@ -62,8 +63,6 @@ def _initOptions():
                            help="Print additional messages for debugging.")
     SCons.Script.AddOption('--traceback', dest='traceback', action='store_true', default=False,
                            help="Print full exception tracebacks when errors occur.")
-    SCons.Script.AddOption('--c++11', dest='cxx11', action='store_true', default=False,
-                           help="Enable C++11 compiler extensions.")
 
 def _initLog():
     from . import utils
@@ -278,7 +277,7 @@ def _configureCommon():
         log.info("CC is %s version %s" % (env.whichCc, env.ccVersion))
         conf.Finish()
     #
-    # Compiler flags; CCFLAGS => C and C++
+    # Compiler flags, including CCFLAGS for C and C++ and CXXFLAGS for C++ only
     #
     ARCHFLAGS = os.environ.get("ARCHFLAGS", env.get('archflags'))
     if ARCHFLAGS:
@@ -293,37 +292,21 @@ def _configureCommon():
         env.Append(LINKFLAGS = '--coverage')
 
     #
-    # Do we want to use C++11 compiler extensions?
+    # Enable C++11 support (and C99 support for gcc)
     #
     if not (env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec")):
-        if env.whichCc == 'gcc':
-            env.Append(CFLAGS = '-std=c99')
-
-        if env.GetOption("cxx11"): # command-line argument c++11
-            if env.whichCc == "clang":
-                env.Append(CXXFLAGS = '-std=c++11')
-                # boost and Eigen use register, but it's deprecated in modern C++11 compilers
-                env.Append(CCFLAGS = ["-Wno-deprecated-register"])
-            elif env.whichCc == "icc":
-                env.Append(CXXFLAGS = '-std=c++0x')
-            elif env.whichCc == 'gcc':
-                versMajor, versMinor = [int(val) for val in env.ccVersion.split(".")[0:2]]
-                if versMajor == 4 and versMinor <= 6:
-                    # gcc 4.6 and earlier do not support -std=c++11
-                    env.Append(CXXFLAGS = '-std=c++0x')
-                else:
-                    # gcc 4.7 and later support -std=c++11 and may use c++0x to mean c++14
-                    # (gcc 3 is not supported, so let it fail)
-                    env.Append(CXXFLAGS = '-std=c++11')
-                    # boost and Eigen use register, but it's deprecated in modern C++11 compilers
-                    env.Append(CCFLAGS = ["-Wno-deprecated-register"])
-            else:
-                log.fail("C++11 extensions could not be enabled for compiler %r" % env.whichCc)
-            log.info("Enabling C++11 extensions")
+        log.info("Checking for C++11 support")
+        conf = env.Configure()
+        for cpp11Arg in ("-std=%s" % (val,) for val in ("c++11", "c++0x")):
+            conf.env = env.Clone()
+            conf.env.Append(CCFLAGS = cpp11Arg)
+            if conf.CheckCXX():
+                env.Append(CCFLAGS = cpp11Arg)
+                log.info("C++11 supported with %r" % (cpp11Arg,))
+                break
         else:
-            if env.whichCc == 'clang':
-                # make clang's template depth for C++98/03 equal to GCC's (900)
-                env.Append(CCFLAGS = ["-ftemplate-depth-900"])
+            log.fail("C++11 extensions could not be enabled for compiler %r" % env.whichCc)
+        conf.Finish()
 
     #
     # Is C++'s TR1 available?  If not, use e.g. #include "lsst/tr1/foo.h"
@@ -358,9 +341,6 @@ def _configureCommon():
     #
     if env.whichCc == "clang":
         env.Append(CCFLAGS = ['-Wall'])
-        if False:                       # requires you to rebuild boost; not worth it (yet).
-            env.Append(CCFLAGS = ['-stdlib=libc++'])
-            env.Append(LINKFLAGS = ['-stdlib=libc++'])
         env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-mno-fused-madd$", o)]
 
         ignoreWarnings = {
@@ -376,6 +356,7 @@ def _configureCommon():
             "shorten-64-to-32" : "implicit conversion loses integer precision",
             "self-assign" : "x = x",
             "unknown-pragmas" : "unknown pragma ignored",
+            "deprecated-register" : "register is deprecated",
             }
         for k in ignoreWarnings.keys():
             env.Append(CCFLAGS = ["-Wno-%s" % k])
