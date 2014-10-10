@@ -300,11 +300,10 @@ def _configureCommon():
             env.Append(CFLAGS = '-std=c99')
 
         if env.GetOption("cxx11"): # command-line argument c++11
-            # boost and Eigen use register, but it's deprecated in C++11
-            env.Append(CCFLAGS = ["-Wno-deprecated-register"])
-
             if env.whichCc == "clang":
                 env.Append(CXXFLAGS = '-std=c++11')
+                # boost and Eigen use register, but it's deprecated in modern C++11 compilers
+                env.Append(CCFLAGS = ["-Wno-deprecated-register"])
             elif env.whichCc == "icc":
                 env.Append(CXXFLAGS = '-std=c++0x')
             elif env.whichCc == 'gcc':
@@ -316,6 +315,8 @@ def _configureCommon():
                     # gcc 4.7 and later support -std=c++11 and may use c++0x to mean c++14
                     # (gcc 3 is not supported, so let it fail)
                     env.Append(CXXFLAGS = '-std=c++11')
+                    # boost and Eigen use register, but it's deprecated in modern C++11 compilers
+                    env.Append(CCFLAGS = ["-Wno-deprecated-register"])
             else:
                 log.fail("C++11 extensions could not be enabled for compiler %r" % env.whichCc)
             log.info("Enabling C++11 extensions")
