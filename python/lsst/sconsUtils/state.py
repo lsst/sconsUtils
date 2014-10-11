@@ -15,6 +15,7 @@ import os
 import re
 
 import SCons.Script
+import SCons.Conftest
 import eupsForScons
 
 SCons.Script.EnsureSConsVersion(2, 1, 0)
@@ -224,6 +225,16 @@ def _configureCommon():
     #
     # Is the C compiler really gcc/g++?
     #
+    def GetCPP11Arg(context):
+        """Return the C++11 argument (e.g. "-std=c++XX"), or None if no such argument works
+        """
+        for cpp11Arg in ("-std=%s" % (val,) for val in ("c++11", "c++0x")):
+            context.env = env.Clone()
+            context.env.Append(CCFLAGS = cpp11Arg)
+            if not SCons.Conftest.CheckCXX(context):
+                return cpp11Arg
+        return None
+
     def ClassifyCc(context):
         """Return a pair of string identifying the compiler in use
 
@@ -294,26 +305,14 @@ def _configureCommon():
     # Enable C++11 support (and C99 support for gcc)
     #
     if not (env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec")):
-        if env.whichCc == "clang":
-            env.Append(CXXFLAGS = '-std=c++11')
-            # boost and Eigen use register, but it's deprecated in modern C++11 compilers
-            env.Append(CCFLAGS = ["-Wno-deprecated-register"])
-        elif env.whichCc == "icc":
-            env.Append(CXXFLAGS = '-std=c++0x')
-        elif env.whichCc == 'gcc':
-            env.Append(CFLAGS = '-std=c99')
-            versMajor, versMinor = [int(val) for val in env.ccVersion.split(".")[0:2]]
-            if versMajor == 4 and versMinor <= 6:
-                # gcc 4.6 and earlier do not support -std=c++11
-                env.Append(CXXFLAGS = '-std=c++0x')
-            else:
-                # gcc 4.7 and later support -std=c++11 and may use c++0x to mean c++14
-                # (gcc 3 is not supported, so let it fail)
-                env.Append(CXXFLAGS = '-std=c++11')
-                # boost and Eigen use register, but it's deprecated in modern C++11 compilers
-                env.Append(CCFLAGS = ["-Wno-deprecated-register"])
+        conf = env.Configure(custom_tests = {'GetCPP11Arg' : GetCPP11Arg,})
+        cpp11Arg = conf.GetCPP11Arg()
+        if cpp11Arg:
+            log.info("Using %s" % (cpp11Arg,))
+            env.Append(CXXFLAGS = cpp11Arg)
         else:
             log.fail("C++11 extensions could not be enabled for compiler %r" % env.whichCc)
+        conf.Finish()
 
     #
     # Is C++'s TR1 available?  If not, use e.g. #include "lsst/tr1/foo.h"
@@ -366,6 +365,7 @@ def _configureCommon():
             "shorten-64-to-32" : "implicit conversion loses integer precision",
             "self-assign" : "x = x",
             "unknown-pragmas" : "unknown pragma ignored",
+            "deprecated-register" : "register is deprecated",
             }
         for k in ignoreWarnings.keys():
             env.Append(CCFLAGS = ["-Wno-%s" % k])
