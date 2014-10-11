@@ -225,16 +225,6 @@ def _configureCommon():
     #
     # Is the C compiler really gcc/g++?
     #
-    def GetCPP11Arg(context):
-        """Return the C++11 argument (e.g. "-std=c++XX"), or None if no such argument works
-        """
-        for cpp11Arg in ("-std=%s" % (val,) for val in ("c++11", "c++0x")):
-            context.env = env.Clone()
-            context.env.Append(CCFLAGS = cpp11Arg)
-            if not SCons.Conftest.CheckCXX(context):
-                return cpp11Arg
-        return None
-
     def ClassifyCc(context):
         """Return a pair of string identifying the compiler in use
 
@@ -305,11 +295,15 @@ def _configureCommon():
     # Enable C++11 support (and C99 support for gcc)
     #
     if not (env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec")):
-        conf = env.Configure(custom_tests = {'GetCPP11Arg' : GetCPP11Arg,})
-        cpp11Arg = conf.GetCPP11Arg()
-        if cpp11Arg:
-            log.info("Using %s" % (cpp11Arg,))
-            env.Append(CXXFLAGS = cpp11Arg)
+        log.info("Checking for C++11 support")
+        conf = env.Configure()
+        for cpp11Arg in ("-std=%s" % (val,) for val in ("c++11", "c++0x")):
+            conf.env = env.Clone()
+            conf.env.Append(CCFLAGS = cpp11Arg)
+            if conf.CheckCXX():
+                env.Append(CCFLAGS = cpp11Arg)
+                log.info("C++11 supported with %r" % (cpp11Arg,))
+                break
         else:
             log.fail("C++11 extensions could not be enabled for compiler %r" % env.whichCc)
         conf.Finish()
@@ -347,9 +341,6 @@ def _configureCommon():
     #
     if env.whichCc == "clang":
         env.Append(CCFLAGS = ['-Wall'])
-        if False:                       # requires you to rebuild boost; not worth it (yet).
-            env.Append(CCFLAGS = ['-stdlib=libc++'])
-            env.Append(LINKFLAGS = ['-stdlib=libc++'])
         env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-mno-fused-madd$", o)]
 
         ignoreWarnings = {
