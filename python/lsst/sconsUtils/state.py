@@ -299,9 +299,9 @@ def _configureCommon():
         conf = env.Configure()
         for cpp11Arg in ("-std=%s" % (val,) for val in ("c++11", "c++0x")):
             conf.env = env.Clone()
-            conf.env.Append(CCFLAGS = cpp11Arg)
+            conf.env.Append(CXXFLAGS = cpp11Arg)
             if conf.CheckCXX():
-                env.Append(CCFLAGS = cpp11Arg)
+                env.Append(CXXFLAGS = cpp11Arg)
                 log.info("C++11 supported with %r" % (cpp11Arg,))
                 break
         else:
