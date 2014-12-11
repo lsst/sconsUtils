@@ -231,7 +231,7 @@ def _configureCommon():
         @return (compiler, version) as a pair of strings, or ("unknown", "unknown") if unknown
         """
         versionNameList = (
-            (r"\(GCC\) +([0-9.a-zA-Z]+) ", "gcc"),
+            (r"gcc +\(.+\) +([0-9.a-zA-Z]+)", "gcc"),
             (r"LLVM +version +([0-9.a-zA-Z]+) ", "clang"), # clang on Mac
             (r"clang +version +([0-9.a-zA-Z]+) ", "clang"), # clang on linux
             (r"\(ICC\) +([0-9.a-zA-Z]+) ", "icc"),
