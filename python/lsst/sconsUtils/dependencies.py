@@ -73,10 +73,11 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     # XCPPPATH is a new variable defined by sconsUtils - it's like CPPPATH, but the headers
     # found there aren't treated as dependencies.  This can make scons a lot faster.
     state.env['XCPPPATH'] = []
+    state.env['XCPPPREFIX'] = "-isystem "
     state.env['_CPPINCFLAGS'] = \
         "$( ${_concat(INCPREFIX, CPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)}"\
-        " ${_concat(INCPREFIX, XCPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)} $)"
-    state.env['_SWIGINCFLAGS'] = state.env['_CPPINCFLAGS'].replace("CPPPATH", "SWIGPATH")
+        " ${_concat(XCPPPREFIX, XCPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)} $)"
+    state.env['_SWIGINCFLAGS'] = state.env['_CPPINCFLAGS'].replace("CPPPATH", "SWIGPATH").replace("XCPPPREFIX", "SWIGINCPREFIX")
 
     if state.env.linkFarmDir:
         for d in [state.env.linkFarmDir, "#"]:
