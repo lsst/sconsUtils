@@ -216,7 +216,7 @@ def ProductDir(env, product):
         _productDirs
     except:
         try:
-            _productDirs = eupsForScons.productDir()
+            _productDirs = eupsForScons.productDir(eupsenv=eupsForScons.getEups())
         except TypeError:               # old version of eups (pre r18588)
             _productDirs = None
     if _productDirs:
