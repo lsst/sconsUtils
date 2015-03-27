@@ -38,3 +38,10 @@ except ImportError:
     
     utils.setupEnvNameFor = setupEnvNameFor
 
+def getEups():
+    """ Return a cached Eups instance, auto-creating if necessary """
+    try:
+        return getEups._eups
+    except AttributeError:
+        getEups._eups = Eups()
+        return getEups._eups

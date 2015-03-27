@@ -117,7 +117,7 @@ class Configuration(object):
 
     @staticmethod
     def getEupsData(eupsProduct):
-        version, eupsPathDir, productDir, table, flavor = eupsForScons.Eups().findSetupVersion(eupsProduct)
+        version, eupsPathDir, productDir, table, flavor = eupsForScons.getEups().findSetupVersion(eupsProduct)
         if productDir is None:
             productDir = eupsForScons.productDir(eupsProduct)
         return version, productDir    
