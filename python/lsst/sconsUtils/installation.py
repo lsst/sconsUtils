@@ -323,6 +323,8 @@ def InstallEups(env, dest, files=[], presetup=""):
         except ImportError:
             state.log.warn("Unable to import eups; not locking")
 
+        eupsTargets = []
+
         for i in build_obj:
             env.AlwaysBuild(i)
 
@@ -330,8 +332,7 @@ def InstallEups(env, dest, files=[], presetup=""):
             if env.has_key('baseversion'):
                 cmd += " --repoversion %s " % env['baseversion']
             cmd += str(i)
-
-            env.AddPostAction(build_obj, env.Action("%s" %(cmd), cmd))
+            eupsTargets.extend(env.AddPostAction(build_obj, env.Action("%s" %(cmd), cmd)))
 
         for i in table_obj:
             env.AlwaysBuild(i)
@@ -342,8 +343,15 @@ def InstallEups(env, dest, files=[], presetup=""):
             cmd += str(i)
 
             act = env.Command("table", "", env.Action("%s" %(cmd), cmd))
+            eupsTargets.extend(act)
             acts += act
             env.Depends(act, i)
+
+        # By declaring that all the Eups operations create a file called "eups" as a side-effect,
+        # even though they don't, SCons knows it can't run them in parallel (it thinks of the
+        # side-effect file as something like a log, and knows you shouldn't be appending to it
+        # in parallel).  When Eups locking is working, we may be able to remove this.
+        env.SideEffect("eups", eupsTargets)
 
     return acts
 
