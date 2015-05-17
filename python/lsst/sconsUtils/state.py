@@ -55,6 +55,8 @@ def _initOptions():
                            help="The directory of symbolic links needed to build and use the package")
     SCons.Script.AddOption('--prefix', dest='prefix', action='store', default=False,
                            help="Specify the install destination")
+    SCons.Script.AddOption('--rlibdir', dest='rlibdir', action='store', default="lib",
+                           help="Directory where libraries will be found, relative to <prefix>.")
     SCons.Script.AddOption('--setenv', dest='setenv', action='store_true', default=False,
                            help="Treat arguments such as Foo=bar as defining construction variables")
     SCons.Script.AddOption('--tag', dest='tag', action='store', default=None,

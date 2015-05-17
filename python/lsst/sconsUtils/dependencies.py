@@ -54,8 +54,9 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     if state.env.linkFarmDir:
         state.env.linkFarmDir = os.path.abspath(os.path.expanduser(state.env.linkFarmDir))
     prefix = installation.setPrefix(state.env, versionString, eupsProductPath)
+    rlibdir = state.env.GetOption("rlibdir").split(',')
     state.env['prefix'] = prefix
-    state.env["libDir"] = "%s/lib" % prefix
+    state.env["libDir"] = "%s/%s" % (prefix, rlibdir[0])
     state.env["pythonDir"] = "%s/python" % prefix
     #
     # Process dependencies
@@ -80,7 +81,8 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     if state.env.linkFarmDir:
         for d in [state.env.linkFarmDir, "#"]:
             state.env.Append(CPPPATH=os.path.join(d, "include"))
-            state.env.Append(LIBPATH=os.path.join(d, "lib"))
+            for rlibdirEntry in rlibdir:
+                state.env.Append(LIBPATH=os.path.join(d, rlibdirEntry))
         state.env['SWIGPATH'] = state.env['CPPPATH']
     
     if not state.env.GetOption("clean") and not state.env.GetOption("help"):
@@ -149,7 +151,7 @@ class Configuration(object):
     #                            .cfg file.
     ##
     def __init__(self, cfgFile, headers=(), libs=None, hasSwigFiles=True,
-                 includeFileDirs=["include",], libFileDirs=["lib",],
+                 includeFileDirs=["include",], libFileDirs=None,
                  hasDoxygenInclude=False, hasDoxygenTag=True, eupsProduct=None):
         self.name, self.root = self.parseFilename(cfgFile)
         if eupsProduct is None:
@@ -189,6 +191,9 @@ class Configuration(object):
             self.paths["SWIGPATH"] = [os.path.join(self.root, "python")]
         else:
             self.paths["SWIGPATH"] = []
+
+        if libFileDirs is None:
+            libFileDirs = state.env.GetOption("rlibdir").split(',')
 
         for pathName, subDirs in [("CPPPATH", includeFileDirs),
                                   ("LIBPATH", libFileDirs),]:
