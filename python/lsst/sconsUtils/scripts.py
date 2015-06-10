@@ -235,6 +235,7 @@ class BasicSConscript(object):
         result = []
         for name, src in swigSrc.iteritems():
             result.extend(state.env.SwigLoadableModule("_" + name, src, LIBS=libs))
+            result.extend([File(name + ".py")])
         state.targets["python"].extend(result)
         return result
 
