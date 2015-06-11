@@ -50,7 +50,8 @@ class Control(object):
     ##
     def __init__(self, env, ignoreList=None, expectedFailures=None, args=None,
                  tmpDir=".tests", verbose=False):
-        env.AppendENVPath('PYTHONPATH', os.environ['PYTHONPATH'])
+        if 'PYTHONPATH' in os.environ:
+            env.AppendENVPath('PYTHONPATH', os.environ['PYTHONPATH'])
 
         self._env = env
 
