@@ -65,6 +65,8 @@ def _initOptions():
                            help="Print additional messages for debugging.")
     SCons.Script.AddOption('--traceback', dest='traceback', action='store_true', default=False,
                            help="Print full exception tracebacks when errors occur.")
+    SCons.Script.AddOption('--no-eups', dest='no_eups', action='store_true', default=False,
+                           help="Do not use EUPS for configuration")
 
 def _initLog():
     from . import utils
@@ -180,6 +182,23 @@ def _initEnvironment():
 
     if env['debug']:
         env.Append(CCFLAGS = ['-g'])
+
+    #
+    # determine if EUPS is present
+    #
+
+    # --no-eups overides probing
+    # XXX is it possible to test python snippets as a scons action?
+    if SCons.Script.GetOption("no_eups"):
+        env['no_eups'] = True
+    else:
+        env['no_eups'] = not eupsForScons.haveEups()
+
+    if env['no_eups']:
+        log.info('EUPS integration: disabled')
+    else:
+        log.info('EUPS integration: enabled')
+
     #
     # Find the eups path, replace 'flavor' in favor of 'PLATFORM' if needed.
     #

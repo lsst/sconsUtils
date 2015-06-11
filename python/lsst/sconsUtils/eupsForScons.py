@@ -3,7 +3,14 @@ import os
 
 try:
     from eups import *
+    eupsLoaded = True
 except ImportError:
+    eupsLoaded = False
+
+def haveEups():
+    return eupsLoaded
+
+if not haveEups():
     #
     # Fake what we can so sconsUtils can limp along without eups
     #
