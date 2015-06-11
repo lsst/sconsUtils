@@ -274,7 +274,8 @@ def _configureCommon():
                 env['CXX'] = CXX
         conf = env.Configure(custom_tests = {'ClassifyCc' : ClassifyCc,})
         env.whichCc, env.ccVersion = conf.ClassifyCc()
-        log.info("CC is %s version %s" % (env.whichCc, env.ccVersion))
+        if not env.GetOption("no_progress"):
+            log.info("CC is %s version %s" % (env.whichCc, env.ccVersion))
         conf.Finish()
     #
     # Compiler flags, including CCFLAGS for C and C++ and CXXFLAGS for C++ only
@@ -295,14 +296,16 @@ def _configureCommon():
     # Enable C++11 support (and C99 support for gcc)
     #
     if not (env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec")):
-        log.info("Checking for C++11 support")
+        if not env.GetOption("no_progress"):
+            log.info("Checking for C++11 support")
         conf = env.Configure()
         for cpp11Arg in ("-std=%s" % (val,) for val in ("c++11", "c++0x")):
             conf.env = env.Clone()
             conf.env.Append(CXXFLAGS = cpp11Arg)
             if conf.CheckCXX():
                 env.Append(CXXFLAGS = cpp11Arg)
-                log.info("C++11 supported with %r" % (cpp11Arg,))
+                if not env.GetOption("no_progress"):
+                    log.info("C++11 supported with %r" % (cpp11Arg,))
                 break
         else:
             log.fail("C++11 extensions could not be enabled for compiler %r" % env.whichCc)
