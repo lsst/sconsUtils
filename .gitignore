@@ -1,6 +1,9 @@
 .sconsign.dblite
 config.log
 .sconf_temp
+_build.log
+_build.sh
+_build.tags
 *.o
 *.os
 *.so
