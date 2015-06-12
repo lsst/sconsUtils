@@ -33,7 +33,7 @@ def makeProductPath(env, pathFormat):
     pathFormat = re.sub(r"%(\w)", r"%(\1)s", pathFormat)
 
     eupsPath = os.environ['PWD']
-    if 'eupsProduct' in env and env['eupsPath']:
+    if 'eupsPath' in env and env['eupsPath']:
         eupsPath = env['eupsPath']
 
     return pathFormat % { "P": eupsPath,
