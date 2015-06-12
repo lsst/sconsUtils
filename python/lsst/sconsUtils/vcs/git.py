@@ -13,7 +13,7 @@ from .. import utils
 
 def guessVersionName():
     """Guess a version name"""
-    
+
     if not os.path.exists(".git"):
         state.log.warn("Cannot guess version without .git directory; version will be set to 'unknown'.")
         return "unknown"

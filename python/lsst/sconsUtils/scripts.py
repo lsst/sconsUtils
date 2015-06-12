@@ -187,7 +187,7 @@ class BasicSConscript(object):
     #  @param libName    Name of the shared libray to be built (defaults to env["packageName"]).
     #  @param src        Source to compile into the library.  Defaults to a 4-directory deep glob
     #                    of all *.cc files in \#src.
-    #  @param libs       Libraries to link against, either as a string argument to be passed to 
+    #  @param libs       Libraries to link against, either as a string argument to be passed to
     #                    env.getLibs() or a sequence of actual libraries to pass in.
     ##
     @staticmethod
@@ -213,7 +213,7 @@ class BasicSConscript(object):
     #  with "Lib" appended to the end.
     #
     #  @param swigNameList    Sequence of SWIG modules to be built (does not include the file extensions).
-    #  @param libs         Libraries to link against, either as a string argument to be passed to 
+    #  @param libs         Libraries to link against, either as a string argument to be passed to
     #                      env.getLibs() or a sequence of actual libraries to pass in.
     #  @param swigSrc      A dictionary of additional source files that go into the modules.  Each
     #                      key should be an entry in swigNameList, and each value should be a list
@@ -317,7 +317,7 @@ class BasicSConscript(object):
                       if _getFileBase(node) not in swigNameList
                       and os.path.basename(str(node)) not in noBuildList]
         if ccList is None:
-            ccList = [node for node in Glob("*.cc") 
+            ccList = [node for node in Glob("*.cc")
                       if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc
                       and os.path.basename(str(node)) not in noBuildList]
         if ignoreList is None:
@@ -371,7 +371,7 @@ class BasicSConscript(object):
             allSwigSrc.update(str(element) for element in src)
             src.append(node)
         if ccList is None:
-            ccList = [node for node in Glob("*.cc") 
+            ccList = [node for node in Glob("*.cc")
                           if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc]
         state.log.info("SWIG modules for examples: %s" % swigFileList)
         state.log.info("C++ examples: %s" % ccList)

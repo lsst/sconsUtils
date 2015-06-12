@@ -104,7 +104,7 @@ def SourcesForSharedLibrary(self, files):
 
     sources.sort()
     return sources
-    
+
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 ##
@@ -198,7 +198,7 @@ def CleanTree(self, files, dir=".", recurse=True, verbose=False):
     # We can't delete .sconsign.dblite if we use "scons clean" instead of "scons --clean",
     # so the former is no longer supported.
     #
-    action += " ; rm -rf .sconf_temp .sconsign.dblite .sconsign.tmp config.log" 
+    action += " ; rm -rf .sconf_temp .sconsign.dblite .sconsign.tmp config.log"
     #
     # Do we actually want to clean up?  We don't if the command is e.g. "scons -c install"
     #
@@ -414,7 +414,7 @@ class DoxygenBuilder(object):
 #                       default ones ("module.i" generates "module.py"
 #                       and "moduleLib_wrap.cc").
 #
-# @note When building documentation from a clean source tree, 
+# @note When building documentation from a clean source tree,
 #       generated source files (like headers generated with M4)
 #       will not be included among the dependencies, because
 #       they aren't present when we walk the input folders.
@@ -427,7 +427,7 @@ def Doxygen(self, config, **kw):
               if os.path.exists(SCons.Script.Entry(d).abspath)]
     defaults = {
         "inputs": inputs,
-        "recursive": True, 
+        "recursive": True,
         "patterns": ["*.h", "*.cc", "*.py", "*.dox"],
         "outputs": ["html",],
         "excludes": [],

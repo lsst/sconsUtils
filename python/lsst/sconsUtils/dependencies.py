@@ -83,7 +83,7 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
             state.env.Append(CPPPATH=os.path.join(d, "include"))
             state.env.Append(LIBPATH=os.path.join(d, "lib"))
         state.env['SWIGPATH'] = state.env['CPPPATH']
-    
+
     if not state.env.GetOption("clean") and not state.env.GetOption("help"):
         packages.configure(state.env, check=state.env.GetOption("checkDependencies"))
         for target in state.env.libs:
@@ -121,7 +121,7 @@ class Configuration(object):
         version, eupsPathDir, productDir, table, flavor = eupsForScons.getEups().findSetupVersion(eupsProduct)
         if productDir is None:
             productDir = eupsForScons.productDir(eupsProduct)
-        return version, productDir    
+        return version, productDir
 
     ##
     # @brief Initialize the configuration object.
@@ -160,7 +160,7 @@ class Configuration(object):
         if version is not None:
             self.version = version
         if productDir is None:
-            state.log.warn("Could not find EUPS product dir for '%s'; using %s." 
+            state.log.warn("Could not find EUPS product dir for '%s'; using %s."
                            % (self.eupsProduct, self.root))
         else:
             self.root = os.path.realpath(productDir)
@@ -197,7 +197,7 @@ class Configuration(object):
 
             if state.env.linkFarmDir:
                 continue
-            
+
             for subDir in subDirs:
                 pathDir = os.path.join(self.root, subDir)
                 if os.path.isdir(pathDir):
@@ -220,7 +220,7 @@ class Configuration(object):
     ##
     def addCustomTests(self, tests):
         pass
-        
+
     ##
     # @brief Update an SCons environment to make use of the package.
     #
@@ -386,7 +386,7 @@ def CustomLinkCheck(context, message, source, extension=".cc"):
 # package's value will be its imported .cfg module.
 ##
 class PackageTree(object):
-    
+
     ##
     # @brief Recursively load *.cfg files for packageName and all its dependencies.
     #
@@ -421,7 +421,7 @@ class PackageTree(object):
                 missingDeps.append(dependency)
         if missingDeps:
             state.log.fail("Failed to load required dependencies: \"%s\"" % '", "'.join(missingDeps))
-            
+
         missingDeps = []
         for dependency in self.primary.dependencies.get("buildRequired", ()):
             if not self._recurse(dependency):

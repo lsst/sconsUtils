@@ -28,7 +28,7 @@ def getInfo(file="."):
         mat = re.search(r"^([^:]+)\s*:\s*(.*)", line)
         if mat:
             info[mat.group(1)] = mat.group(2)
-        
+
     return info
 
 def isTrunk(file="."):
@@ -74,7 +74,7 @@ def revision(file=None, lastChanged=False):
             if mat:
                 matches = mat.groupdict()
                 return matches["youngest"], matches["youngest"], tuple(matches["flags"])
-            
+
         return matches["oldest"], matches["youngest"], tuple(matches["flags"])
 
     raise RuntimeError("svnversion returned unexpected result \"%s\"" % res[:-1])
@@ -129,7 +129,7 @@ def parseVersionName(versionName):
     means the top of ticket 374, and
     ticket_374+svn6021
     means revision 6021 on ticket 374.  You may replace "ticket" with "branch" if you wish
-    
+
     The "versionName" may actually be the directory part of a URL, and ".../(branches|tags|tickets)/tagname"
     is also supported
     """

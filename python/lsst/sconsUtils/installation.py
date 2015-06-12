@@ -25,13 +25,13 @@ from .utils import memberOf
 
 ##
 # @brief return a path to use as the installation directory for a product
-# @param pathFormat     the format string to process 
+# @param pathFormat     the format string to process
 # @param env            the scons environment
 # @param versionString  the versionString passed to MakeEnv
 ##
 def makeProductPath(env, pathFormat):
     pathFormat = re.sub(r"%(\w)", r"%(\1)s", pathFormat)
-    
+
     eupsPath = os.environ['PWD']
     if 'eupsProduct' in env and env['eupsPath']:
         eupsPath = env['eupsPath']
@@ -41,7 +41,7 @@ def makeProductPath(env, pathFormat):
                           "p": env['eupsProduct'],
                           "v": env['version'],
                           "c": os.environ['PWD'] }
-    
+
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 ## @brief Set a version ID from env, or a version control ID string ($name$ or $HeadURL$)
@@ -100,9 +100,9 @@ def setPrefix(env, versionString, eupsProductPath=None):
         eupsPrefix = makeProductPath(env, eupsProductPath)
     elif 'eupsPath' in env and env['eupsPath']:
         eupsPrefix = env['eupsPath']
-	flavor = env['eupsFlavor']
-	if not re.search("/" + flavor + "$", eupsPrefix):
-	    eupsPrefix = os.path.join(eupsPrefix, flavor)
+    flavor = env['eupsFlavor']
+    if not re.search("/" + flavor + "$", eupsPrefix):
+        eupsPrefix = os.path.join(eupsPrefix, flavor)
         prodPath = env['eupsProduct']
         if 'eupsProductPath' in env and env['eupsProductPath']:
             prodPath = env['eupsProductPath']
@@ -165,10 +165,10 @@ def Declare(self, products=None):
                     if version:
                         command = "eups undeclare --flavor %s %s %s" % \
                                   (self['eupsFlavor'], product, version)
-                        if ("current" in SCons.Script.COMMAND_LINE_TARGETS 
+                        if ("current" in SCons.Script.COMMAND_LINE_TARGETS
                             and not "declare" in SCons.Script.COMMAND_LINE_TARGETS):
                             command += " --current"
-                            
+
                         if self.GetOption("clean"):
                             self.Execute(command)
                         else:
@@ -181,7 +181,7 @@ def Declare(self, products=None):
 
                     if 'eupsPath' in self:
                         command += " -Z %s" % self['eupsPath']
-                        
+
                     if version:
                         command += " %s %s" % (product, version)
 
@@ -245,7 +245,7 @@ class DirectoryInstaller(object):
                 state.log.info("Copying %s to %s" % (srcpath, destpath))
                 shutil.copy(srcpath, destpath)
         return 0
-        
+
 
 ##
 #  Install the directory dir into prefix, (along with all its descendents if recursive is True).
@@ -302,7 +302,7 @@ def InstallEups(env, dest, files=[], presetup=""):
         buildFiles = [f for f in files if re.search(r"\.build$", f)]
         build_obj = env.Install(dest, buildFiles)
         acts += build_obj
-        
+
         tableFiles = [f for f in files if re.search(r"\.table$", f)]
         table_obj = env.Install(dest, tableFiles)
         acts += table_obj

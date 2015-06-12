@@ -93,9 +93,9 @@ def _initVariables():
         SCons.Script.BoolVariable('force', 'Set to force possibly dangerous behaviours', False),
         ('optfile', 'Specify a file to read default options from', None),
         ('prefix', 'Specify the install destination', None),
-        SCons.Script.EnumVariable('opt', 'Set the optimisation level', 0, 
+        SCons.Script.EnumVariable('opt', 'Set the optimisation level', 0,
                                   allowed_values=('0', '1', '2', '3')),
-        SCons.Script.EnumVariable('profile', 'Compile/link for profiler', 0, 
+        SCons.Script.EnumVariable('profile', 'Compile/link for profiler', 0,
                                   allowed_values=('0', '1', 'pg', 'gcov')),
         ('version', 'Specify the version to declare', None),
         ('baseversion', 'Specify the current base version', None),
@@ -175,7 +175,7 @@ def _initEnvironment():
     for k in ("force", "prefix"):       # these may now be set as options instead of variables
         if SCons.Script.GetOption(k):
             env[k] = SCons.Script.GetOption(k)
-        
+
     if env['debug']:
         env.Append(CCFLAGS = ['-g'])
     #
@@ -419,7 +419,7 @@ def _saveState():
             config.write(configfile)
     except Exception as e:
         log.warn("Unexpected exception in _saveState: %s" % e)
-        
+
 _initOptions()
 _initLog()
 _initVariables()
