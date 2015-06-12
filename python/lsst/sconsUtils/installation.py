@@ -27,7 +27,6 @@ from .utils import memberOf
 # @brief return a path to use as the installation directory for a product
 # @param pathFormat     the format string to process
 # @param env            the scons environment
-# @param versionString  the versionString passed to MakeEnv
 ##
 def makeProductPath(env, pathFormat):
     pathFormat = re.sub(r"%(\w)", r"%(\1)s", pathFormat)
