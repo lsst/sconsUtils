@@ -3,6 +3,8 @@
 #
 #  Builders and path setup for installation targets.
 ##
+
+from __future__ import absolute_import, division, print_function
 import os.path
 import glob
 import re
@@ -31,7 +33,7 @@ def makeProductPath(env, pathFormat):
     pathFormat = re.sub(r"%(\w)", r"%(\1)s", pathFormat)
     
     eupsPath = os.environ['PWD']
-    if env.has_key('eupsProduct') and env['eupsPath']:
+    if 'eupsProduct' in env and env['eupsPath']:
         eupsPath = env['eupsPath']
 
     return pathFormat % { "P": eupsPath,
@@ -45,7 +47,7 @@ def makeProductPath(env, pathFormat):
 ## @brief Set a version ID from env, or a version control ID string ($name$ or $HeadURL$)
 def determineVersion(env, versionString):
     version = "unknown"
-    if env.has_key('version'):
+    if 'version' in env:
         version = env['version']
     elif not versionString:
         version = "unknown"
@@ -96,22 +98,22 @@ def setPrefix(env, versionString, eupsProductPath=None):
             )
     if eupsProductPath:
         eupsPrefix = makeProductPath(env, eupsProductPath)
-    elif env.has_key('eupsPath') and env['eupsPath']:
+    elif 'eupsPath' in env and env['eupsPath']:
         eupsPrefix = env['eupsPath']
 	flavor = env['eupsFlavor']
 	if not re.search("/" + flavor + "$", eupsPrefix):
 	    eupsPrefix = os.path.join(eupsPrefix, flavor)
         prodPath = env['eupsProduct']
-        if env.has_key('eupsProductPath') and env['eupsProductPath']:
+        if 'eupsProductPath' in env and env['eupsProductPath']:
             prodPath = env['eupsProductPath']
         eupsPrefix = os.path.join(eupsPrefix, prodPath, env["version"])
     else:
         eupsPrefix = None
-    if env.has_key('prefix'):
+    if 'prefix' in env:
         if env['version'] != "unknown" and eupsPrefix and eupsPrefix != env['prefix']:
-            print >> sys.stderr, "Ignoring prefix %s from EUPS_PATH" % eupsPrefix
+            state.log.warn("Ignoring prefix %s from EUPS_PATH" % eupsPrefix)
         return makeProductPath(env, env['prefix'])
-    elif env.has_key('eupsPath') and env['eupsPath']:
+    elif 'eupsPath' in env and env['eupsPath']:
         prefix = eupsPrefix
     else:
         prefix = "/usr/local"
@@ -146,7 +148,7 @@ def Declare(self, products=None):
             if not prod or isinstance(prod, str):   # i.e. no version
                 product = prod
 
-                if self.has_key('version'):
+                if 'version' in self:
                     version = self['version']
                 else:
                     version = None
@@ -156,7 +158,7 @@ def Declare(self, products=None):
             if not product:
                 product = self['eupsProduct']
 
-            if "EUPS_DIR" in os.environ.keys():
+            if "EUPS_DIR" in os.environ:
                 self['ENV']['PATH'] += os.pathsep + "%s/bin" % (os.environ["EUPS_DIR"])
                 self["ENV"]["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", "-1")
                 if "undeclare" in SCons.Script.COMMAND_LINE_TARGETS or self.GetOption("clean"):
@@ -177,7 +179,7 @@ def Declare(self, products=None):
                     command = "eups declare --force --flavor %s --root %s" % \
                               (self['eupsFlavor'], self['prefix'])
 
-                    if self.has_key('eupsPath'):
+                    if 'eupsPath' in self:
                         command += " -Z %s" % self['eupsPath']
                         
                     if version:
@@ -279,7 +281,7 @@ def InstallEups(env, dest, files=[], presetup=""):
         return acts
 
     if env.GetOption("clean"):
-        print >> sys.stderr, "Removing", dest
+        state.log.warn("Removing" + dest)
         shutil.rmtree(dest, ignore_errors=True)
     else:
         presetupStr = []
@@ -297,19 +299,19 @@ def InstallEups(env, dest, files=[], presetup=""):
             + glob.glob(os.path.join("ups", "eupspkg*"))
         files = list(set(files))        # remove duplicates
 
-        buildFiles = filter(lambda f: re.search(r"\.build$", f), files)
+        buildFiles = [f for f in files if re.search(r"\.build$", f)]
         build_obj = env.Install(dest, buildFiles)
         acts += build_obj
         
-        tableFiles = filter(lambda f: re.search(r"\.table$", f), files)
+        tableFiles = [f for f in files if re.search(r"\.table$", f)]
         table_obj = env.Install(dest, tableFiles)
         acts += table_obj
 
-        eupspkgFiles = filter(lambda f: re.search(r"^eupspkg", f), files)
+        eupspkgFiles = [f for f in files if re.search(r"^eupspkg", f)]
         eupspkg_obj = env.Install(dest, eupspkgFiles)
         acts += eupspkg_obj
 
-        miscFiles = filter(lambda f: not re.search(r"\.(build|table)$", f), files)
+        miscFiles = [f for f in files if not re.search(r"\.(build|table)$", f)]
         misc_obj = env.Install(dest, miscFiles)
         acts += misc_obj
 
@@ -329,7 +331,7 @@ def InstallEups(env, dest, files=[], presetup=""):
             env.AlwaysBuild(i)
 
             cmd = "eups expandbuild -i --version %s " % env['version']
-            if env.has_key('baseversion'):
+            if 'baseversion' in env:
                 cmd += " --repoversion %s " % env['baseversion']
             cmd += str(i)
             eupsTargets.extend(env.AddPostAction(build_obj, env.Action("%s" %(cmd), cmd)))

@@ -3,7 +3,7 @@
 #
 #  Control which tests run, and how.
 ##
-
+from __future__ import print_function
 import glob, os, re, sys
 from SCons.Script import *    # So that this file has the same namespace as SConstruct/SConscript
 from . import state
@@ -70,7 +70,7 @@ class Control(object):
                 self._info[f] = (self._IGNORE, None)
 
         if expectedFailures:
-            for f in expectedFailures.keys():
+            for f in expectedFailures:
                 self._info[f] = (self._EXPECT_FAILURE, expectedFailures[f])
 
         if args:
@@ -80,12 +80,13 @@ class Control(object):
 
         self.runExamples = True                      # should I run the examples?
         try:
-            self.runExamples = (os.stat(self._tmpDir).st_mode & 0700) != 0 # file is user read/write/executable
+            self.runExamples = (os.stat(self._tmpDir).st_mode & 0o700) != 0 # file is user read/write/executable
         except OSError:
             pass
 
         if not self.runExamples:
-            print >> sys.stderr, "Not running examples; \"chmod 755 %s\" to run them again" % self._tmpDir
+            print("Not running examples; \"chmod 755 %s\" to run them again" % self._tmpDir,
+                  file=sys.stderr)
 
     def args(self, test):
         try:
@@ -99,10 +100,10 @@ class Control(object):
                len(self._env.Glob(test)) == 0: # we don't know how to build it
             return True
 
-        ignoreFile = self._info.has_key(test) and self._info[test][0] == self._IGNORE
+        ignoreFile = test in self._info and self._info[test][0] == self._IGNORE
 
         if self._verbose and ignoreFile:
-            print >> sys.stderr, "Skipping", test
+            print("Skipping", test, file=sys.stderr)
 
         return ignoreFile
 
@@ -110,7 +111,7 @@ class Control(object):
         """Return the messages to be used in case of success/failure; the logicals
         (note that they are strings) tell whether the test is expected to pass"""
 
-        if self._info.has_key(test) and self._info[test][0] == self._EXPECT_FAILURE:
+        if test in self._info and self._info[test][0] == self._EXPECT_FAILURE:
             msg = self._info[test][1]
             return "false", "Passed, but should have failed: %s" % msg, \
                    "true",  "Failed as expected: %s" % msg

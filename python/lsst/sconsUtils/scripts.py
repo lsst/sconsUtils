@@ -6,7 +6,7 @@
 # @defgroup sconsUtilsScripts Convenience functions for SConstruct/SConscript files
 # @{
 ##
-
+from __future__ import absolute_import, division, print_function
 import os.path
 from SCons.Script import *
 
@@ -137,7 +137,7 @@ class BasicSConstruct(object):
         install = state.env.InstallLSST(state.env["prefix"],
                                         [subDir for subDir in subDirList],
                                         ignoreRegex=ignoreRegex)
-        for name, target in state.targets.iteritems():
+        for name, target in state.targets.items():
             state.env.Requires(install, target)
             state.env.Alias(name, target)
         state.env.Requires(state.targets["python"], state.targets["version"])
@@ -233,7 +233,7 @@ class BasicSConscript(object):
         elif libs is None:
             libs = []
         result = []
-        for name, src in swigSrc.iteritems():
+        for name, src in swigSrc.items():
             result.extend(state.env.SwigLoadableModule("_" + name, src, LIBS=libs))
         state.targets["python"].extend(result)
         return result
@@ -332,7 +332,7 @@ class BasicSConscript(object):
         for ccTest in ccList:
             state.env.Program(ccTest, LIBS=state.env.getLibs("main test"))
         swigMods = []
-        for name, src in swigSrc.iteritems():
+        for name, src in swigSrc.items():
             swigMods.extend(
                 state.env.SwigLoadableModule("_" + name, src, LIBS=state.env.getLibs("main python"))
             )
@@ -379,7 +379,7 @@ class BasicSConscript(object):
         for src in ccList:
             results.extend(state.env.Program(src, LIBS=state.env.getLibs("main")))
         swigMods = []
-        for name, src in swigSrc.iteritems():
+        for name, src in swigSrc.items():
             results.extend(
                 state.env.SwigLoadableModule("_" + name, src, LIBS=state.env.getLibs("main python"))
                 )

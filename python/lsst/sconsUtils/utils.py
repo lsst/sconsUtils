@@ -4,6 +4,7 @@
 #  Internal utilities for sconsUtils.
 ##
 
+from __future__ import absolute_import, division, print_function
 import sys
 import warnings
 import subprocess
@@ -24,20 +25,20 @@ class Log(object):
 
     def info(self, message):
         if self.verbose:
-            print message
+            print(message)
 
     def warn(self, message):
         if self.traceback:
             warnings.warn(message, stacklevel=2)
         else:
-            sys.stderr.write(message + "\n")
+            print(message, file=sys.stderr)
 
     def fail(self, message):
         if self.traceback:
             raise RuntimeError(message)
         else:
             if message:
-                sys.stderr.write(message + "\n")
+                print(message, file=sys.stderr)
             SCons.Script.Exit(1)
 
     def flush(self):

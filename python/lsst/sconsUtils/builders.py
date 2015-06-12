@@ -4,6 +4,7 @@
 #  Extra builders and methods to be injected into the SConsEnvironment class.
 ##
 
+from __future__ import absolute_import, division, print_function
 import os
 import re
 import fnmatch
@@ -119,7 +120,7 @@ def filesToTag(root=None, fileRegex=None, ignoreDirs=None):
     if fileRegex is None: fileRegex = r"^[a-zA-Z0-9_].*\.(cc|h(pp)?|py)$"
     if ignoreDirs is None: ignoreDirs = ["examples", "tests"]
 
-    if len(filter(lambda t: t == "TAGS", SCons.Script.COMMAND_LINE_TARGETS)) == 0:
+    if "TAGS" not in SCons.Script.COMMAND_LINE_TARGETS:
         return []
 
     files = []
@@ -210,7 +211,7 @@ def CleanTree(self, files, dir=".", recurse=True, verbose=False):
 ## @brief Return a product's PRODUCT_DIR, or None
 @memberOf(SConsEnvironment)
 def ProductDir(env, product):
-    import eupsForScons
+    from . import eupsForScons
     global _productDirs
     try:
         _productDirs
@@ -510,7 +511,7 @@ def VersionModule(self, filename, versionString=None):
             what = "__dependency_versions__"
             names.append(what)
             outFile.write("%s = {\n" % (what))
-            for name, mod in env.dependencies.packages.iteritems():
+            for name, mod in env.dependencies.packages.items():
                 if mod is None:
                     outFile.write("    '%s': None,\n" % name)
                 elif hasattr(mod.config, "version"):
@@ -522,7 +523,7 @@ def VersionModule(self, filename, versionString=None):
             outFile.write("__all__ = %r\n" % (tuple(names),))
 
         if calcMd5(target[0].abspath) != oldMd5: # only print if something's changed
-            print "makeVersionModule([\"%s\"], [])" % str(target[0])
+            state.log.info("makeVersionModule([\"%s\"], [])" % str(target[0]))
 
     result = self.Command(filename, [], self.Action(makeVersionModule, strfunction=lambda *args: None))
 

@@ -7,12 +7,13 @@
 #  @{
 ##
 
+from __future__ import absolute_import
 import os.path
 import collections
 import imp
 import sys
 import SCons.Script
-import eupsForScons
+from . import eupsForScons
 from SCons.Script.SConscript import SConsEnvironment
 
 from . import installation
@@ -48,8 +49,8 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     # Setup installation directories and variables
     #
     SCons.Script.Help(state.opts.GenerateHelpText(state.env))
-    state.env.installing = filter(lambda t: t == "install", SCons.Script.BUILD_TARGETS) 
-    state.env.declaring = filter(lambda t: t == "declare" or t == "current", SCons.Script.BUILD_TARGETS)
+    state.env.installing = [t for t in SCons.Script.BUILD_TARGETS if t == "install"]
+    state.env.declaring = [t for t in SCons.Script.BUILD_TARGETS if t == "declare" or t == "current"]
     state.env.linkFarmDir = state.env.GetOption("linkFarmDir")
     if state.env.linkFarmDir:
         state.env.linkFarmDir = os.path.abspath(os.path.expanduser(state.env.linkFarmDir))
@@ -439,7 +440,7 @@ class PackageTree(object):
     ## @brief Configure the entire dependency tree in order. and return an updated environment."""
     def configure(self, env, check=False):
         conf = env.Configure(custom_tests=self.customTests)
-        for name, module in self.packages.iteritems():
+        for name, module in self.packages.items():
             if module is None:
                 state.log.info("Skipping missing optional package %s." % name)
                 continue
@@ -490,7 +491,7 @@ class PackageTree(object):
             if os.path.exists(filename):
                 try:
                     module = imp.load_source(name + "_cfg", filename)
-                except Exception, e:
+                except Exception as e:
                     state.log.warn("Error loading configuration %s (%s)" % (filename, e))
                     continue
                 state.log.info("Using configuration for package '%s' at '%s'." % (name, filename))

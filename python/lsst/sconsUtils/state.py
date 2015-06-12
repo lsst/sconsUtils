@@ -11,12 +11,14 @@
 # These are all initialized when the module is imported, but may be modified by other code
 # (particularly dependencies.configure()).
 ##
+
+from __future__ import absolute_import, division, print_function
 import os
 import re
 
 import SCons.Script
 import SCons.Conftest
-import eupsForScons
+from . import eupsForScons
 
 SCons.Script.EnsureSConsVersion(2, 1, 0)
 
@@ -71,14 +73,14 @@ def _initLog():
 
 def _initVariables():
     files = []
-    if SCons.Script.ARGUMENTS.has_key("optfile"):
+    if "optfile" in SCons.Script.ARGUMENTS:
         configfile = SCons.Script.ARGUMENTS["optfile"]
         if configfile not in files:
             files.append(configfile)
     for file in files:
         if not os.path.isfile(file):
             log.warn("Warning: Will ignore non-existent options file, %s" % file)
-    if not SCons.Script.ARGUMENTS.has_key("optfile"):
+    if "optfile" not in SCons.Script.ARGUMENTS:
         files.append("buildOpts.py")
     global opts
     opts = SCons.Script.Variables(files)
@@ -112,7 +114,7 @@ def _initEnvironment():
 
     # Find and propagate EUPS environment variables.
     cfgPath = []
-    for k in os.environ.keys():
+    for k in os.environ:
         m = re.search(r"^(?P<name>\w+)_DIR(?P<extra>_EXTRA)?$", k)
         if not m: continue
         cfgPath.append(os.path.join(os.environ[k], "ups"))
@@ -122,7 +124,7 @@ def _initEnvironment():
             cfgPath.append(os.path.join(os.environ[k], "ups"))
             p = m.group("name")
             varname = eupsForScons.utils.setupEnvNameFor(p)
-            if os.environ.has_key(varname):
+            if varname in os.environ:
                 ourEnv[varname] = os.environ[varname]
                 ourEnv[k] = os.environ[k]
 
@@ -161,6 +163,7 @@ def _initEnvironment():
     #
     # Remove valid options from the arguments
     #
+    # SCons Variables do not behave like dicts
     for opt in opts.keys():
         try:
             del SCons.Script.ARGUMENTS[opt]
@@ -181,7 +184,7 @@ def _initEnvironment():
     eupsPath = None
     try:
         db = env['eupsdb']
-        if not os.environ.has_key('EUPS_PATH'):
+        if 'EUPS_PATH' not in os.environ:
             raise RuntimeError("You can't use eupsdb=XXX without an EUPS_PATH set")
         eupsPath = None
         for d in os.environ['EUPS_PATH'].split(':'):
@@ -191,7 +194,7 @@ def _initEnvironment():
         if not eupsPath:
             raise RuntimeError("I cannot find DB \"%s\" in $EUPS_PATH" % db)
     except KeyError:
-        if os.environ.has_key('EUPS_PATH'):
+        if 'EUPS_PATH' in os.environ:
             eupsPath = os.environ['EUPS_PATH'].split(':')[0]
     env['eupsPath'] = eupsPath
     try:
@@ -208,10 +211,10 @@ def _initEnvironment():
     # set construction variables; otherwise generate an error
     #
     if SCons.Script.GetOption("setenv"):
-        for key in SCons.Script.ARGUMENTS.keys():
+        for key in SCons.Script.ARGUMENTS:
             env[key] = SCons.Script.Split(SCons.Script.ARGUMENTS[key])
     else:
-        for key in SCons.Script.ARGUMENTS.keys():
+        for key in SCons.Script.ARGUMENTS:
             errorStr += " %s=%s" % (key, SCons.Script.ARGUMENTS[key])
         if errorStr:
             log.fail("Unprocessed arguments:%s" % errorStr)
@@ -330,7 +333,7 @@ def _configureCommon():
     # If we're linking to libraries that themselves linked to
     # shareable libraries we need to do something special.
     #
-    if (re.search(r"^(Linux|Linux64)$", env["eupsFlavor"]) and os.environ.has_key("LD_LIBRARY_PATH")):
+    if (re.search(r"^(Linux|Linux64)$", env["eupsFlavor"]) and "LD_LIBRARY_PATH" in os.environ):
         env.Append(LINKFLAGS = ["-Wl,-rpath-link"])
         env.Append(LINKFLAGS = ["-Wl,%s" % os.environ["LD_LIBRARY_PATH"]])
     #
@@ -361,10 +364,10 @@ def _configureCommon():
             "unknown-pragmas" : "unknown pragma ignored",
             "deprecated-register" : "register is deprecated",
             }
-        for k in ignoreWarnings.keys():
+        for k in ignoreWarnings:
             env.Append(CCFLAGS = ["-Wno-%s" % k])
         if env.GetOption('filterWarn'):
-            for k in filterWarnings.keys():
+            for k in filterWarnings:
                 env.Append(CCFLAGS = ["-Wno-%s" % k])
     elif env.whichCc == "gcc":
         env.Append(CCFLAGS = ['-Wall'])
@@ -390,7 +393,7 @@ def _configureCommon():
             2259 : 'non-pointer conversion from "int" to "float" may lose significant bits',
             }
         if env.GetOption('filterWarn'):
-            env.Append(CCFLAGS = ["-wd%s" % (",".join([str(k) for k in filterWarnings.keys()]))])
+            env.Append(CCFLAGS = ["-wd%s" % (",".join([str(k) for k in filterWarnings]))])
         # Workaround intel bug; cf. RHL's intel bug report 580167
         env.Append(LINKFLAGS = ["-Wl,-no_compact_unwind", "-wd,11015"])
 
@@ -414,7 +417,7 @@ def _saveState():
         confFile = os.path.join(env.Dir(env["CONFIGUREDIR"]).abspath, "build.cfg")
         with open(confFile, 'wb') as configfile:
             config.write(configfile)
-    except Exception, e:
+    except Exception as e:
         log.warn("Unexpected exception in _saveState: %s" % e)
         
 _initOptions()
