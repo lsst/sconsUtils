@@ -4,7 +4,10 @@
 # If ever we want to do anything clever, we should use one of
 # the supported svn/python packages
 #
-import os, re, sys
+from __future__ import absolute_import, division, print_function
+import os
+import re
+import sys
 
 def isSvnFile(file):
     """Is file under svn control?"""
@@ -16,7 +19,7 @@ def getInfo(file="."):
     """Return a dictionary of all the information returned by "svn info" for the specified file"""
 
     if not isSvnFile(file):
-        raise RuntimeError, "%s is not under svn control" % file
+        raise RuntimeError("%s is not under svn control" % file)
 
     infoList = os.popen("svn info %s" % file).readlines()
 
@@ -25,7 +28,7 @@ def getInfo(file="."):
         mat = re.search(r"^([^:]+)\s*:\s*(.*)", line)
         if mat:
             info[mat.group(1)] = mat.group(2)
-        
+
     return info
 
 def isTrunk(file="."):
@@ -51,12 +54,12 @@ def revision(file=None, lastChanged=False):
             return info["Revision"]
 
     if lastChanged:
-        raise RuntimeError, "lastChanged makes no sense if file is None"
+        raise RuntimeError("lastChanged makes no sense if file is None")
 
     res = os.popen("svnversion . 2>&1").readline()
 
     if res == "exported\n":
-        raise RuntimeError, "No svn revision information is available"
+        raise RuntimeError("No svn revision information is available")
 
     versionRe = r"^(?P<oldest>\d+)(:(?P<youngest>\d+))?(?P<flags>[MS]*)"
     mat = re.search(versionRe, res)
@@ -71,10 +74,10 @@ def revision(file=None, lastChanged=False):
             if mat:
                 matches = mat.groupdict()
                 return matches["youngest"], matches["youngest"], tuple(matches["flags"])
-            
+
         return matches["oldest"], matches["youngest"], tuple(matches["flags"])
 
-    raise RuntimeError, ("svnversion returned unexpected result \"%s\"" % res[:-1])
+    raise RuntimeError("svnversion returned unexpected result \"%s\"" % res[:-1])
 
 #
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -93,7 +96,7 @@ def guessVersionName(HeadURL):
     elif re.search(r"/tickets/(\d+)$", HeadURL):
         versionName = "ticket_%s+" % re.search(r"/tickets/(\d+)$", HeadURL).group(1)
     else:
-        print >> sys.stderr, "Unable to guess versionName name from %s" % HeadURL
+        print("Unable to guess versionName name from %s" % HeadURL, file=sys.stderr)
         versionName = "unknown+"
 
     try:                    # Try to lookup the svn versionName
@@ -112,7 +115,7 @@ def guessVersionName(HeadURL):
             okVersion = False
 
         if not okVersion:
-            raise RuntimeError, ("Problem with determining svn revision: %s" % msg)
+            raise RuntimeError("Problem with determining svn revision: %s" % msg)
 
         versionName += "svn" + youngest
     except IOError:
@@ -126,7 +129,7 @@ def parseVersionName(versionName):
     means the top of ticket 374, and
     ticket_374+svn6021
     means revision 6021 on ticket 374.  You may replace "ticket" with "branch" if you wish
-    
+
     The "versionName" may actually be the directory part of a URL, and ".../(branches|tags|tickets)/tagname"
     is also supported
     """

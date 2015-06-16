@@ -4,6 +4,7 @@
 #  Extra builders and methods to be injected into the SConsEnvironment class.
 ##
 
+from __future__ import absolute_import, division, print_function
 import os
 import re
 import fnmatch
@@ -103,7 +104,7 @@ def SourcesForSharedLibrary(self, files):
 
     sources.sort()
     return sources
-    
+
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 ##
@@ -119,7 +120,7 @@ def filesToTag(root=None, fileRegex=None, ignoreDirs=None):
     if fileRegex is None: fileRegex = r"^[a-zA-Z0-9_].*\.(cc|h(pp)?|py)$"
     if ignoreDirs is None: ignoreDirs = ["examples", "tests"]
 
-    if len(filter(lambda t: t == "TAGS", SCons.Script.COMMAND_LINE_TARGETS)) == 0:
+    if "TAGS" not in SCons.Script.COMMAND_LINE_TARGETS:
         return []
 
     files = []
@@ -197,7 +198,7 @@ def CleanTree(self, files, dir=".", recurse=True, verbose=False):
     # We can't delete .sconsign.dblite if we use "scons clean" instead of "scons --clean",
     # so the former is no longer supported.
     #
-    action += " ; rm -rf .sconf_temp .sconsign.dblite .sconsign.tmp config.log" 
+    action += " ; rm -rf .sconf_temp .sconsign.dblite .sconsign.tmp config.log"
     #
     # Do we actually want to clean up?  We don't if the command is e.g. "scons -c install"
     #
@@ -210,7 +211,7 @@ def CleanTree(self, files, dir=".", recurse=True, verbose=False):
 ## @brief Return a product's PRODUCT_DIR, or None
 @memberOf(SConsEnvironment)
 def ProductDir(env, product):
-    import eupsForScons
+    from . import eupsForScons
     global _productDirs
     try:
         _productDirs
@@ -413,7 +414,7 @@ class DoxygenBuilder(object):
 #                       default ones ("module.i" generates "module.py"
 #                       and "moduleLib_wrap.cc").
 #
-# @note When building documentation from a clean source tree, 
+# @note When building documentation from a clean source tree,
 #       generated source files (like headers generated with M4)
 #       will not be included among the dependencies, because
 #       they aren't present when we walk the input folders.
@@ -426,7 +427,7 @@ def Doxygen(self, config, **kw):
               if os.path.exists(SCons.Script.Entry(d).abspath)]
     defaults = {
         "inputs": inputs,
-        "recursive": True, 
+        "recursive": True,
         "patterns": ["*.h", "*.cc", "*.py", "*.dox"],
         "outputs": ["html",],
         "excludes": [],
@@ -510,7 +511,7 @@ def VersionModule(self, filename, versionString=None):
             what = "__dependency_versions__"
             names.append(what)
             outFile.write("%s = {\n" % (what))
-            for name, mod in env.dependencies.packages.iteritems():
+            for name, mod in env.dependencies.packages.items():
                 if mod is None:
                     outFile.write("    '%s': None,\n" % name)
                 elif hasattr(mod.config, "version"):
@@ -522,7 +523,7 @@ def VersionModule(self, filename, versionString=None):
             outFile.write("__all__ = %r\n" % (tuple(names),))
 
         if calcMd5(target[0].abspath) != oldMd5: # only print if something's changed
-            print "makeVersionModule([\"%s\"], [])" % str(target[0])
+            state.log.info("makeVersionModule([\"%s\"], [])" % str(target[0]))
 
     result = self.Command(filename, [], self.Action(makeVersionModule, strfunction=lambda *args: None))
 

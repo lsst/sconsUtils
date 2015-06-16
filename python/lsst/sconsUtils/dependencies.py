@@ -7,12 +7,13 @@
 #  @{
 ##
 
+from __future__ import absolute_import
 import os.path
 import collections
 import imp
 import sys
 import SCons.Script
-import eupsForScons
+from . import eupsForScons
 from SCons.Script.SConscript import SConsEnvironment
 
 from . import installation
@@ -48,8 +49,8 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     # Setup installation directories and variables
     #
     SCons.Script.Help(state.opts.GenerateHelpText(state.env))
-    state.env.installing = filter(lambda t: t == "install", SCons.Script.BUILD_TARGETS) 
-    state.env.declaring = filter(lambda t: t == "declare" or t == "current", SCons.Script.BUILD_TARGETS)
+    state.env.installing = [t for t in SCons.Script.BUILD_TARGETS if t == "install"]
+    state.env.declaring = [t for t in SCons.Script.BUILD_TARGETS if t == "declare" or t == "current"]
     state.env.linkFarmDir = state.env.GetOption("linkFarmDir")
     if state.env.linkFarmDir:
         state.env.linkFarmDir = os.path.abspath(os.path.expanduser(state.env.linkFarmDir))
@@ -82,7 +83,7 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
             state.env.Append(CPPPATH=os.path.join(d, "include"))
             state.env.Append(LIBPATH=os.path.join(d, "lib"))
         state.env['SWIGPATH'] = state.env['CPPPATH']
-    
+
     if not state.env.GetOption("clean") and not state.env.GetOption("help"):
         packages.configure(state.env, check=state.env.GetOption("checkDependencies"))
         for target in state.env.libs:
@@ -120,7 +121,7 @@ class Configuration(object):
         version, eupsPathDir, productDir, table, flavor = eupsForScons.getEups().findSetupVersion(eupsProduct)
         if productDir is None:
             productDir = eupsForScons.productDir(eupsProduct)
-        return version, productDir    
+        return version, productDir
 
     ##
     # @brief Initialize the configuration object.
@@ -159,7 +160,7 @@ class Configuration(object):
         if version is not None:
             self.version = version
         if productDir is None:
-            state.log.warn("Could not find EUPS product dir for '%s'; using %s." 
+            state.log.warn("Could not find EUPS product dir for '%s'; using %s."
                            % (self.eupsProduct, self.root))
         else:
             self.root = os.path.realpath(productDir)
@@ -196,7 +197,7 @@ class Configuration(object):
 
             if state.env.linkFarmDir:
                 continue
-            
+
             for subDir in subDirs:
                 pathDir = os.path.join(self.root, subDir)
                 if os.path.isdir(pathDir):
@@ -219,7 +220,7 @@ class Configuration(object):
     ##
     def addCustomTests(self, tests):
         pass
-        
+
     ##
     # @brief Update an SCons environment to make use of the package.
     #
@@ -385,7 +386,7 @@ def CustomLinkCheck(context, message, source, extension=".cc"):
 # package's value will be its imported .cfg module.
 ##
 class PackageTree(object):
-    
+
     ##
     # @brief Recursively load *.cfg files for packageName and all its dependencies.
     #
@@ -420,7 +421,7 @@ class PackageTree(object):
                 missingDeps.append(dependency)
         if missingDeps:
             state.log.fail("Failed to load required dependencies: \"%s\"" % '", "'.join(missingDeps))
-            
+
         missingDeps = []
         for dependency in self.primary.dependencies.get("buildRequired", ()):
             if not self._recurse(dependency):
@@ -439,7 +440,7 @@ class PackageTree(object):
     ## @brief Configure the entire dependency tree in order. and return an updated environment."""
     def configure(self, env, check=False):
         conf = env.Configure(custom_tests=self.customTests)
-        for name, module in self.packages.iteritems():
+        for name, module in self.packages.items():
             if module is None:
                 state.log.info("Skipping missing optional package %s." % name)
                 continue
@@ -490,7 +491,7 @@ class PackageTree(object):
             if os.path.exists(filename):
                 try:
                     module = imp.load_source(name + "_cfg", filename)
-                except Exception, e:
+                except Exception as e:
                     state.log.warn("Error loading configuration %s (%s)" % (filename, e))
                     continue
                 state.log.info("Using configuration for package '%s' at '%s'." % (name, filename))
