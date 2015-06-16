@@ -99,6 +99,8 @@ def setPrefix(env, versionString, eupsProductPath=None):
         eupsPrefix = makeProductPath(env, eupsProductPath)
     elif 'eupsPath' in env and env['eupsPath']:
         eupsPrefix = env['eupsPath']
+    else:
+        state.log.fail("Unable to determine eupsPrefix from eupsProductPath or eupsPath")
     flavor = env['eupsFlavor']
     if not re.search("/" + flavor + "$", eupsPrefix):
         eupsPrefix = os.path.join(eupsPrefix, flavor)
