@@ -21,7 +21,7 @@ from . import state
 def SharedLibraryIncomplete(self, target, source, **keywords):
     myenv = self.Clone()
     if myenv['PLATFORM'] == 'darwin':
-        myenv['SHLINKFLAGS'] += ["-undefined", "suppress", "-flat_namespace"]
+        myenv['SHLINKFLAGS'] += ["-undefined", "suppress", "-flat_namespace", "-headerpad_max_install_names"]
     return myenv.SharedLibrary(target, source, **keywords)
 
 ##  @brief Like LoadableModule, but don't insist that all symbols are resolved, and set
@@ -30,7 +30,7 @@ def SharedLibraryIncomplete(self, target, source, **keywords):
 def SwigLoadableModule(self, target, source, **keywords):
     myenv = self.Clone()
     if myenv['PLATFORM'] == 'darwin':
-        myenv.Append(LDMODULEFLAGS = ["-undefined", "suppress", "-flat_namespace",])
+        myenv.Append(LDMODULEFLAGS = ["-undefined", "suppress", "-flat_namespace", "-headerpad_max_install_names"])
     #
     # Swig-generated .cc files cast pointers to long longs and back,
     # which is illegal.  This flag tells g++ about the sin

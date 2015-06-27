@@ -160,6 +160,8 @@ def _initEnvironment():
         env['LDMODULESUFFIX'] = ".so"
         if not re.search(r"-install_name", str(env['SHLINKFLAGS'])):
             env.Append(SHLINKFLAGS = ["-Wl,-install_name", "-Wl,${TARGET.file}"])
+        if not re.search(r"-headerpad_max_install_names", str(env['SHLINKFLAGS'])):
+            env.Append(SHLINKFLAGS = ["-Wl,-headerpad_max_install_names"])
     #
     # Remove valid options from the arguments
     #
