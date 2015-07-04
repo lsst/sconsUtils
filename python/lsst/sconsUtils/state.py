@@ -160,6 +160,8 @@ def _initEnvironment():
         env['LDMODULESUFFIX'] = ".so"
         if not re.search(r"-install_name", str(env['SHLINKFLAGS'])):
             env.Append(SHLINKFLAGS = ["-Wl,-install_name", "-Wl,${TARGET.file}"])
+        if not re.search(r"-headerpad_max_install_names", str(env['SHLINKFLAGS'])):
+            env.Append(SHLINKFLAGS = ["-Wl,-headerpad_max_install_names"])
     #
     # Remove valid options from the arguments
     #
@@ -285,8 +287,8 @@ def _configureCommon():
     #
     ARCHFLAGS = os.environ.get("ARCHFLAGS", env.get('archflags'))
     if ARCHFLAGS:
-        env.Append(CCFLAGS = [ARCHFLAGS.split()])
-        env.Append(LINKFLAGS = [ARCHFLAGS.split()])
+        env.Append(CCFLAGS = ARCHFLAGS.split())
+        env.Append(LINKFLAGS = ARCHFLAGS.split())
     # We'll add warning and optimisation options last
     if env['profile'] == '1' or env['profile'] == "pg":
         env.Append(CCFLAGS = ['-pg'])
