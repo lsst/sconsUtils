@@ -130,6 +130,11 @@ def _initEnvironment():
                 ourEnv[varname] = os.environ[varname]
                 ourEnv[k] = os.environ[k]
 
+    # add <build root>/ups directory to the configuration search path
+    # this allows the .cfg file for the package being built to be found without
+    # requiring <product name>_DIR to be in the env
+    cfgPath.append(os.path.join(SCons.Script.Dir('#').abspath, 'ups'))
+
     # Recursively walk LSST_CFG_PATH
     for root in os.environ.get("LSST_CFG_PATH", "").split(":"):
         for base, dirs, files in os.walk(root):
