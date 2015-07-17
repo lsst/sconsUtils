@@ -483,10 +483,7 @@ class PackageTree(object):
     def _tryImport(self, name):
         """Search for and import an individual configuration module from file."""
         filenames = []
-        envVars = ("%s_DIR_EXTRA" % name.upper(), "%s_DIR" % name.upper())
-        paths = [os.path.join(os.environ[v], "ups") for v in envVars if v in os.environ]
-        paths.extend(self.cfgPath)
-        for path in paths:
+        for path in self.cfgPath:
             filename = os.path.join(path, name + ".cfg")
             if os.path.exists(filename):
                 try:
