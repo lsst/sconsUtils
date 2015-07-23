@@ -95,6 +95,13 @@ def setPrefix(env, versionString, eupsProductPath=None):
                 "%s\nFound problem with version number; update or specify force=True to proceed"
                 % err
             )
+
+    if state.env['no_eups']:
+        if 'prefix' in env and env['prefix']:
+            return env['prefix']
+        else:
+            return "/usr/local"
+
     if eupsProductPath:
         eupsPrefix = makeProductPath(env, eupsProductPath)
     elif 'eupsPath' in env and env['eupsPath']:
@@ -365,7 +372,8 @@ def InstallEups(env, dest, files=[], presetup=""):
 def InstallLSST(self, prefix, dirs, ignoreRegex=None):
     results = []
     for d in dirs:
-        if d == "ups":
+        # if eups is disabled, the .build & .table files will not be "expanded"
+        if d == "ups" and not state.env['no_eups']:
             t = self.InstallEups(os.path.join(prefix, "ups"))
         else:
             t = self.InstallDir(prefix, d, ignoreRegex=ignoreRegex)

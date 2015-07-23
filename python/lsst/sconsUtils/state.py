@@ -65,6 +65,8 @@ def _initOptions():
                            help="Print additional messages for debugging.")
     SCons.Script.AddOption('--traceback', dest='traceback', action='store_true', default=False,
                            help="Print full exception tracebacks when errors occur.")
+    SCons.Script.AddOption('--no-eups', dest='no_eups', action='store_true', default=False,
+                           help="Do not use EUPS for configuration")
 
 def _initLog():
     from . import utils
@@ -128,6 +130,11 @@ def _initEnvironment():
                 ourEnv[varname] = os.environ[varname]
                 ourEnv[k] = os.environ[k]
 
+    # add <build root>/ups directory to the configuration search path
+    # this allows the .cfg file for the package being built to be found without
+    # requiring <product name>_DIR to be in the env
+    cfgPath.append(os.path.join(SCons.Script.Dir('#').abspath, 'ups'))
+
     # Recursively walk LSST_CFG_PATH
     for root in os.environ.get("LSST_CFG_PATH", "").split(":"):
         for base, dirs, files in os.walk(root):
@@ -180,6 +187,23 @@ def _initEnvironment():
 
     if env['debug']:
         env.Append(CCFLAGS = ['-g'])
+
+    #
+    # determine if EUPS is present
+    #
+
+    # --no-eups overides probing
+    # XXX is it possible to test python snippets as a scons action?
+    if SCons.Script.GetOption("no_eups"):
+        env['no_eups'] = True
+    else:
+        env['no_eups'] = not eupsForScons.haveEups()
+
+    if env['no_eups']:
+        log.info('EUPS integration: disabled')
+    else:
+        log.info('EUPS integration: enabled')
+
     #
     # Find the eups path, replace 'flavor' in favor of 'PLATFORM' if needed.
     #

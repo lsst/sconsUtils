@@ -9,6 +9,7 @@
 from __future__ import absolute_import, division, print_function
 import os.path
 from SCons.Script import *
+from distutils.spawn import find_executable
 
 from . import dependencies
 from . import builders
@@ -250,8 +251,8 @@ class BasicSConscript(object):
     ##
     @staticmethod
     def doc(config="doxygen.conf.in", projectName=None, projectNumber=None, **kw):
-        if not state.env.ProductDir("doxygen"):
-            state.log.warn("Doxygen is not setup; skipping documentation build.")
+        if not find_executable("doxygen"):
+            state.log.warn("doxygen executable not found; skipping documentation build.")
             return []
         if projectName is None:
             projectName = ".".join(["lsst"] + state.env["packageName"].split("_"))

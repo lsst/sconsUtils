@@ -32,7 +32,7 @@ or
    >>> import testAll; testAll.run()
 """
 
-import eups
+import os
 import subprocess
 import unittest
 
@@ -48,22 +48,17 @@ class SconsUtilsTestCase(unittest.TestCase):
 
     def testCheckErrorCode(self):
         self.assertTrue(subprocess.call("""
-                                           . %s/bin/setups.sh
-                                           cd %s/tests/testFailedTests
-                                           setup -r .
-                                           scons > /dev/null 2>&1
-        """ % (
-                                               eups.productDir("eups"),
-                                               eups.productDir("sconsUtils")
-                                           ),
-                                        shell=True), "Failed to detect failed tests")
+                cd %s/testFailedTests
+                scons > /dev/null 2>&1
+            """ % os.path.dirname(__file__), shell=True),
+            "Failed to detect failed tests")
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
 # Copied from utils/python/lsst/utils/tests.py as I don't want to make sconsUtils depend on utils
 #
 import sys
-        
+
 def tests_run(suite, exit=True):
     """Exit with the status code resulting from running the provided test suite"""
 
