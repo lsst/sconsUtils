@@ -199,10 +199,11 @@ def _initEnvironment():
     else:
         env['no_eups'] = not eupsForScons.haveEups()
 
-    if env['no_eups']:
-        log.info('EUPS integration: disabled')
-    else:
-        log.info('EUPS integration: enabled')
+    if not env.GetOption("no_progress"):
+        if env['no_eups']:
+            log.info('EUPS integration: disabled')
+        else:
+            log.info('EUPS integration: enabled')
 
     #
     # Find the eups path, replace 'flavor' in favor of 'PLATFORM' if needed.
