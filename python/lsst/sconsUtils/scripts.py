@@ -168,13 +168,17 @@ class BasicSConstruct(object):
         if "tests" in [str(t) for t in BUILD_TARGETS]:
             testsDir = pipes.quote(os.path.join(os.getcwd(), "tests", ".tests"))
             checkTestStatus_command = state.env.Command('checkTestStatus', [], """
-                @ if [ -d %s ]; then \
-                      nfail=`find %s -name \*.failed | wc -l | sed -e 's/ //g'`; \
+                @ if [ -d {0} ]; then \
+                      nfail=`find {0} -name \*.failed | wc -l | sed -e 's/ //g'`; \
                       if [ $$nfail -gt 0 ]; then \
+                          echo "Failed test output:" >&2; \
+                          find {0} -name \*.failed -exec cat {{}} \; >&2; \
+                          echo "The following tests failed:" >&2;\
+                          find {0} -name \*.failed >&2; \
                           echo "$$nfail tests failed" >&2; exit 1; \
                       fi; \
                   fi; \
-            """ % (testsDir, testsDir))
+            """.format(testsDir))
 
             state.env.Depends(checkTestStatus_command, BUILD_TARGETS)  # this is why the check runs last
             BUILD_TARGETS.extend(checkTestStatus_command)
