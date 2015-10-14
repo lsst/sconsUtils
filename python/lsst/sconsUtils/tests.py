@@ -7,6 +7,7 @@ from __future__ import print_function
 import glob, os, re, sys
 from SCons.Script import *    # So that this file has the same namespace as SConstruct/SConscript
 from . import state
+from . import utils
 
 ##
 #  @brief A class to control unit tests.
@@ -156,6 +157,17 @@ class Control(object):
 
             (should_pass, passedMsg, should_fail, failedMsg) = self.messages(f)
 
+            libpathstr = ""
+
+            # If we have an OS X with System Integrity Protection enabled or similar we need
+            # to pass through DYLD_LIBRARY_PATH to the test execution layer.
+            pass_through_var = utils.libraryPathPassThrough()
+            if pass_through_var is not None:
+                for varname in (pass_through_var, "LSST_LIBRARY_PATH"):
+                    if varname in os.environ:
+                        libpathstr = '{}="{}"'.format(pass_through_var, os.environ[varname])
+                        break
+
             # The TRAVIS environment variable is set to allow us to disable
             # the matplotlib font cache. See ticket DM-3856.
             # TODO: Work out better way of solving matplotlib issue in build.
@@ -164,14 +176,14 @@ class Control(object):
             @rm -f ${TARGET}.failed;
             @printf "%%s" 'running ${SOURCES}... ';
             @echo $SOURCES %s > $TARGET; echo >> $TARGET;
-            @if TRAVIS=1 %s $SOURCES %s >> $TARGET 2>&1; then \
+            @if %s TRAVIS=1 %s $SOURCES %s >> $TARGET 2>&1; then \
                if ! %s; then mv $TARGET ${TARGET}.failed; fi; \
                echo "%s"; \
             else \
                if ! %s; then mv $TARGET ${TARGET}.failed; fi; \
                echo "%s"; \
             fi;
-            """ % (expandedArgs, interpreter, expandedArgs, should_pass, passedMsg, should_fail, failedMsg))
+            """ % (expandedArgs, libpathstr, interpreter, expandedArgs, should_pass, passedMsg, should_fail, failedMsg))
 
             targets.extend(result)
 
