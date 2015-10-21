@@ -8,6 +8,8 @@
 ##
 from __future__ import absolute_import, division, print_function
 import os.path
+import re
+import sys
 from SCons.Script import *
 from distutils.spawn import find_executable
 
@@ -16,6 +18,7 @@ from . import builders
 from . import installation
 from . import state
 from . import tests
+from . import utils
 
 def _getFileBase(node):
     name, ext = os.path.splitext(os.path.basename(str(node)))
@@ -50,7 +53,7 @@ class BasicSConstruct(object):
     # a BasicSConstruct instance (which would be useless).
     ##
     def __new__(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None, cleanExt=None,
-                defaultTargets=("lib", "python", "tests", "examples", "doc"),
+                defaultTargets=("lib", "python", "tests", "examples", "doc", "shebang"),
                 subDirList=None, ignoreRegex=None,
                 versionModuleName="python/lsst/%s/version.py", noCfgFile=False):
         cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt,
@@ -126,7 +129,7 @@ class BasicSConstruct(object):
     #  @returns an SCons Environment object (which is also available as lsst.sconsUtils.env).
     ##
     @staticmethod
-    def finish(defaultTargets=("lib", "python", "tests", "examples", "doc"),
+    def finish(defaultTargets=("lib", "python", "tests", "examples", "doc", "shebang"),
                subDirList=None, ignoreRegex=None):
         if ignoreRegex is None:
             ignoreRegex = r"(~$|\.pyc$|^\.svn$|\.o|\.os$)"
@@ -205,6 +208,48 @@ class BasicSConscript(object):
         result = state.env.SharedLibrary(libName, src, LIBS=libs)
         state.targets["lib"].extend(result)
         return result
+
+    ##
+    #  @brief   Handles shebang rewriting
+    #
+    #  With no arguments looks in bin.src/ and copies to bin/
+    #  If utils.needShebangRewrite() is False the shebang will
+    #  not be modified.
+    #
+    #  @param src  Override the source list
+    ##
+    @staticmethod
+    def shebang(src=None):
+        # check if Python is called on the first line with this expression
+        # This comes from distutils copy_scripts
+        FIRST_LINE_RE = re.compile(r'^#!.*python[0-9.]*([ \t].*)?$')
+        doRewrite = utils.needShebangRewrite()
+        def rewrite_shebang(target, source, env):
+            """Copy source to target, rewriting the shebang"""
+            # Currently just use this python
+            usepython = sys.executable
+            for targ, src in zip(target, source):
+                with open(str(src), "r") as srcfd:
+                    with open(str(targ), "w") as outfd:
+                        first_line = srcfd.readline()
+                        match = False
+                        if doRewrite:
+                            match = FIRST_LINE_RE.match(first_line)
+                        if match:
+                            post_interp = match.group(1) or ''
+                            outfd.write("#!{}{}\n".format(usepython, post_interp))
+                        else:
+                            outfd.write(first_line)
+                        for line in srcfd.readlines():
+                            outfd.write(line)
+
+        if src is None:
+            src = Glob("#bin.src/*")
+        for s in src:
+            if str(s) != "SConscript":
+                result = state.env.Command(target=os.path.join(Dir("#bin").abspath, str(s)),
+                                           source=s, action=rewrite_shebang)
+                state.targets["shebang"].extend(result)
 
     ##
     #  @brief Convenience function to replace standard python/*/SConscript boilerplate.
