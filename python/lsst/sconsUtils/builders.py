@@ -8,6 +8,7 @@ from __future__ import absolute_import, division, print_function
 import os
 import re
 import fnmatch
+import pipes
 
 import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
@@ -261,7 +262,7 @@ class DoxygenBuilder(object):
                              action=self.buildConfig)
         env.AlwaysBuild(config)
         doc = env.Command(target=self.targets, source=self.sources,
-                          action="doxygen %s" % outConfigNode.abspath)
+                          action="doxygen %s" % pipes.quote(outConfigNode.abspath))
         for path in self.outputPaths:
             env.Clean(doc, path)
         env.Depends(doc, config)
@@ -330,8 +331,8 @@ class DoxygenBuilder(object):
             outConfigFile.write("PROJECT_NAME = %s\n" % self.projectName)
         if self.projectNumber is not None:
             outConfigFile.write("PROJECT_NUMBER = %s\n" % self.projectNumber)
-        outConfigFile.write("INPUT = %s\n" % " ".join(self.inputs))
-        outConfigFile.write("EXCLUDE = %s\n" % " ".join(self.excludes))
+        outConfigFile.write("INPUT = %s\n" % " ".join('"{}"'.format(s) for s in self.inputs))
+        outConfigFile.write("EXCLUDE = %s\n" % " ".join('"{}"'.format(s) for s in self.excludes))
         outConfigFile.write("FILE_PATTERNS = %s\n" % " ".join(self.patterns))
         outConfigFile.write("RECURSIVE = YES\n" if self.recursive else "RECURSIVE = NO\n")
         allOutputs = set(("html", "latex", "man", "rtf", "xml"))
@@ -342,11 +343,11 @@ class DoxygenBuilder(object):
                 state.log.fail("Unknown Doxygen output format '%s'." % output)
                 state.log.finish()
             outConfigFile.write("GENERATE_%s = YES\n" % output.upper())
-            outConfigFile.write("%s_OUTPUT = %s\n" % (output.upper(), path.abspath))
+            outConfigFile.write('%s_OUTPUT = "%s"\n' % (output.upper(), path.abspath))
         for output in allOutputs:
             outConfigFile.write("GENERATE_%s = NO\n" % output.upper())
         if self.makeTag is not None:
-            outConfigFile.write("GENERATE_TAGFILE = %s\n" % self.makeTag)
+            outConfigFile.write('GENERATE_TAGFILE = "%s"\n' % self.makeTag)
         #
         # Append the local overrides (usually doxygen.conf.in)
         #
