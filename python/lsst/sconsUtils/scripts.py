@@ -10,6 +10,7 @@ from __future__ import absolute_import, division, print_function
 import os.path
 import re
 import sys
+import pipes
 from stat import ST_MODE
 from SCons.Script import *
 from distutils.spawn import find_executable
@@ -166,7 +167,7 @@ class BasicSConstruct(object):
         # N.b. the test is written in sh not python as then we can use @ to suppress output
         #
         if "tests" in [str(t) for t in BUILD_TARGETS]:
-            testsDir = os.path.join(os.getcwd(), "tests", ".tests")
+            testsDir = pipes.quote(os.path.join(os.getcwd(), "tests", ".tests"))
             checkTestStatus_command = state.env.Command('checkTestStatus', [], """
                 @ if [ -d %s ]; then \
                       nfail=`find %s -name \*.failed | wc -l | sed -e 's/ //g'`; \
