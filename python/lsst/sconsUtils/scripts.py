@@ -10,6 +10,7 @@ from __future__ import absolute_import, division, print_function
 import os.path
 import re
 import sys
+from stat import ST_MODE
 from SCons.Script import *
 from distutils.spawn import find_executable
 
@@ -252,6 +253,14 @@ class BasicSConscript(object):
                             outfd.write(first_line)
                         for line in srcfd.readlines():
                             outfd.write(line)
+                # Ensure the bin/ file is executable
+                oldmode = os.stat(str(targ))[ST_MODE] & 0o7777
+                newmode = (oldmode | 0o555) & 0o7777
+                if newmode != oldmode:
+                    state.log.info("changing mode of {} from {} to {}".format(
+                                   str(targ), oldmode, newmode))
+                    os.chmod(str(targ), newmode)
+
 
         if src is None:
             src = Glob("#bin.src/*")
