@@ -8,6 +8,7 @@ from __future__ import absolute_import, division, print_function
 import sys
 import warnings
 import subprocess
+import platform
 import SCons.Script
 
 ##
@@ -43,6 +44,35 @@ class Log(object):
 
     def flush(self):
         sys.stderr.flush()
+
+##
+#  @brief Internal function indicating that the OS has System
+#   Integrity Protection.
+##
+def _has_OSX_SIP():
+    hasSIP = False
+    os_platform = SCons.Platform.platform_default()
+    # SIP is enabled on OS X >=10.11 equivalent to darwin >= 15
+    if os_platform == 'darwin':
+        release_str = platform.release()
+        release_major = int(release_str.split('.')[0])
+        if release_major >= 15:
+            hasSIP = True
+    return hasSIP
+
+##
+#  @brief Returns name of library path environment variable to be passed through
+#  or else returns None if no pass through is required on this platform.
+def libraryPathPassThrough():
+    if _has_OSX_SIP():
+        return "DYLD_LIBRARY_PATH"
+    return None
+
+##
+#  @brief Returns True if the shebang lines of executables should be rewritten
+##
+def needShebangRewrite():
+    return _has_OSX_SIP()
 
 ##
 #  @brief Safe wrapper for running external programs, reading stdout, and sanitizing error messages.
