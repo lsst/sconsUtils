@@ -11,13 +11,13 @@ from __future__ import absolute_import
 import os.path
 import collections
 import imp
-import sys
 import SCons.Script
 from . import eupsForScons
 from SCons.Script.SConscript import SConsEnvironment
 
 from . import installation
 from . import state
+
 
 ##
 # @brief Recursively configure a package using ups/.cfg files.
@@ -64,9 +64,9 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     state.log.traceback = state.env.GetOption("traceback")
     state.log.verbose = state.env.GetOption("verbose")
     packages = PackageTree(packageName, noCfgFile=noCfgFile)
-    state.log.flush() # if we've already hit a fatal error, die now.
-    state.env.libs = {"main":[], "python":[], "test":[]}
-    state.env.doxygen = {"tags":[], "includes":[]}
+    state.log.flush()  # if we've already hit a fatal error, die now.
+    state.env.libs = {"main": [], "python": [], "test": []}
+    state.env.doxygen = {"tags": [], "includes": []}
     state.env['CPPPATH'] = []
     state.env['LIBPATH'] = []
 
@@ -90,6 +90,7 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
             state.log.info("Libraries in target '%s': %s" % (target, state.env.libs[target]))
     state.env.dependencies = packages
     state.log.flush()
+
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -150,7 +151,7 @@ class Configuration(object):
     #                            .cfg file.
     ##
     def __init__(self, cfgFile, headers=(), libs=None, hasSwigFiles=True,
-                 includeFileDirs=["include",], libFileDirs=["lib",],
+                 includeFileDirs=["include"], libFileDirs=["lib"],
                  hasDoxygenInclude=False, hasDoxygenTag=True, eupsProduct=None):
         self.name, self.root = self.parseFilename(cfgFile)
         if eupsProduct is None:
@@ -177,9 +178,9 @@ class Configuration(object):
                 # Normal libraries provided by this package
                 "main": [self.name],
                 # Libraries provided that should only be linked with Python modules
-                "python":[],
+                "python": [],
                 # Libraries provided that should only be linked with unit test code
-                "test":[],
+                "test": [],
                 }
         elif "main" in libs:
             self.libs = libs
@@ -192,7 +193,7 @@ class Configuration(object):
             self.paths["SWIGPATH"] = []
 
         for pathName, subDirs in [("CPPPATH", includeFileDirs),
-                                  ("LIBPATH", libFileDirs),]:
+                                  ("LIBPATH", libFileDirs)]:
             self.paths[pathName] = []
 
             if state.env.linkFarmDir:
@@ -244,7 +245,7 @@ class Configuration(object):
             conf.env.doxygen["tags"].extend(self.doxygen["tags"])
         for target in self.libs:
             if target not in conf.env.libs:
-                conf.env.libs[target] = lib[target].copy()
+                conf.env.libs[target] = self.libs[target].copy()
                 state.log.info("Adding '%s' libraries to target '%s'." % (self.libs[target], target))
             else:
                 for lib in self.libs[target]:
@@ -253,10 +254,13 @@ class Configuration(object):
                         state.log.info("Adding '%s' library to target '%s'." % (lib, target))
         if check:
             for header in self.provides["headers"]:
-                if not conf.CheckCXXHeader(header): return False
+                if not conf.CheckCXXHeader(header):
+                    return False
             for lib in self.libs["main"]:
-                if not conf.CheckLib(lib, autoadd=False, language="C++"): return False
+                if not conf.CheckLib(lib, autoadd=False, language="C++"):
+                    return False
         return True
+
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -292,6 +296,7 @@ class ExternalConfiguration(Configuration):
         self.paths["XCPPPATH"] = self.paths["CPPPATH"]
         del self.paths["CPPPATH"]
 
+
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 ##
@@ -305,13 +310,14 @@ class ExternalConfiguration(Configuration):
 ##
 def CustomCFlagCheck(context, flag, append=True):
     context.Message("Checking if C compiler supports " + flag + " flag ")
-    ccflags = context.env["CCFLAGS"];
-    context.env.Append(CCFLAGS = flag)
+    ccflags = context.env["CCFLAGS"]
+    context.env.Append(CCFLAGS=flag)
     result = context.TryCompile("int main(int argc, char **argv) { return 0; }", ".c")
     context.Result(result)
     if not append or not result:
-        context.env.Replace(CCFLAGS = ccflags)
+        context.env.Replace(CCFLAGS=ccflags)
     return result
+
 
 ##
 # @brief A configuration test that checks whether a C++ compiler supports
@@ -324,13 +330,14 @@ def CustomCFlagCheck(context, flag, append=True):
 ##
 def CustomCppFlagCheck(context, flag, append=True):
     context.Message("Checking if C++ compiler supports " + flag + " flag ")
-    cxxflags = context.env["CXXFLAGS"];
-    context.env.Append(CXXFLAGS = flag)
+    cxxflags = context.env["CXXFLAGS"]
+    context.env.Append(CXXFLAGS=flag)
     result = context.TryCompile("int main(int argc, char **argv) { return 0; }", ".cc")
     context.Result(result)
     if not append or not result:
-        context.env.Replace(CXXFLAGS = cxxflags)
+        context.env.Replace(CXXFLAGS=cxxflags)
     return result
+
 
 ##
 # @brief A configuration test that checks whether the given source code
@@ -354,6 +361,7 @@ def CustomCompileCheck(context, message, source, extension=".cc"):
 
     return result
 
+
 ##
 # @brief A configuration test that checks whether the given source code
 #        compiles and links.
@@ -368,6 +376,7 @@ def CustomLinkCheck(context, message, source, extension=".cc"):
     result = context.TryLink(source, extension)
     context.Result(result)
     return result
+
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -401,10 +410,10 @@ class PackageTree(object):
         self.cfgPath = state.env.cfgPath
         self.packages = collections.OrderedDict()
         self.customTests = {
-            "CustomCFlagCheck" : CustomCFlagCheck,
-            "CustomCppFlagCheck" : CustomCppFlagCheck,
-            "CustomCompileCheck" : CustomCompileCheck,
-            "CustomLinkCheck" : CustomLinkCheck,
+            "CustomCFlagCheck": CustomCFlagCheck,
+            "CustomCppFlagCheck": CustomCppFlagCheck,
+            "CustomCompileCheck": CustomCompileCheck,
+            "CustomLinkCheck": CustomLinkCheck,
             }
         self._current = set([primaryName])
         if noCfgFile:
@@ -531,6 +540,7 @@ class PackageTree(object):
         self.packages[name] = module
         self._current.remove(name)
         return True
+
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 

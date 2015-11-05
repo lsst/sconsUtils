@@ -16,8 +16,6 @@ from SCons.Script import *
 from distutils.spawn import find_executable
 
 from . import dependencies
-from . import builders
-from . import installation
 from . import state
 from . import tests
 from . import utils
@@ -28,6 +26,7 @@ DEFAULT_TARGETS = ("lib", "python", "tests", "examples", "doc", "shebang")
 def _getFileBase(node):
     name, ext = os.path.splitext(os.path.basename(str(node)))
     return name
+
 
 ##
 # @brief A scope-only class for SConstruct-replacement convenience functions.
@@ -108,8 +107,8 @@ class BasicSConstruct(object):
             if "SConstruct" in files and root != ".":
                 dirs[:] = []
                 continue
-            dirs[:] = [d for d in dirs if (not d.startswith('.'))]
-            dirs.sort() # happy coincidence that include < libs < python < tests
+            dirs[:] = [d for d in dirs if not d.startswith('.')]
+            dirs.sort()  # happy coincidence that include < libs < python < tests
             if "SConscript" in files:
                 state.log.info("Using Sconscript at %s/SConscript" % root)
                 SCons.Script.SConscript(os.path.join(root, "SConscript"))
@@ -151,7 +150,7 @@ class BasicSConstruct(object):
             state.env.Alias(name, target)
         state.env.Requires(state.targets["python"], state.targets["version"])
         declarer = state.env.Declare()
-        state.env.Requires(declarer, install) # Ensure declaration fires after installation available
+        state.env.Requires(declarer, install)  # Ensure declaration fires after installation available
         state.env.Default([t for t in defaultTargets if os.path.exists(t)])
         # shebang target is not named same as relevant directory so we must be explicit
         if "shebang" in defaultTargets and os.path.exists("bin.src"):
@@ -159,7 +158,7 @@ class BasicSConstruct(object):
         if "version" in state.targets:
             state.env.Default(state.targets["version"])
         state.env.Requires(state.targets["tests"], state.targets["version"])
-        state.env.Decider("MD5-timestamp") # if timestamps haven't changed, don't do MD5 checks
+        state.env.Decider("MD5-timestamp")  # if timestamps haven't changed, don't do MD5 checks
         #
         # Check if any of the tests failed by looking for *.failed files.
         # Perform this test just before scons exits
@@ -177,9 +176,10 @@ class BasicSConstruct(object):
                   fi; \
             """ % (testsDir, testsDir))
 
-            state.env.Depends(checkTestStatus_command, BUILD_TARGETS) # this is why the check runs last
+            state.env.Depends(checkTestStatus_command, BUILD_TARGETS)  # this is why the check runs last
             BUILD_TARGETS.extend(checkTestStatus_command)
             state.env.AlwaysBuild(checkTestStatus_command)
+
 
 ##
 # @brief A scope-only class for SConscript-replacement convenience functions.
@@ -235,6 +235,7 @@ class BasicSConscript(object):
         # This comes from distutils copy_scripts
         FIRST_LINE_RE = re.compile(r'^#!.*python[0-9.]*([ \t].*)?$')
         doRewrite = utils.needShebangRewrite()
+
         def rewrite_shebang(target, source, env):
             """Copy source to target, rewriting the shebang"""
             # Currently just use this python
@@ -264,7 +265,6 @@ class BasicSConscript(object):
                     state.log.info("changing mode of {} from {} to {}".format(
                                    str(targ), oldmode, newmode))
                     os.chmod(str(targ), newmode)
-
 
         if src is None:
             src = Glob("#bin.src/*")
@@ -441,7 +441,7 @@ class BasicSConscript(object):
             src.append(node)
         if ccList is None:
             ccList = [node for node in Glob("*.cc")
-                          if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc]
+                      if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc]
         state.log.info("SWIG modules for examples: %s" % swigFileList)
         state.log.info("C++ examples: %s" % ccList)
         results = []

@@ -11,6 +11,7 @@ import subprocess
 import platform
 import SCons.Script
 
+
 ##
 #  @brief A dead-simple logger for all messages.
 #
@@ -45,6 +46,7 @@ class Log(object):
     def flush(self):
         sys.stderr.flush()
 
+
 ##
 #  @brief Internal function indicating that the OS has System
 #   Integrity Protection.
@@ -60,6 +62,7 @@ def _has_OSX_SIP():
             hasSIP = True
     return hasSIP
 
+
 ##
 #  @brief Returns name of library path environment variable to be passed through
 #  or else returns None if no pass through is required on this platform.
@@ -68,11 +71,13 @@ def libraryPathPassThrough():
         return "DYLD_LIBRARY_PATH"
     return None
 
+
 ##
 #  @brief Returns True if the shebang lines of executables should be rewritten
 ##
 def needShebangRewrite():
     return _has_OSX_SIP()
+
 
 ##
 #  @brief Safe wrapper for running external programs, reading stdout, and sanitizing error messages.
@@ -91,9 +96,10 @@ def runExternal(cmd, fatal=False, msg=None):
         if fatal:
             raise RuntimeError("%s: %s" % (msg, stderr))
         else:
-            from . import state # can't import at module scope due to circular dependency
+            from . import state  # can't import at module scope due to circular dependency
             state.log.warn("%s: %s" % (msg, stderr))
     return stdout
+
 
 ##
 #  @brief A Python decorator that injects functions into a class.
@@ -118,10 +124,11 @@ def memberOf(cls, name=None):
     else:
         classes = tuple(cls)
     kw = {"name": name}
+
     def nested(member):
-        if kw["name"] is None: kw["name"] = member.__name__
+        if kw["name"] is None:
+            kw["name"] = member.__name__
         for scope in classes:
             setattr(scope, kw["name"], member)
         return member
     return nested
-

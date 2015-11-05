@@ -69,10 +69,12 @@ def _initOptions():
     SCons.Script.AddOption('--no-eups', dest='no_eups', action='store_true', default=False,
                            help="Do not use EUPS for configuration")
 
+
 def _initLog():
     from . import utils
     global log
     log = utils.Log()
+
 
 def _initVariables():
     files = []
@@ -106,11 +108,12 @@ def _initVariables():
         ('noOptFiles', "Specify a list of files that should NOT be optimized", None),
         )
 
+
 def _initEnvironment():
     """Construction and basic setup of the state.env variable."""
 
     ourEnv = {}
-    for key in ('EUPS_DIR', 'EUPS_PATH', 'EUPS_SHELL', 'PATH' ,'DYLD_LIBRARY_PATH', 'LD_LIBRARY_PATH',
+    for key in ('EUPS_DIR', 'EUPS_PATH', 'EUPS_SHELL', 'PATH', 'DYLD_LIBRARY_PATH', 'LD_LIBRARY_PATH',
                 'SHELL', 'TMPDIR', 'TEMP', 'TMP', 'EUPS_LOCK_PID', 'XPA_PORT'):
         if key in os.environ:
             ourEnv[key] = os.environ[key]
@@ -119,7 +122,8 @@ def _initEnvironment():
     cfgPath = []
     for k in os.environ:
         m = re.search(r"^(?P<name>\w+)_DIR(?P<extra>_EXTRA)?$", k)
-        if not m: continue
+        if not m:
+            continue
         cfgPath.append(os.path.join(os.environ[k], "ups"))
         if m.group("extra"):
             cfgPath.append(os.environ[k])
@@ -167,9 +171,9 @@ def _initEnvironment():
     if env['PLATFORM'] == 'darwin':
         env['LDMODULESUFFIX'] = ".so"
         if not re.search(r"-install_name", str(env['SHLINKFLAGS'])):
-            env.Append(SHLINKFLAGS = ["-Wl,-install_name", "-Wl,${TARGET.file}"])
+            env.Append(SHLINKFLAGS=["-Wl,-install_name", "-Wl,${TARGET.file}"])
         if not re.search(r"-headerpad_max_install_names", str(env['SHLINKFLAGS'])):
-            env.Append(SHLINKFLAGS = ["-Wl,-headerpad_max_install_names"])
+            env.Append(SHLINKFLAGS=["-Wl,-headerpad_max_install_names"])
     #
     # Remove valid options from the arguments
     #
@@ -187,7 +191,7 @@ def _initEnvironment():
             env[k] = SCons.Script.GetOption(k)
 
     if env['debug']:
-        env.Append(CCFLAGS = ['-g'])
+        env.Append(CCFLAGS=['-g'])
 
     #
     # determine if EUPS is present
@@ -251,6 +255,7 @@ def _initEnvironment():
     #
     env['eupsFlavor'] = eupsForScons.flavor()
 
+
 def _configureCommon():
     """Configuration checks for the compiler, platform, and standard libraries."""
     #
@@ -263,8 +268,8 @@ def _configureCommon():
         """
         versionNameList = (
             (r"gcc(?:\-.+)? +\(.+\) +([0-9.a-zA-Z]+)", "gcc"),
-            (r"LLVM +version +([0-9.a-zA-Z]+) ", "clang"), # clang on Mac
-            (r"clang +version +([0-9.a-zA-Z]+) ", "clang"), # clang on linux
+            (r"LLVM +version +([0-9.a-zA-Z]+) ", "clang"),  # clang on Mac
+            (r"clang +version +([0-9.a-zA-Z]+) ", "clang"),  # clang on linux
             (r"\(ICC\) +([0-9.a-zA-Z]+) ", "icc"),
         )
 
@@ -279,7 +284,7 @@ def _configureCommon():
                     return (compilerName, compilerVersion)
         return ("unknown", "unknown")
 
-    if env.GetOption("clean") or env.GetOption("no_exec") or env.GetOption("help") :
+    if env.GetOption("clean") or env.GetOption("no_exec") or env.GetOption("help"):
         env.whichCc = "unknown"         # who cares? We're cleaning/not execing, not building
     else:
         if env['cc'] != '':
@@ -303,7 +308,7 @@ def _configureCommon():
                 env['CC'] = CC
             if CC and env['CXX'] == env0['CXX']:
                 env['CXX'] = CXX
-        conf = env.Configure(custom_tests = {'ClassifyCc' : ClassifyCc,})
+        conf = env.Configure(custom_tests={'ClassifyCc': ClassifyCc})
         env.whichCc, env.ccVersion = conf.ClassifyCc()
         if not env.GetOption("no_progress"):
             log.info("CC is %s version %s" % (env.whichCc, env.ccVersion))
@@ -313,15 +318,15 @@ def _configureCommon():
     #
     ARCHFLAGS = os.environ.get("ARCHFLAGS", env.get('archflags'))
     if ARCHFLAGS:
-        env.Append(CCFLAGS = ARCHFLAGS.split())
-        env.Append(LINKFLAGS = ARCHFLAGS.split())
+        env.Append(CCFLAGS=ARCHFLAGS.split())
+        env.Append(LINKFLAGS=ARCHFLAGS.split())
     # We'll add warning and optimisation options last
     if env['profile'] == '1' or env['profile'] == "pg":
-        env.Append(CCFLAGS = ['-pg'])
-        env.Append(LINKFLAGS = ['-pg'])
+        env.Append(CCFLAGS=['-pg'])
+        env.Append(LINKFLAGS=['-pg'])
     elif env['profile'] == 'gcov':
-        env.Append(CCFLAGS = '--coverage')
-        env.Append(LINKFLAGS = '--coverage')
+        env.Append(CCFLAGS='--coverage')
+        env.Append(LINKFLAGS='--coverage')
 
     #
     # Enable C++11 support (and C99 support for gcc)
@@ -332,9 +337,9 @@ def _configureCommon():
         conf = env.Configure()
         for cpp11Arg in ("-std=%s" % (val,) for val in ("c++11", "c++0x")):
             conf.env = env.Clone()
-            conf.env.Append(CXXFLAGS = cpp11Arg)
+            conf.env.Append(CXXFLAGS=cpp11Arg)
             if conf.CheckCXX():
-                env.Append(CXXFLAGS = cpp11Arg)
+                env.Append(CXXFLAGS=cpp11Arg)
                 if not env.GetOption("no_progress"):
                     log.info("C++11 supported with %r" % (cpp11Arg,))
                 break
@@ -349,21 +354,21 @@ def _configureCommon():
     # but that was causing "no" to be cached and used on later runs.
     if not (env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec")):
         conf = env.Configure()
-        env.Append(CCFLAGS = ['-DLSST_HAVE_TR1=%d' % int(conf.CheckCXXHeader("tr1/unordered_map"))])
+        env.Append(CCFLAGS=['-DLSST_HAVE_TR1=%d' % int(conf.CheckCXXHeader("tr1/unordered_map"))])
         conf.Finish()
     #
     # Byte order
     #
     import socket
     if socket.htons(1) != 1:
-        env.Append(CCFLAGS = ['-DLSST_LITTLE_ENDIAN=1'])
+        env.Append(CCFLAGS=['-DLSST_LITTLE_ENDIAN=1'])
     #
     # If we're linking to libraries that themselves linked to
     # shareable libraries we need to do something special.
     #
     if (re.search(r"^(Linux|Linux64)$", env["eupsFlavor"]) and "LD_LIBRARY_PATH" in os.environ):
-        env.Append(LINKFLAGS = ["-Wl,-rpath-link"])
-        env.Append(LINKFLAGS = ["-Wl,%s" % os.environ["LD_LIBRARY_PATH"]])
+        env.Append(LINKFLAGS=["-Wl,-rpath-link"])
+        env.Append(LINKFLAGS=["-Wl,%s" % os.environ["LD_LIBRARY_PATH"]])
     #
     # Set the optimization level.
     #
@@ -374,56 +379,58 @@ def _configureCommon():
     # Set compiler-specific warning flags.
     #
     if env.whichCc == "clang":
-        env.Append(CCFLAGS = ['-Wall'])
+        env.Append(CCFLAGS=['-Wall'])
         env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-mno-fused-madd$", o)]
 
         ignoreWarnings = {
-            "unused-function" : 'boost::regex has functions in anon namespaces in headers',
+            "unused-function": 'boost::regex has functions in anon namespaces in headers',
             }
         filterWarnings = {
-            "attributes" : "clang pretends to be g++, but complains about g++ attributes such as flatten",
-            "char-subscripts" : 'seems innocous enough, and is used by boost',
-            "constant-logical-operand" : "Used by eigen 2.0.15. Should get this fixed",
-            "format-security" : "format string is not a string literal",
-            "mismatched-tags" : "mixed class and struct.  Used by gcc 4.2 RTL and eigen 2.0.15",
-            "parentheses" : "equality comparison with extraneous parentheses",
-            "shorten-64-to-32" : "implicit conversion loses integer precision",
-            "self-assign" : "x = x",
-            "unknown-pragmas" : "unknown pragma ignored",
-            "deprecated-register" : "register is deprecated",
+            "attributes": "clang pretends to be g++, but complains about g++ attributes such as flatten",
+            "char-subscripts": 'seems innocous enough, and is used by boost',
+            "constant-logical-operand": "Used by eigen 2.0.15. Should get this fixed",
+            "format-security": "format string is not a string literal",
+            "mismatched-tags": "mixed class and struct.  Used by gcc 4.2 RTL and eigen 2.0.15",
+            "parentheses": "equality comparison with extraneous parentheses",
+            "shorten-64-to-32": "implicit conversion loses integer precision",
+            "self-assign": "x = x",
+            "unknown-pragmas": "unknown pragma ignored",
+            "deprecated-register": "register is deprecated",
             }
         for k in ignoreWarnings:
-            env.Append(CCFLAGS = ["-Wno-%s" % k])
+            env.Append(CCFLAGS=["-Wno-%s" % k])
         if env.GetOption('filterWarn'):
             for k in filterWarnings:
-                env.Append(CCFLAGS = ["-Wno-%s" % k])
+                env.Append(CCFLAGS=["-Wno-%s" % k])
     elif env.whichCc == "gcc":
-        env.Append(CCFLAGS = ['-Wall'])
-        env.Append(CCFLAGS = ["-Wno-unknown-pragmas"]) # we don't want complaints about icc/clang pragmas
+        env.Append(CCFLAGS=['-Wall'])
+        env.Append(CCFLAGS=["-Wno-unknown-pragmas"])  # we don't want complaints about icc/clang pragmas
     elif env.whichCc == "icc":
-        env.Append(CCFLAGS = ['-Wall'])
+        env.Append(CCFLAGS=['-Wall'])
         filterWarnings = {
-            21 : 'type qualifiers are meaningless in this declaration',
-            68 : 'integer conversion resulted in a change of sign',
-            111 : 'statement is unreachable',
-            191 : 'type qualifier is meaningless on cast type',
-            193 : 'zero used for undefined preprocessing identifier "SYMB"',
-            279 : 'controlling expression is constant',
-            304 : 'access control not specified ("public" by default)', # comes from boost
-            383 : 'value copied to temporary, reference to temporary used',
-            #424 : 'Extra ";" ignored',
-            444 : 'destructor for base class "CLASS" is not virtual',
-            981 : 'operands are evaluated in unspecified order',
-            1418 : 'external function definition with no prior declaration',
-            1419 : 'external declaration in primary source file',
-            1572 : 'floating-point equality and inequality comparisons are unreliable',
-            1720 : 'function "FUNC" has no corresponding member operator delete (to be called if an exception is thrown during initialization of an allocated object)',
-            2259 : 'non-pointer conversion from "int" to "float" may lose significant bits',
+            21: 'type qualifiers are meaningless in this declaration',
+            68: 'integer conversion resulted in a change of sign',
+            111: 'statement is unreachable',
+            191: 'type qualifier is meaningless on cast type',
+            193: 'zero used for undefined preprocessing identifier "SYMB"',
+            279: 'controlling expression is constant',
+            304: 'access control not specified ("public" by default)',  # comes from boost
+            383: 'value copied to temporary, reference to temporary used',
+            # 424: 'Extra ";" ignored',
+            444: 'destructor for base class "CLASS" is not virtual',
+            981: 'operands are evaluated in unspecified order',
+            1418: 'external function definition with no prior declaration',
+            1419: 'external declaration in primary source file',
+            1572: 'floating-point equality and inequality comparisons are unreliable',
+            1720: 'function "FUNC" has no corresponding member operator delete'
+                  '(to be called if an exception is thrown during initialization of an allocated object)',
+            2259: 'non-pointer conversion from "int" to "float" may lose significant bits',
             }
         if env.GetOption('filterWarn'):
-            env.Append(CCFLAGS = ["-wd%s" % (",".join([str(k) for k in filterWarnings]))])
+            env.Append(CCFLAGS=["-wd%s" % (",".join([str(k) for k in filterWarnings]))])
         # Workaround intel bug; cf. RHL's intel bug report 580167
-        env.Append(LINKFLAGS = ["-Wl,-no_compact_unwind", "-wd,11015"])
+        env.Append(LINKFLAGS=["-Wl,-no_compact_unwind", "-wd,11015"])
+
 
 def _saveState():
     """Save state such as optimization level used.  The scons mailing lists were unable to tell

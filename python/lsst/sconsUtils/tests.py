@@ -3,11 +3,15 @@
 #
 #  Control which tests run, and how.
 ##
-from __future__ import print_function
-import glob, os, re, sys
+from __future__ import print_function, absolute_import
+import glob
+import os
+import re
+import sys
 from SCons.Script import *    # So that this file has the same namespace as SConstruct/SConscript
 from . import state
 from . import utils
+
 
 ##
 #  @brief A class to control unit tests.
@@ -82,7 +86,8 @@ class Control(object):
 
         self.runExamples = True                      # should I run the examples?
         try:
-            self.runExamples = (os.stat(self._tmpDir).st_mode & 0o700) != 0 # file is user read/write/executable
+            # file is user read/write/executable
+            self.runExamples = (os.stat(self._tmpDir).st_mode & 0o700) != 0
         except OSError:
             pass
 
@@ -97,9 +102,8 @@ class Control(object):
             return ""
 
     def ignore(self, test):
-        if \
-               not re.search(r"\.py$", test) and \
-               len(self._env.Glob(test)) == 0: # we don't know how to build it
+        if not re.search(r"\.py$", test) and \
+           len(self._env.Glob(test)) == 0:  # we don't know how to build it
             return True
 
         ignoreFile = test in self._info and self._info[test][0] == self._IGNORE
@@ -122,7 +126,7 @@ class Control(object):
                    "false", "failed"
 
     def run(self, fileGlob):
-        if not isinstance(fileGlob, basestring): # env.Glob() returns an scons Node
+        if not isinstance(fileGlob, basestring):  # env.Glob() returns an scons Node
             fileGlob = str(fileGlob)
         targets = []
         if not self.runExamples:
@@ -144,7 +148,7 @@ class Control(object):
             for a in self.args(f).split(" "):
                 # if a is a file, make it an absolute name as scons runs from the root directory
                 filePrefix = "file:"
-                if re.search(r"^" + filePrefix, a): # they explicitly said that this was a file
+                if re.search(r"^" + filePrefix, a):  # they explicitly said that this was a file
                     a = os.path.join(self._cwd, a[len(filePrefix):])
                 else:
                     try:                # see if it's a file
@@ -183,7 +187,8 @@ class Control(object):
                if ! %s; then mv $TARGET ${TARGET}.failed; fi; \
                echo "%s"; \
             fi;
-            """ % (expandedArgs, libpathstr, interpreter, expandedArgs, should_pass, passedMsg, should_fail, failedMsg))
+            """ % (expandedArgs, libpathstr, interpreter, expandedArgs, should_pass,
+                   passedMsg, should_fail, failedMsg))
 
             targets.extend(result)
 
