@@ -3,10 +3,15 @@
 #
 #  Control which tests run, and how.
 ##
-from __future__ import print_function
-import glob, os, re, sys
+from __future__ import print_function, absolute_import
+import glob
+import os
+import re
+import sys
 from SCons.Script import *    # So that this file has the same namespace as SConstruct/SConscript
 from . import state
+from . import utils
+
 
 ##
 #  @brief A class to control unit tests.
@@ -81,7 +86,8 @@ class Control(object):
 
         self.runExamples = True                      # should I run the examples?
         try:
-            self.runExamples = (os.stat(self._tmpDir).st_mode & 0o700) != 0 # file is user read/write/executable
+            # file is user read/write/executable
+            self.runExamples = (os.stat(self._tmpDir).st_mode & 0o700) != 0
         except OSError:
             pass
 
@@ -96,9 +102,8 @@ class Control(object):
             return ""
 
     def ignore(self, test):
-        if \
-               not re.search(r"\.py$", test) and \
-               len(self._env.Glob(test)) == 0: # we don't know how to build it
+        if not re.search(r"\.py$", test) and \
+           len(self._env.Glob(test)) == 0:  # we don't know how to build it
             return True
 
         ignoreFile = test in self._info and self._info[test][0] == self._IGNORE
@@ -121,7 +126,7 @@ class Control(object):
                    "false", "failed"
 
     def run(self, fileGlob):
-        if not isinstance(fileGlob, basestring): # env.Glob() returns an scons Node
+        if not isinstance(fileGlob, basestring):  # env.Glob() returns an scons Node
             fileGlob = str(fileGlob)
         targets = []
         if not self.runExamples:
@@ -143,7 +148,7 @@ class Control(object):
             for a in self.args(f).split(" "):
                 # if a is a file, make it an absolute name as scons runs from the root directory
                 filePrefix = "file:"
-                if re.search(r"^" + filePrefix, a): # they explicitly said that this was a file
+                if re.search(r"^" + filePrefix, a):  # they explicitly said that this was a file
                     a = os.path.join(self._cwd, a[len(filePrefix):])
                 else:
                     try:                # see if it's a file
@@ -156,6 +161,17 @@ class Control(object):
 
             (should_pass, passedMsg, should_fail, failedMsg) = self.messages(f)
 
+            libpathstr = ""
+
+            # If we have an OS X with System Integrity Protection enabled or similar we need
+            # to pass through DYLD_LIBRARY_PATH to the test execution layer.
+            pass_through_var = utils.libraryPathPassThrough()
+            if pass_through_var is not None:
+                for varname in (pass_through_var, "LSST_LIBRARY_PATH"):
+                    if varname in os.environ:
+                        libpathstr = '{}="{}"'.format(pass_through_var, os.environ[varname])
+                        break
+
             # The TRAVIS environment variable is set to allow us to disable
             # the matplotlib font cache. See ticket DM-3856.
             # TODO: Work out better way of solving matplotlib issue in build.
@@ -164,14 +180,15 @@ class Control(object):
             @rm -f ${TARGET}.failed;
             @printf "%%s" 'running ${SOURCES}... ';
             @echo $SOURCES %s > $TARGET; echo >> $TARGET;
-            @if TRAVIS=1 %s $SOURCES %s >> $TARGET 2>&1; then \
+            @if %s TRAVIS=1 %s $SOURCES %s >> $TARGET 2>&1; then \
                if ! %s; then mv $TARGET ${TARGET}.failed; fi; \
                echo "%s"; \
             else \
                if ! %s; then mv $TARGET ${TARGET}.failed; fi; \
                echo "%s"; \
             fi;
-            """ % (expandedArgs, interpreter, expandedArgs, should_pass, passedMsg, should_fail, failedMsg))
+            """ % (expandedArgs, libpathstr, interpreter, expandedArgs, should_pass,
+                   passedMsg, should_fail, failedMsg))
 
             targets.extend(result)
 

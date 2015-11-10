@@ -8,18 +8,25 @@
 ##
 from __future__ import absolute_import, division, print_function
 import os.path
+import re
+import sys
+import pipes
+from stat import ST_MODE
 from SCons.Script import *
 from distutils.spawn import find_executable
 
 from . import dependencies
-from . import builders
-from . import installation
 from . import state
 from . import tests
+from . import utils
+
+DEFAULT_TARGETS = ("lib", "python", "tests", "examples", "doc", "shebang")
+
 
 def _getFileBase(node):
     name, ext = os.path.splitext(os.path.basename(str(node)))
     return name
+
 
 ##
 # @brief A scope-only class for SConstruct-replacement convenience functions.
@@ -50,7 +57,7 @@ class BasicSConstruct(object):
     # a BasicSConstruct instance (which would be useless).
     ##
     def __new__(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None, cleanExt=None,
-                defaultTargets=("lib", "python", "tests", "examples", "doc"),
+                defaultTargets=DEFAULT_TARGETS,
                 subDirList=None, ignoreRegex=None,
                 versionModuleName="python/lsst/%s/version.py", noCfgFile=False):
         cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt,
@@ -100,8 +107,8 @@ class BasicSConstruct(object):
             if "SConstruct" in files and root != ".":
                 dirs[:] = []
                 continue
-            dirs[:] = [d for d in dirs if (not d.startswith('.'))]
-            dirs.sort() # happy coincidence that include < libs < python < tests
+            dirs[:] = [d for d in dirs if not d.startswith('.')]
+            dirs.sort()  # happy coincidence that include < libs < python < tests
             if "SConscript" in files:
                 state.log.info("Using Sconscript at %s/SConscript" % root)
                 SCons.Script.SConscript(os.path.join(root, "SConscript"))
@@ -126,7 +133,7 @@ class BasicSConstruct(object):
     #  @returns an SCons Environment object (which is also available as lsst.sconsUtils.env).
     ##
     @staticmethod
-    def finish(defaultTargets=("lib", "python", "tests", "examples", "doc"),
+    def finish(defaultTargets=DEFAULT_TARGETS,
                subDirList=None, ignoreRegex=None):
         if ignoreRegex is None:
             ignoreRegex = r"(~$|\.pyc$|^\.svn$|\.o|\.os$)"
@@ -143,12 +150,15 @@ class BasicSConstruct(object):
             state.env.Alias(name, target)
         state.env.Requires(state.targets["python"], state.targets["version"])
         declarer = state.env.Declare()
-        state.env.Requires(declarer, install) # Ensure declaration fires after installation available
+        state.env.Requires(declarer, install)  # Ensure declaration fires after installation available
         state.env.Default([t for t in defaultTargets if os.path.exists(t)])
+        # shebang target is not named same as relevant directory so we must be explicit
+        if "shebang" in defaultTargets and os.path.exists("bin.src"):
+            state.env.Default("shebang")
         if "version" in state.targets:
             state.env.Default(state.targets["version"])
         state.env.Requires(state.targets["tests"], state.targets["version"])
-        state.env.Decider("MD5-timestamp") # if timestamps haven't changed, don't do MD5 checks
+        state.env.Decider("MD5-timestamp")  # if timestamps haven't changed, don't do MD5 checks
         #
         # Check if any of the tests failed by looking for *.failed files.
         # Perform this test just before scons exits
@@ -156,7 +166,7 @@ class BasicSConstruct(object):
         # N.b. the test is written in sh not python as then we can use @ to suppress output
         #
         if "tests" in [str(t) for t in BUILD_TARGETS]:
-            testsDir = os.path.join(os.getcwd(), "tests", ".tests")
+            testsDir = pipes.quote(os.path.join(os.getcwd(), "tests", ".tests"))
             checkTestStatus_command = state.env.Command('checkTestStatus', [], """
                 @ if [ -d %s ]; then \
                       nfail=`find %s -name \*.failed | wc -l | sed -e 's/ //g'`; \
@@ -166,9 +176,10 @@ class BasicSConstruct(object):
                   fi; \
             """ % (testsDir, testsDir))
 
-            state.env.Depends(checkTestStatus_command, BUILD_TARGETS) # this is why the check runs last
+            state.env.Depends(checkTestStatus_command, BUILD_TARGETS)  # this is why the check runs last
             BUILD_TARGETS.extend(checkTestStatus_command)
             state.env.AlwaysBuild(checkTestStatus_command)
+
 
 ##
 # @brief A scope-only class for SConscript-replacement convenience functions.
@@ -205,6 +216,63 @@ class BasicSConscript(object):
         result = state.env.SharedLibrary(libName, src, LIBS=libs)
         state.targets["lib"].extend(result)
         return result
+
+    ##
+    #  @brief   Handles shebang rewriting
+    #
+    #  With no arguments looks in bin.src/ and copies to bin/
+    #  If utils.needShebangRewrite() is False the shebang will
+    #  not be modified.
+    #
+    #  Only Python files requiring a shebang rewrite should be placed
+    #  in bin.src/  Do not place executable binaries in this directory.
+    #
+    #  @param src  Override the source list
+    ##
+    @staticmethod
+    def shebang(src=None):
+        # check if Python is called on the first line with this expression
+        # This comes from distutils copy_scripts
+        FIRST_LINE_RE = re.compile(r'^#!.*python[0-9.]*([ \t].*)?$')
+        doRewrite = utils.needShebangRewrite()
+
+        def rewrite_shebang(target, source, env):
+            """Copy source to target, rewriting the shebang"""
+            # Currently just use this python
+            usepython = sys.executable
+            for targ, src in zip(target, source):
+                with open(str(src), "r") as srcfd:
+                    with open(str(targ), "w") as outfd:
+                        first_line = srcfd.readline()
+                        # Always match the first line so we can warn people
+                        # if an attempt is being made to rewrite a file that should
+                        # not be rewritten
+                        match = FIRST_LINE_RE.match(first_line)
+                        if match and doRewrite:
+                            post_interp = match.group(1) or ''
+                            outfd.write("#!{}{}\n".format(usepython, post_interp))
+                        else:
+                            if not match:
+                                state.log.warn("Could not rewrite shebang of {}. Please check"
+                                               " file or move it to bin directory.".format(str(src)))
+                            outfd.write(first_line)
+                        for line in srcfd.readlines():
+                            outfd.write(line)
+                # Ensure the bin/ file is executable
+                oldmode = os.stat(str(targ))[ST_MODE] & 0o7777
+                newmode = (oldmode | 0o555) & 0o7777
+                if newmode != oldmode:
+                    state.log.info("changing mode of {} from {} to {}".format(
+                                   str(targ), oldmode, newmode))
+                    os.chmod(str(targ), newmode)
+
+        if src is None:
+            src = Glob("#bin.src/*")
+        for s in src:
+            if str(s) != "SConscript":
+                result = state.env.Command(target=os.path.join(Dir("#bin").abspath, str(s)),
+                                           source=s, action=rewrite_shebang)
+                state.targets["shebang"].extend(result)
 
     ##
     #  @brief Convenience function to replace standard python/*/SConscript boilerplate.
@@ -373,7 +441,7 @@ class BasicSConscript(object):
             src.append(node)
         if ccList is None:
             ccList = [node for node in Glob("*.cc")
-                          if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc]
+                      if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc]
         state.log.info("SWIG modules for examples: %s" % swigFileList)
         state.log.info("C++ examples: %s" % ccList)
         results = []

@@ -7,6 +7,7 @@ try:
 except ImportError:
     eupsLoaded = False
 
+
 def haveEups():
     return eupsLoaded
 
@@ -16,14 +17,14 @@ if not haveEups():
     #
     def flavor():
         from .state import env, log
-        
+
         log.warn("Unable to import eups; guessing flavor")
 
         if env['PLATFORM'] == "posix":
             return os.uname()[0].title()
         else:
             return env['PLATFORM'].title()
-    
+
     def productDir(name):
         return os.environ.get("%s_DIR" % name.upper())
 
@@ -43,8 +44,9 @@ if not haveEups():
 
     def setupEnvNameFor(productName):
         return "SETUP_%s" % productName
-    
+
     utils.setupEnvNameFor = setupEnvNameFor
+
 
 def getEups():
     """ Return a cached Eups instance, auto-creating if necessary """

@@ -8,7 +8,6 @@ from __future__ import absolute_import, division, print_function
 import os.path
 import glob
 import re
-import sys
 import shutil
 
 import SCons.Script
@@ -20,6 +19,7 @@ from .vcs import git
 
 from . import state
 from .utils import memberOf
+
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -35,11 +35,12 @@ def makeProductPath(env, pathFormat):
     if 'eupsPath' in env and env['eupsPath']:
         eupsPath = env['eupsPath']
 
-    return pathFormat % { "P": eupsPath,
-                          "f": env['eupsFlavor'],
-                          "p": env['eupsProduct'],
-                          "v": env['version'],
-                          "c": os.environ['PWD'] }
+    return pathFormat % {"P": eupsPath,
+                         "f": env['eupsFlavor'],
+                         "p": env['eupsProduct'],
+                         "v": env['version'],
+                         "c": os.environ['PWD']}
+
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -68,6 +69,7 @@ def determineVersion(env, versionString):
         version = git.guessVersionName()
     return version.replace("/", "_")
 
+
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 ## @brief Return a unique fingerprint for a version (e.g. an SHA1); return None if unavailable
@@ -83,6 +85,7 @@ def getFingerprint(versionString):
         fingerprint += " *"
 
     return fingerprint
+
 
 ## @brief Set a prefix based on the EUPS_PATH, the product name, and a versionString from cvs or svn.
 def setPrefix(env, versionString, eupsProductPath=None):
@@ -127,6 +130,7 @@ def setPrefix(env, versionString, eupsProductPath=None):
         prefix = "/usr/local"
     return prefix
 
+
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 ##
@@ -142,12 +146,13 @@ def Declare(self, products=None):
         state.log.warn("'scons undeclare' is deprecated; please use 'scons declare -c' instead")
 
     acts = []
-    if \
-           "declare" in SCons.Script.COMMAND_LINE_TARGETS or \
-           "undeclare" in SCons.Script.COMMAND_LINE_TARGETS or \
-           ("install" in SCons.Script.COMMAND_LINE_TARGETS and self.GetOption("clean")) or \
-           "current" in SCons.Script.COMMAND_LINE_TARGETS:
-        current = []; declare = []; undeclare = []
+    if ("declare" in SCons.Script.COMMAND_LINE_TARGETS or
+            "undeclare" in SCons.Script.COMMAND_LINE_TARGETS or
+            ("install" in SCons.Script.COMMAND_LINE_TARGETS and self.GetOption("clean")) or
+            "current" in SCons.Script.COMMAND_LINE_TARGETS):
+        current = []
+        declare = []
+        undeclare = []
 
         if not products:
             products = [None]
@@ -174,7 +179,7 @@ def Declare(self, products=None):
                         command = "eups undeclare --flavor %s %s %s" % \
                                   (self['eupsFlavor'], product, version)
                         if ("current" in SCons.Script.COMMAND_LINE_TARGETS
-                            and not "declare" in SCons.Script.COMMAND_LINE_TARGETS):
+                                and "declare" not in SCons.Script.COMMAND_LINE_TARGETS):
                             command += " --current"
 
                         if self.GetOption("clean"):
@@ -204,13 +209,14 @@ def Declare(self, products=None):
             acts += self.Command("current", "", action=current)
         if declare:
             if "current" in SCons.Script.COMMAND_LINE_TARGETS:
-                acts += self.Command("declare", "", action="") # current will declare it for us
+                acts += self.Command("declare", "", action="")  # current will declare it for us
             else:
                 acts += self.Command("declare", "", action=declare)
         if undeclare:
             acts += self.Command("undeclare", "", action=undeclare)
 
     return acts
+
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -239,7 +245,7 @@ class DirectoryInstaller(object):
             if not self.recursive:
                 dirnames[:] = []
             else:
-                dirnames[:] = [d for d in dirnames if d != ".svn"] # ignore .svn tree
+                dirnames[:] = [d for d in dirnames if d != ".svn"]  # ignore .svn tree
             for dirname in dirnames:
                 destpath = os.path.join(prefix, root, dirname)
                 if not os.path.isdir(destpath):
@@ -267,6 +273,7 @@ def InstallDir(self, prefix, dir, ignoreRegex=r"(~$|\.pyc$|\.os?$)", recursive=T
                           action=DirectoryInstaller(ignoreRegex, recursive))
     self.AlwaysBuild(result)
     return result
+
 
 #=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -297,15 +304,15 @@ def InstallEups(env, dest, files=[], presetup=""):
             presetupStr += ["--product %s=%s" % (p, presetup[p])]
         presetup = " ".join(presetupStr)
 
-        env = env.Clone(ENV = os.environ)
+        env = env.Clone(ENV=os.environ)
         #
         # Add any build/table/cfg files to the desired files
         #
-        files = [str(f) for f in files] # in case the user used Glob not glob.glob
-        files += glob.glob(os.path.join("ups", "*.build")) + glob.glob(os.path.join("ups","*.table")) \
+        files = [str(f) for f in files]  # in case the user used Glob not glob.glob
+        files += glob.glob(os.path.join("ups", "*.build")) + glob.glob(os.path.join("ups", "*.table")) \
             + glob.glob(os.path.join("ups", "*.cfg")) \
             + glob.glob(os.path.join("ups", "eupspkg*"))
-        files = list(set(files))        # remove duplicates
+        files = list(set(files))         # remove duplicates
 
         buildFiles = [f for f in files if re.search(r"\.build$", f)]
         build_obj = env.Install(dest, buildFiles)
@@ -342,17 +349,17 @@ def InstallEups(env, dest, files=[], presetup=""):
             if 'baseversion' in env:
                 cmd += " --repoversion %s " % env['baseversion']
             cmd += str(i)
-            eupsTargets.extend(env.AddPostAction(build_obj, env.Action("%s" %(cmd), cmd)))
+            eupsTargets.extend(env.AddPostAction(build_obj, env.Action("%s" % (cmd), cmd)))
 
         for i in table_obj:
             env.AlwaysBuild(i)
 
-            cmd = "eups expandtable -i -W '^(?!LOCAL:)' " # version doesn't start "LOCAL:"
+            cmd = "eups expandtable -i -W '^(?!LOCAL:)' "  # version doesn't start "LOCAL:"
             if presetup:
                 cmd += presetup + " "
             cmd += str(i)
 
-            act = env.Command("table", "", env.Action("%s" %(cmd), cmd))
+            act = env.Command("table", "", env.Action("%s" % (cmd), cmd))
             eupsTargets.extend(act)
             acts += act
             env.Depends(act, i)
@@ -364,6 +371,7 @@ def InstallEups(env, dest, files=[], presetup=""):
         env.SideEffect("eups", eupsTargets)
 
     return acts
+
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 

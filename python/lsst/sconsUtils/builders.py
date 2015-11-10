@@ -8,6 +8,7 @@ from __future__ import absolute_import, division, print_function
 import os
 import re
 import fnmatch
+import pipes
 
 import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
@@ -15,6 +16,7 @@ from SCons.Script.SConscript import SConsEnvironment
 from .utils import memberOf
 from .installation import determineVersion, getFingerprint
 from . import state
+
 
 ## @brief Like SharedLibrary, but don't insist that all symbols are resolved
 @memberOf(SConsEnvironment)
@@ -24,25 +26,28 @@ def SharedLibraryIncomplete(self, target, source, **keywords):
         myenv['SHLINKFLAGS'] += ["-undefined", "suppress", "-flat_namespace", "-headerpad_max_install_names"]
     return myenv.SharedLibrary(target, source, **keywords)
 
+
 ##  @brief Like LoadableModule, but don't insist that all symbols are resolved, and set
 ##         some SWIG-specific flags.
 @memberOf(SConsEnvironment)
 def SwigLoadableModule(self, target, source, **keywords):
     myenv = self.Clone()
     if myenv['PLATFORM'] == 'darwin':
-        myenv.Append(LDMODULEFLAGS = ["-undefined", "suppress", "-flat_namespace", "-headerpad_max_install_names"])
+        myenv.Append(LDMODULEFLAGS=["-undefined", "suppress",
+                                    "-flat_namespace", "-headerpad_max_install_names"])
     #
     # Swig-generated .cc files cast pointers to long longs and back,
     # which is illegal.  This flag tells g++ about the sin
     #
     try:
         if myenv.whichCc == "gcc":
-            myenv.Append(CCFLAGS = ["-fno-strict-aliasing",])
+            myenv.Append(CCFLAGS=["-fno-strict-aliasing"])
     except AttributeError:
         pass
     return myenv.LoadableModule(target, source, **keywords)
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
 
 ##
 #  @brief Prepare the list of files to be passed to a SharedLibrary constructor
@@ -67,14 +72,14 @@ def SourcesForSharedLibrary(self, files):
         return files
 
     if self.get("optFiles"):
-        optFiles = self["optFiles"].replace(".", r"\.") # it'll be used in an RE
+        optFiles = self["optFiles"].replace(".", r"\.")  # it'll be used in an RE
         optFiles = SCons.Script.Split(optFiles.replace(",", " "))
         optFilesRe = "/(%s)$" % "|".join(optFiles)
     else:
         optFilesRe = None
 
     if self.get("noOptFiles"):
-        noOptFiles = self["noOptFiles"].replace(".", r"\.") # it'll be used in an RE
+        noOptFiles = self["noOptFiles"].replace(".", r"\.")  # it'll be used in an RE
         noOptFiles = SCons.Script.Split(noOptFiles.replace(",", " "))
         noOptFilesRe = "/(%s)$" % "|".join(noOptFiles)
     else:
@@ -89,7 +94,7 @@ def SourcesForSharedLibrary(self, files):
         opt = 3
 
     CCFLAGS_OPT = re.sub(r"-O(\d|s)\s*", "-O%d " % opt, " ".join(self["CCFLAGS"]))
-    CCFLAGS_NOOPT = re.sub(r"-O(\d|s)\s*", "-O0 ", " ".join(self["CCFLAGS"])) # remove -O flags from CCFLAGS
+    CCFLAGS_NOOPT = re.sub(r"-O(\d|s)\s*", "-O0 ", " ".join(self["CCFLAGS"]))  # remove -O flags from CCFLAGS
 
     sources = []
     for ccFile in files:
@@ -105,6 +110,7 @@ def SourcesForSharedLibrary(self, files):
     sources.sort()
     return sources
 
+
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 ##
@@ -116,9 +122,12 @@ def SourcesForSharedLibrary(self, files):
 #  This routine won't do anything unless you specified a "TAGS" target
 ##
 def filesToTag(root=None, fileRegex=None, ignoreDirs=None):
-    if root is None: root = "."
-    if fileRegex is None: fileRegex = r"^[a-zA-Z0-9_].*\.(cc|h(pp)?|py)$"
-    if ignoreDirs is None: ignoreDirs = ["examples", "tests"]
+    if root is None:
+        root = "."
+    if fileRegex is None:
+        fileRegex = r"^[a-zA-Z0-9_].*\.(cc|h(pp)?|py)$"
+    if ignoreDirs is None:
+        ignoreDirs = ["examples", "tests"]
 
     if "TAGS" not in SCons.Script.COMMAND_LINE_TARGETS:
         return []
@@ -128,7 +137,7 @@ def filesToTag(root=None, fileRegex=None, ignoreDirs=None):
         if dirpath == ".":
             dirnames[:] = [d for d in dirnames if not re.search(r"^(%s)$" % "|".join(ignoreDirs), d)]
 
-        dirnames[:] = [d for d in dirnames if not re.search(r"^(\.svn)$", d)] # ignore .svn tree
+        dirnames[:] = [d for d in dirnames if not re.search(r"^(\.svn)$", d)]  # ignore .svn tree
         #
         # List of possible files to tag, but there's some cleanup required for machine-generated files
         #
@@ -144,6 +153,7 @@ def filesToTag(root=None, fileRegex=None, ignoreDirs=None):
 
     return files
 
+
 ##
 #  @brief Build Emacs tags (see man etags for more information).
 #
@@ -155,6 +165,7 @@ def BuildETags(env, root=None, fileRegex=None, ignoreDirs=None):
     toTag = filesToTag(root, fileRegex, ignoreDirs)
     if toTag:
         return env.Command("TAGS", toTag, "etags -o $TARGET $SOURCES")
+
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -177,7 +188,7 @@ def CleanTree(self, files, dir=".", recurse=True, verbose=False):
         if files_expr:
             files_expr += " -o "
 
-        files_expr += "-name %s" % re.sub(r"(^|[^\\])([[*])", r"\1\\\2",file) # quote unquoted * and []
+        files_expr += "-name %s" % re.sub(r"(^|[^\\])([[*])", r"\1\\\2", file)  # quote unquoted * and []
     #
     # don't use xargs --- who knows what needs quoting?
     #
@@ -208,6 +219,7 @@ def CleanTree(self, files, dir=".", recurse=True, verbose=False):
         self.Execute(self.Action([action]))
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
+
 ## @brief Return a product's PRODUCT_DIR, or None
 @memberOf(SConsEnvironment)
 def ProductDir(env, product):
@@ -227,6 +239,7 @@ def ProductDir(env, product):
     if pdir == "none":
         pdir = None
     return pdir
+
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -261,7 +274,7 @@ class DoxygenBuilder(object):
                              action=self.buildConfig)
         env.AlwaysBuild(config)
         doc = env.Command(target=self.targets, source=self.sources,
-                          action="doxygen %s" % outConfigNode.abspath)
+                          action="doxygen %s" % pipes.quote(outConfigNode.abspath))
         for path in self.outputPaths:
             env.Clean(doc, path)
         env.Depends(doc, config)
@@ -330,8 +343,8 @@ class DoxygenBuilder(object):
             outConfigFile.write("PROJECT_NAME = %s\n" % self.projectName)
         if self.projectNumber is not None:
             outConfigFile.write("PROJECT_NUMBER = %s\n" % self.projectNumber)
-        outConfigFile.write("INPUT = %s\n" % " ".join(self.inputs))
-        outConfigFile.write("EXCLUDE = %s\n" % " ".join(self.excludes))
+        outConfigFile.write("INPUT = %s\n" % " ".join('"{}"'.format(s) for s in self.inputs))
+        outConfigFile.write("EXCLUDE = %s\n" % " ".join('"{}"'.format(s) for s in self.excludes))
         outConfigFile.write("FILE_PATTERNS = %s\n" % " ".join(self.patterns))
         outConfigFile.write("RECURSIVE = YES\n" if self.recursive else "RECURSIVE = NO\n")
         allOutputs = set(("html", "latex", "man", "rtf", "xml"))
@@ -342,11 +355,11 @@ class DoxygenBuilder(object):
                 state.log.fail("Unknown Doxygen output format '%s'." % output)
                 state.log.finish()
             outConfigFile.write("GENERATE_%s = YES\n" % output.upper())
-            outConfigFile.write("%s_OUTPUT = %s\n" % (output.upper(), path.abspath))
+            outConfigFile.write('%s_OUTPUT = "%s"\n' % (output.upper(), path.abspath))
         for output in allOutputs:
             outConfigFile.write("GENERATE_%s = NO\n" % output.upper())
         if self.makeTag is not None:
-            outConfigFile.write("GENERATE_TAGFILE = %s\n" % self.makeTag)
+            outConfigFile.write('GENERATE_TAGFILE = "%s"\n' % self.makeTag)
         #
         # Append the local overrides (usually doxygen.conf.in)
         #
@@ -355,6 +368,7 @@ class DoxygenBuilder(object):
                 outConfigFile.write(inConfigFile.read())
 
         outConfigFile.close()
+
 
 ##
 #  @brief Generate a Doxygen config file and run Doxygen on it.
@@ -429,7 +443,7 @@ def Doxygen(self, config, **kw):
         "inputs": inputs,
         "recursive": True,
         "patterns": ["*.h", "*.cc", "*.py", "*.dox"],
-        "outputs": ["html",],
+        "outputs": ["html"],
         "excludes": [],
         "includes": [],
         "useTags": [],
@@ -443,6 +457,7 @@ def Doxygen(self, config, **kw):
             kw[k] = defaults[k]
     builder = DoxygenBuilder(**kw)
     return builder(self, config)
+
 
 @memberOf(SConsEnvironment)
 def VersionModule(self, filename, versionString=None):
@@ -522,7 +537,7 @@ def VersionModule(self, filename, versionString=None):
 
             outFile.write("__all__ = %r\n" % (tuple(names),))
 
-        if calcMd5(target[0].abspath) != oldMd5: # only print if something's changed
+        if calcMd5(target[0].abspath) != oldMd5:  # only print if something's changed
             state.log.info("makeVersionModule([\"%s\"], [])" % str(target[0]))
 
     result = self.Command(filename, [], self.Action(makeVersionModule, strfunction=lambda *args: None))
