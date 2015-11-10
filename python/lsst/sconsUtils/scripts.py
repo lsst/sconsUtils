@@ -219,6 +219,9 @@ class BasicSConscript(object):
     #  If utils.needShebangRewrite() is False the shebang will
     #  not be modified.
     #
+    #  Only Python files requiring a shebang rewrite should be placed
+    #  in bin.src/  Do not place executable binaries in this directory.
+    #
     #  @param src  Override the source list
     ##
     @staticmethod
@@ -235,13 +238,17 @@ class BasicSConscript(object):
                 with open(str(src), "r") as srcfd:
                     with open(str(targ), "w") as outfd:
                         first_line = srcfd.readline()
-                        match = False
-                        if doRewrite:
-                            match = FIRST_LINE_RE.match(first_line)
-                        if match:
+                        # Always match the first line so we can warn people
+                        # if an attempt is being made to rewrite a file that should
+                        # not be rewritten
+                        match = FIRST_LINE_RE.match(first_line)
+                        if match and doRewrite:
                             post_interp = match.group(1) or ''
                             outfd.write("#!{}{}\n".format(usepython, post_interp))
                         else:
+                            if not match:
+                                state.log.warn("Could not rewrite shebang of {}. Please check"
+                                               " file or move it to bin directory.".format(str(src)))
                             outfd.write(first_line)
                         for line in srcfd.readlines():
                             outfd.write(line)
