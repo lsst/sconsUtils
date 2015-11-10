@@ -152,6 +152,9 @@ class BasicSConstruct(object):
         declarer = state.env.Declare()
         state.env.Requires(declarer, install) # Ensure declaration fires after installation available
         state.env.Default([t for t in defaultTargets if os.path.exists(t)])
+        # shebang target is not named same as relevant directory so we must be explicit
+        if "shebang" in defaultTargets and os.path.exists("bin.src"):
+            state.env.Default("shebang")
         if "version" in state.targets:
             state.env.Default(state.targets["version"])
         state.env.Requires(state.targets["tests"], state.targets["version"])
