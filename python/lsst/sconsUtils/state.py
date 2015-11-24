@@ -348,15 +348,6 @@ def _configureCommon():
         conf.Finish()
 
     #
-    # Is C++'s TR1 available?  If not, use e.g. #include "lsst/tr1/foo.h"
-    #
-    # NOTE: previously this was only checked when none of --clean, --help, and --noexec,
-    # but that was causing "no" to be cached and used on later runs.
-    if not (env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec")):
-        conf = env.Configure()
-        env.Append(CCFLAGS=['-DLSST_HAVE_TR1=%d' % int(conf.CheckCXXHeader("tr1/unordered_map"))])
-        conf.Finish()
-    #
     # Byte order
     #
     import socket
