@@ -8,6 +8,7 @@ from __future__ import absolute_import, division, print_function
 import os
 import re
 import fnmatch
+import pipes
 
 import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
@@ -273,7 +274,7 @@ class DoxygenBuilder(object):
                              action=self.buildConfig)
         env.AlwaysBuild(config)
         doc = env.Command(target=self.targets, source=self.sources,
-                          action="doxygen %s" % outConfigNode.abspath)
+                          action="doxygen %s" % pipes.quote(outConfigNode.abspath))
         for path in self.outputPaths:
             env.Clean(doc, path)
         env.Depends(doc, config)
@@ -322,6 +323,20 @@ class DoxygenBuilder(object):
 
     def buildConfig(self, target, source, env):
         outConfigFile = open(target[0].abspath, "w")
+
+        # Need a routine to quote paths that contain spaces
+        # but can not use pipes.quote because it has to be
+        # a double quote for doxygen.conf
+        # Also have a version that quotes each item in a sequence and generates the
+        # final quoted entry.
+        def _quote_path(path):
+            if " " in path:
+                return '"{}"'.format(path)
+            return path
+
+        def _quote_paths(pathList):
+            return " ".join(_quote_path(p) for p in pathList)
+
         for tagPath in self.useTags:
             docDir, tagFile = os.path.split(tagPath)
             htmlDir = os.path.join(docDir, "html")
@@ -335,15 +350,15 @@ class DoxygenBuilder(object):
             incFiles.append('"%s"' % incFile)
             self.sources.append(SCons.Script.File(incPath))
         if docPaths:
-            outConfigFile.write('@INCLUDE_PATH = %s\n' % " ".join(docPaths))
+            outConfigFile.write('@INCLUDE_PATH = %s\n' % _quote_paths(docPaths))
         for incFile in incFiles:
-            outConfigFile.write('@INCLUDE = %s\n' % incFile)
+            outConfigFile.write('@INCLUDE = %s\n' % _quote_path(incFile))
         if self.projectName is not None:
             outConfigFile.write("PROJECT_NAME = %s\n" % self.projectName)
         if self.projectNumber is not None:
             outConfigFile.write("PROJECT_NUMBER = %s\n" % self.projectNumber)
-        outConfigFile.write("INPUT = %s\n" % " ".join(self.inputs))
-        outConfigFile.write("EXCLUDE = %s\n" % " ".join(self.excludes))
+        outConfigFile.write("INPUT = %s\n" % _quote_paths(self.inputs))
+        outConfigFile.write("EXCLUDE = %s\n" % _quote_paths(self.excludes))
         outConfigFile.write("FILE_PATTERNS = %s\n" % " ".join(self.patterns))
         outConfigFile.write("RECURSIVE = YES\n" if self.recursive else "RECURSIVE = NO\n")
         allOutputs = set(("html", "latex", "man", "rtf", "xml"))
@@ -354,11 +369,11 @@ class DoxygenBuilder(object):
                 state.log.fail("Unknown Doxygen output format '%s'." % output)
                 state.log.finish()
             outConfigFile.write("GENERATE_%s = YES\n" % output.upper())
-            outConfigFile.write("%s_OUTPUT = %s\n" % (output.upper(), path.abspath))
+            outConfigFile.write("%s_OUTPUT = %s\n" % (output.upper(), _quote_path(path.abspath)))
         for output in allOutputs:
             outConfigFile.write("GENERATE_%s = NO\n" % output.upper())
         if self.makeTag is not None:
-            outConfigFile.write("GENERATE_TAGFILE = %s\n" % self.makeTag)
+            outConfigFile.write("GENERATE_TAGFILE = %s\n" % _quote_path(self.makeTag))
         #
         # Append the local overrides (usually doxygen.conf.in)
         #
