@@ -414,6 +414,7 @@ class BasicSConscript(object):
         for pyTest in pyList:
             state.env.Depends(pyTest, swigMods)
             state.env.Depends(pyTest, state.targets["python"])
+            state.env.Depends(pyTest, state.targets["shebang"])
         result = ccList + pyList
         state.targets["tests"].extend(result)
         return result
