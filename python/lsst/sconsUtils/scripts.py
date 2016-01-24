@@ -12,7 +12,7 @@ import re
 import sys
 import pipes
 from stat import ST_MODE
-from SCons.Script import *
+from SCons.Script import SConscript, File, Dir, Glob, BUILD_TARGETS
 from distutils.spawn import find_executable
 
 from . import dependencies
@@ -111,7 +111,7 @@ class BasicSConstruct(object):
             dirs.sort()  # happy coincidence that include < libs < python < tests
             if "SConscript" in files:
                 state.log.info("Using Sconscript at %s/SConscript" % root)
-                SCons.Script.SConscript(os.path.join(root, "SConscript"))
+                SConscript(os.path.join(root, "SConscript"))
         cls._initializing = False
         return state.env
 
