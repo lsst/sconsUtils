@@ -5,6 +5,7 @@
 ##
 
 from __future__ import absolute_import, division, print_function
+import os
 import sys
 import warnings
 import subprocess
@@ -78,6 +79,21 @@ def libraryPathPassThrough():
 def needShebangRewrite():
     return _has_OSX_SIP()
 
+##
+#  @brief Returns library loader path environment string to be prepended to external commands
+#         Will be "" if nothing is required.
+##
+def libraryLoaderEnvironment():
+    libpathstr = ""
+    # If we have an OS X with System Integrity Protection enabled or similar we need
+    # to pass through DYLD_LIBRARY_PATH to the external command.
+    pass_through_var = libraryPathPassThrough()
+    if pass_through_var is not None:
+        for varname in (pass_through_var, "LSST_LIBRARY_PATH"):
+            if varname in os.environ:
+                libpathstr = '{}="{}"'.format(pass_through_var, os.environ[varname])
+                break
+    return libpathstr
 
 ##
 #  @brief Safe wrapper for running external programs, reading stdout, and sanitizing error messages.
