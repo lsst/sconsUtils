@@ -161,16 +161,9 @@ class Control(object):
 
             (should_pass, passedMsg, should_fail, failedMsg) = self.messages(f)
 
-            libpathstr = ""
-
-            # If we have an OS X with System Integrity Protection enabled or similar we need
-            # to pass through DYLD_LIBRARY_PATH to the test execution layer.
-            pass_through_var = utils.libraryPathPassThrough()
-            if pass_through_var is not None:
-                for varname in (pass_through_var, "LSST_LIBRARY_PATH"):
-                    if varname in os.environ:
-                        libpathstr = '{}="{}"'.format(pass_through_var, os.environ[varname])
-                        break
+            # Determine any library load path values that we have to prepend
+            # to the command.
+            libpathstr = utils.libraryLoaderEnvironment()
 
             # The TRAVIS environment variable is set to allow us to disable
             # the matplotlib font cache. See ticket DM-3856.
