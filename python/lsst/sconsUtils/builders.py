@@ -457,7 +457,7 @@ def Doxygen(self, config, **kw):
         "inputs": inputs,
         "recursive": True,
         "patterns": ["*.h", "*.cc", "*.py", "*.dox"],
-        "outputs": ["html"],
+        "outputs": ["html", "xml"],
         "excludes": [],
         "includes": [],
         "useTags": [],
