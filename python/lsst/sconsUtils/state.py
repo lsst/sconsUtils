@@ -335,7 +335,7 @@ def _configureCommon():
         if not env.GetOption("no_progress"):
             log.info("Checking for C++11 support")
         conf = env.Configure()
-        for cpp11Arg in ("-std=%s" % (val,) for val in ("c++11", "c++0x")):
+        for cpp11Arg in ("-std=%s" % (val,) for val in ("c++11",)):
             conf.env = env.Clone()
             conf.env.Append(CXXFLAGS=cpp11Arg)
             if conf.CheckCXX():
