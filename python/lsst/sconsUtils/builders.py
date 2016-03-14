@@ -327,10 +327,11 @@ class DoxygenBuilder(object):
         # Need a routine to quote paths that contain spaces
         # but can not use pipes.quote because it has to be
         # a double quote for doxygen.conf
+        # Do not quote a string if it is already quoted
         # Also have a version that quotes each item in a sequence and generates the
         # final quoted entry.
         def _quote_path(path):
-            if " " in path:
+            if " " in path and not path.startswith('"') and not path.endswith('"'):
                 return '"{}"'.format(path)
             return path
 
