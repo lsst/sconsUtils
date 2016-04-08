@@ -180,6 +180,12 @@ def _initEnvironment():
         #
         env['ENV']['MACOSX_DEPLOYMENT_TARGET'] = env['macosx_deployment_target']
         log.info("Setting OS X binary compatibility level: %s" % env['ENV']['MACOSX_DEPLOYMENT_TARGET'])
+        #
+        # For XCode 7.3 we need to explicitly add a trailing slash to library paths.
+        # This does not hurt things on older XCodes. We can remove this once XCode
+        # is fixed. See Apple radar rdr://25313838
+        #
+        env['LIBDIRSUFFIX'] = '/'
 
     #
     # Remove valid options from the arguments
