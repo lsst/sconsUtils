@@ -172,7 +172,7 @@ def _initEnvironment():
     if env['PLATFORM'] == 'darwin':
         env['LDMODULESUFFIX'] = ".so"
         if not re.search(r"-install_name", str(env['SHLINKFLAGS'])):
-            env.Append(SHLINKFLAGS=["-Wl,-install_name", "-Wl,${TARGET.file}"])
+            env.Append(SHLINKFLAGS=["-install_name", "${TARGET.file}"])
         if not re.search(r"-headerpad_max_install_names", str(env['SHLINKFLAGS'])):
             env.Append(SHLINKFLAGS=["-Wl,-headerpad_max_install_names"])
         #
