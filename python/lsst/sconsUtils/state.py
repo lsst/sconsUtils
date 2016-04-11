@@ -172,7 +172,7 @@ def _initEnvironment():
     if env['PLATFORM'] == 'darwin':
         env['LDMODULESUFFIX'] = ".so"
         if not re.search(r"-install_name", str(env['SHLINKFLAGS'])):
-            env.Append(SHLINKFLAGS=["-Wl,-install_name", "-Wl,${TARGET.file}"])
+            env.Append(SHLINKFLAGS=["-install_name", "${TARGET.file}"])
         if not re.search(r"-headerpad_max_install_names", str(env['SHLINKFLAGS'])):
             env.Append(SHLINKFLAGS=["-Wl,-headerpad_max_install_names"])
         #
@@ -180,6 +180,12 @@ def _initEnvironment():
         #
         env['ENV']['MACOSX_DEPLOYMENT_TARGET'] = env['macosx_deployment_target']
         log.info("Setting OS X binary compatibility level: %s" % env['ENV']['MACOSX_DEPLOYMENT_TARGET'])
+        #
+        # For XCode 7.3 we need to explicitly add a trailing slash to library paths.
+        # This does not hurt things on older XCodes. We can remove this once XCode
+        # is fixed. See Apple radar rdr://25313838
+        #
+        env['LIBDIRSUFFIX'] = '/'
 
     #
     # Remove valid options from the arguments
