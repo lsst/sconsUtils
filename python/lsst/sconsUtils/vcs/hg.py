@@ -5,9 +5,11 @@
 # If ever we want to do anything clever, we should use one of
 # the supported svn/python packages
 #
-import os, re
+import os
+import re
 from .. import state
 from .. import utils
+
 
 def guessVersionName():
     """Guess a version name"""
@@ -38,6 +40,7 @@ def guessVersionName():
         return ident[0]
 
     return ident[index]
+
 
 def guessFingerprint():
     """Return (fingerprint, modified) where fingerprint is the repository's SHA1"""

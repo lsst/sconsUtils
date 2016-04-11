@@ -18,7 +18,7 @@ from .installation import determineVersion, getFingerprint
 from . import state
 
 
-## @brief Like SharedLibrary, but don't insist that all symbols are resolved
+# @brief Like SharedLibrary, but don't insist that all symbols are resolved
 @memberOf(SConsEnvironment)
 def SharedLibraryIncomplete(self, target, source, **keywords):
     myenv = self.Clone()
@@ -27,8 +27,8 @@ def SharedLibraryIncomplete(self, target, source, **keywords):
     return myenv.SharedLibrary(target, source, **keywords)
 
 
-##  @brief Like LoadableModule, but don't insist that all symbols are resolved, and set
-##         some SWIG-specific flags.
+#  @brief Like LoadableModule, but don't insist that all symbols are resolved, and set
+#         some SWIG-specific flags.
 @memberOf(SConsEnvironment)
 def SwigLoadableModule(self, target, source, **keywords):
     myenv = self.Clone()
@@ -46,7 +46,7 @@ def SwigLoadableModule(self, target, source, **keywords):
         pass
     return myenv.LoadableModule(target, source, **keywords)
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 
 ##
@@ -111,16 +111,16 @@ def SourcesForSharedLibrary(self, files):
     return sources
 
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-##
+#
 #  @brief Return a list of files that need to be scanned for tags, starting at directory root
 #
 #  These tags are for advanced Emacs users, and should not be confused with SVN tags or Doxygen tags.
 #
 #  Files are chosen if they match fileRegex; toplevel directories in list ignoreDirs are ignored
 #  This routine won't do anything unless you specified a "TAGS" target
-##
+#
 def filesToTag(root=None, fileRegex=None, ignoreDirs=None):
     if root is None:
         root = "."
@@ -167,7 +167,7 @@ def BuildETags(env, root=None, fileRegex=None, ignoreDirs=None):
         return env.Command("TAGS", toTag, "etags -o $TARGET $SOURCES")
 
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 ##
 #  @brief Remove files matching the argument list starting at dir
@@ -217,10 +217,10 @@ def CleanTree(self, files, dir=".", recurse=True, verbose=False):
         state.log.fail("'scons clean' is no longer supported; please use 'scons --clean'.")
     elif not SCons.Script.COMMAND_LINE_TARGETS and self.GetOption("clean"):
         self.Execute(self.Action([action]))
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 
-## @brief Return a product's PRODUCT_DIR, or None
+# @brief Return a product's PRODUCT_DIR, or None
 @memberOf(SConsEnvironment)
 def ProductDir(env, product):
     from . import eupsForScons
@@ -241,7 +241,7 @@ def ProductDir(env, product):
     return pdir
 
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 ##
 #  @brief A callable to be used as an SCons Action to run Doxygen.
@@ -466,7 +466,7 @@ def Doxygen(self, config, **kw):
         "projectName": None,
         "projectNumber": None,
         "excludeSwig": True
-        }
+    }
     for k in defaults:
         if kw.get(k) is None:
             kw[k] = defaults[k]

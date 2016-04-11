@@ -7,9 +7,9 @@
 #
 from __future__ import absolute_import, division, print_function
 import os
-import re
 from .. import state
 from .. import utils
+
 
 def guessVersionName():
     """Guess a version name"""
@@ -22,6 +22,7 @@ def guessVersionName():
         raise RuntimeError("Error with git version: uncommitted changes")
     desc = utils.runExternal("git describe --tags --always", fatal=True)
     return desc.strip()
+
 
 def guessFingerprint():
     """Return (fingerprint, modified) where fingerprint is the repository's SHA1"""

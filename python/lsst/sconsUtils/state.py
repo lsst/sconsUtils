@@ -39,7 +39,7 @@ SCons.Script.EnsureSConsVersion(2, 1, 0)
 targets = {"doc": [], "tests": [], "lib": [], "python": [], "examples": [], "include": [], "version": [],
            "shebang": []}
 
-## @cond INTERNAL
+# @cond INTERNAL
 
 env = None
 log = None
@@ -107,7 +107,7 @@ def _initVariables():
         ('optFiles', "Specify a list of files that SHOULD be optimized", None),
         ('noOptFiles', "Specify a list of files that should NOT be optimized", None),
         ('macosx_deployment_target', 'Deployment target for Mac OS X', '10.9'),
-        )
+    )
 
 
 def _initEnvironment():
@@ -388,7 +388,7 @@ def _configureCommon():
 
         ignoreWarnings = {
             "unused-function": 'boost::regex has functions in anon namespaces in headers',
-            }
+        }
         filterWarnings = {
             "attributes": "clang pretends to be g++, but complains about g++ attributes such as flatten",
             "char-subscripts": 'seems innocous enough, and is used by boost',
@@ -400,7 +400,7 @@ def _configureCommon():
             "self-assign": "x = x",
             "unknown-pragmas": "unknown pragma ignored",
             "deprecated-register": "register is deprecated",
-            }
+        }
         for k in ignoreWarnings:
             env.Append(CCFLAGS=["-Wno-%s" % k])
         if env.GetOption('filterWarn'):
@@ -429,7 +429,7 @@ def _configureCommon():
             1720: 'function "FUNC" has no corresponding member operator delete'
                   '(to be called if an exception is thrown during initialization of an allocated object)',
             2259: 'non-pointer conversion from "int" to "float" may lose significant bits',
-            }
+        }
         if env.GetOption('filterWarn'):
             env.Append(CCFLAGS=["-wd%s" % (",".join([str(k) for k in filterWarnings]))])
         # Workaround intel bug; cf. RHL's intel bug report 580167
@@ -466,4 +466,4 @@ _initEnvironment()
 _configureCommon()
 _saveState()
 
-## @endcond
+# @endcond

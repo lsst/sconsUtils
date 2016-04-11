@@ -21,7 +21,7 @@ from . import state
 from .utils import memberOf
 
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 ##
 # @brief return a path to use as the installation directory for a product
@@ -42,9 +42,9 @@ def makeProductPath(env, pathFormat):
                          "c": os.environ['PWD']}
 
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-## @brief Set a version ID from env, or a version control ID string ($name$ or $HeadURL$)
+# @brief Set a version ID from env, or a version control ID string ($name$ or $HeadURL$)
 def determineVersion(env, versionString):
     version = "unknown"
     if 'version' in env:
@@ -70,9 +70,9 @@ def determineVersion(env, versionString):
     return version.replace("/", "_")
 
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-## @brief Return a unique fingerprint for a version (e.g. an SHA1); return None if unavailable
+# @brief Return a unique fingerprint for a version (e.g. an SHA1); return None if unavailable
 def getFingerprint(versionString):
     if versionString.lower() in ("hg", "mercurial"):
         fingerprint, modified = hg.guessFingerprint()
@@ -87,7 +87,7 @@ def getFingerprint(versionString):
     return fingerprint
 
 
-## @brief Set a prefix based on the EUPS_PATH, the product name, and a versionString from cvs or svn.
+# @brief Set a prefix based on the EUPS_PATH, the product name, and a versionString from cvs or svn.
 def setPrefix(env, versionString, eupsProductPath=None):
     try:
         env['version'] = determineVersion(env, versionString)
@@ -131,7 +131,7 @@ def setPrefix(env, versionString, eupsProductPath=None):
     return prefix
 
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 ##
 # Create current and declare targets for products.  products
@@ -178,8 +178,8 @@ def Declare(self, products=None):
                     if version:
                         command = "eups undeclare --flavor %s %s %s" % \
                                   (self['eupsFlavor'], product, version)
-                        if ("current" in SCons.Script.COMMAND_LINE_TARGETS
-                                and "declare" not in SCons.Script.COMMAND_LINE_TARGETS):
+                        if ("current" in SCons.Script.COMMAND_LINE_TARGETS and
+                                "declare" not in SCons.Script.COMMAND_LINE_TARGETS):
                             command += " --current"
 
                         if self.GetOption("clean"):
@@ -218,7 +218,7 @@ def Declare(self, products=None):
     return acts
 
 
-#=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 ##
 #  @brief SCons Action callable to recursively install a directory.
@@ -275,7 +275,7 @@ def InstallDir(self, prefix, dir, ignoreRegex=r"(~$|\.pyc$|\.os?$)", recursive=T
     return result
 
 
-#=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 ##
 # Install a ups directory, setting absolute versions as appropriate
@@ -373,9 +373,9 @@ def InstallEups(env, dest, files=[], presetup=""):
     return acts
 
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-## @brief Install directories in the usual LSST way, handling "ups" specially.
+# @brief Install directories in the usual LSST way, handling "ups" specially.
 @memberOf(SConsEnvironment)
 def InstallLSST(self, prefix, dirs, ignoreRegex=None):
     results = []

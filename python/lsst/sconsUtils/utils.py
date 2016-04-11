@@ -79,6 +79,7 @@ def libraryPathPassThrough():
 def needShebangRewrite():
     return _has_OSX_SIP()
 
+
 ##
 #  @brief Returns library loader path environment string to be prepended to external commands
 #         Will be "" if nothing is required.
@@ -94,6 +95,7 @@ def libraryLoaderEnvironment():
                 libpathstr = '{}="{}"'.format(pass_through_var, os.environ[varname])
                 break
     return libpathstr
+
 
 ##
 #  @brief Safe wrapper for running external programs, reading stdout, and sanitizing error messages.
