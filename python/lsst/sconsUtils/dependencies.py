@@ -92,7 +92,7 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     state.log.flush()
 
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 ##
 # @brief Base class for defining how to configure an LSST sconsUtils package.
@@ -110,7 +110,7 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
 ##
 class Configuration(object):
 
-    ## @brief Parse the name of a .cfg file, returning the package name and root directory.
+    # @brief Parse the name of a .cfg file, returning the package name and root directory.
     @staticmethod
     def parseFilename(cfgFile):
         dir, file = os.path.split(cfgFile)
@@ -172,7 +172,7 @@ class Configuration(object):
             # Doxygen include files to include in the configuration of dependent products
             "includes": ([os.path.join(self.root, "doc", "%s.inc" % self.name)]
                          if hasDoxygenInclude else [])
-            }
+        }
         if libs is None:
             self.libs = {
                 # Normal libraries provided by this package
@@ -181,7 +181,7 @@ class Configuration(object):
                 "python": [],
                 # Libraries provided that should only be linked with unit test code
                 "test": [],
-                }
+            }
         elif "main" in libs:
             self.libs = libs
         else:
@@ -207,7 +207,7 @@ class Configuration(object):
         self.provides = {
             "headers": tuple(headers),
             "libs": tuple(self.libs["main"])
-            }
+        }
 
     ##
     # @brief Add custom SCons configuration tests to the Configure Context passed to the
@@ -262,7 +262,7 @@ class Configuration(object):
         return True
 
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 ##
 # @brief A Configuration subclass for external (third-party) packages.
@@ -297,7 +297,7 @@ class ExternalConfiguration(Configuration):
         del self.paths["CPPPATH"]
 
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 ##
 # @brief A configuration test that checks whether a C compiler supports
@@ -378,7 +378,7 @@ def CustomLinkCheck(context, message, source, extension=".cc"):
     return result
 
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 ##
 # @brief A class for loading and managing the dependency tree of a package, as defined by its
@@ -414,7 +414,7 @@ class PackageTree(object):
             "CustomCppFlagCheck": CustomCppFlagCheck,
             "CustomCompileCheck": CustomCompileCheck,
             "CustomLinkCheck": CustomLinkCheck,
-            }
+        }
         self._current = set([primaryName])
         if noCfgFile:
             self.primary = None
@@ -446,7 +446,7 @@ class PackageTree(object):
 
     name = property(lambda self: self.primary.config.name)
 
-    ## @brief Configure the entire dependency tree in order. and return an updated environment."""
+    # @brief Configure the entire dependency tree in order. and return an updated environment."""
     def configure(self, env, check=False):
         conf = env.Configure(custom_tests=self.customTests)
         for name, module in self.packages.items():
@@ -542,7 +542,7 @@ class PackageTree(object):
         return True
 
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 ##
 # @brief Get the libraries the package should be linked with.

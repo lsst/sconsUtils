@@ -12,7 +12,7 @@ import re
 import sys
 import pipes
 from stat import ST_MODE
-from SCons.Script import *
+from SCons.Script import SConscript, File, Dir, Glob, BUILD_TARGETS
 from distutils.spawn import find_executable
 
 from . import dependencies
@@ -111,7 +111,7 @@ class BasicSConstruct(object):
             dirs.sort()  # happy coincidence that include < libs < python < tests
             if "SConscript" in files:
                 state.log.info("Using Sconscript at %s/SConscript" % root)
-                SCons.Script.SConscript(os.path.join(root, "SConscript"))
+                SConscript(os.path.join(root, "SConscript"))
         cls._initializing = False
         return state.env
 
@@ -336,7 +336,7 @@ class BasicSConscript(object):
             useTags=state.env.doxygen["tags"],
             makeTag=(state.env["packageName"] + ".tag"),
             **kw
-            )
+        )
         state.targets["doc"].extend(result)
         return result
 
@@ -387,15 +387,17 @@ class BasicSConscript(object):
             src.append(node)
         if pyList is None:
             pyList = [node for node in Glob("*.py")
-                      if _getFileBase(node) not in swigNameList
-                      and os.path.basename(str(node)) not in noBuildList]
+                      if _getFileBase(node) not in swigNameList and
+                      os.path.basename(str(node)) not in noBuildList]
         if ccList is None:
             ccList = [node for node in Glob("*.cc")
-                      if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc
-                      and os.path.basename(str(node)) not in noBuildList]
+                      if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc and
+                      os.path.basename(str(node)) not in noBuildList]
         if ignoreList is None:
             ignoreList = []
-        s = lambda l: [str(i) for i in l]
+
+        def s(l):
+            return [str(i) for i in l]
         state.log.info("SWIG modules for tests: %s" % s(swigFileList))
         state.log.info("Python tests: %s" % s(pyList))
         state.log.info("C++ tests: %s" % s(ccList))
@@ -452,11 +454,10 @@ class BasicSConscript(object):
         results = []
         for src in ccList:
             results.extend(state.env.Program(src, LIBS=state.env.getLibs("main")))
-        swigMods = []
         for name, src in swigSrc.items():
             results.extend(
                 state.env.SwigLoadableModule("_" + name, src, LIBS=state.env.getLibs("main python"))
-                )
+            )
         for result in results:
             state.env.Depends(result, state.targets["lib"])
         state.targets["examples"].extend(results)

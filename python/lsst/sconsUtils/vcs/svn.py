@@ -9,11 +9,13 @@ import os
 import re
 import sys
 
+
 def isSvnFile(file):
     """Is file under svn control?"""
 
     return re.search(r"is not a working copy",
-                     "".join(os.popen("svn info %s 2>&1" % file).readlines())) == None
+                     "".join(os.popen("svn info %s 2>&1" % file).readlines())) is None
+
 
 def getInfo(file="."):
     """Return a dictionary of all the information returned by "svn info" for the specified file"""
@@ -31,12 +33,14 @@ def getInfo(file="."):
 
     return info
 
+
 def isTrunk(file="."):
     """Is file on the trunk?"""
 
     info = getInfo(file)
 
-    return re.search(r"/trunk($|/)", info["URL"]) != None
+    return re.search(r"/trunk($|/)", info["URL"]) is not None
+
 
 def revision(file=None, lastChanged=False):
     """Return file's Revision as a string; if file is None return
@@ -79,8 +83,9 @@ def revision(file=None, lastChanged=False):
 
     raise RuntimeError("svnversion returned unexpected result \"%s\"" % res[:-1])
 
+
 #
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 #
 def guessVersionName(HeadURL):
     """Guess a version name given a HeadURL"""
@@ -122,6 +127,7 @@ def guessVersionName(HeadURL):
         return "unknown"
 
     return versionName
+
 
 def parseVersionName(versionName):
     """A callback that knows about the LSST convention that a tagname such as
