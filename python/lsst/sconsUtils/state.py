@@ -281,6 +281,7 @@ def _configureCommon():
         """
         versionNameList = (
             (r"gcc(?:\-.+)? +\(.+\) +([0-9.a-zA-Z]+)", "gcc"),
+            (r"\(GCC\) +([0-9.a-zA-Z]+) ", "gcc"),
             (r"LLVM +version +([0-9.a-zA-Z]+) ", "clang"),  # clang on Mac
             (r"clang +version +([0-9.a-zA-Z]+) ", "clang"),  # clang on linux
             (r"\(ICC\) +([0-9.a-zA-Z]+) ", "icc"),
