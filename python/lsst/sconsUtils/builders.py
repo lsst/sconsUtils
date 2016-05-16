@@ -514,10 +514,6 @@ def VersionModule(self, filename, versionString=None):
             outFile.write("%s = '%s'\n" % (what, parts[0]))
             names.append(what)
 
-            what = "__repo_version__"
-            outFile.write("%s = '%s'\n" % (what, parts[0]))
-            names.append(what)
-
             what = "__fingerprint__"
             outFile.write("%s = '%s'\n" % (what, getFingerprint(versionString)))
             names.append(what)
