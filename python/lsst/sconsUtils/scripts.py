@@ -306,6 +306,8 @@ class BasicSConscript(object):
     #  to our current pseudo-convention: last part of env["packageName"], split by underscores,
     #  with "Lib" appended to the end.
     #
+    #  @return A list of SwigLoadableModule elements.
+    #
     #  @param swigNameList    Sequence of SWIG modules to be built (does not include the file extensions).
     #  @param libs         Libraries to link against, either as a string argument to be passed to
     #                      env.getLibs() or a sequence of actual libraries to pass in.
@@ -329,6 +331,27 @@ class BasicSConscript(object):
         result = []
         for name, src in swigSrc.items():
             result.extend(state.env.SwigLoadableModule("_" + name, src, LIBS=libs))
+        state.targets["python"].extend(result)
+        return result
+
+    ##
+    #  @brief Convenience function to replace standard python/*/SConscript boilerplate.
+    #
+    #  @return A list of Pybind11LoadableModule elements.
+    #
+    #  @param nameList    Sequence of pybind11 modules to be built (does not include the file extensions).
+    #  @param libs        Libraries to link against, either as a string argument to be passed to
+    #                     env.getLibs() or a sequence of actual libraries to pass in.
+    ##
+    @staticmethod
+    def pybind11(nameList=[], libs="main python"):
+        if isinstance(libs, basestring):
+            libs = state.env.getLibs(libs)
+        elif libs is None:
+            libs = []
+        result = []
+        for name in nameList:
+            result.extend(state.env.Pybind11LoadableModule("_" + name, name + ".cc", LIBS=libs))
         state.targets["python"].extend(result)
         return result
 

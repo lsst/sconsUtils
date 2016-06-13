@@ -46,6 +46,16 @@ def SwigLoadableModule(self, target, source, **keywords):
         pass
     return myenv.LoadableModule(target, source, **keywords)
 
+#  @brief Like LoadableModule, but don't insist that all symbols are resolved, and set
+#         some pybind11-specific flags.
+@memberOf(SConsEnvironment)
+def Pybind11LoadableModule(self, target, source, **keywords):
+    myenv = self.Clone()
+    if myenv['PLATFORM'] == 'darwin':
+        myenv.Append(LDMODULEFLAGS=["-undefined", "suppress",
+                                    "-flat_namespace", "-headerpad_max_install_names"])
+    return myenv.LoadableModule(target, source, **keywords)
+
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 
