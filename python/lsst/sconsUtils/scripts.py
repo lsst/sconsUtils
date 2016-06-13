@@ -124,6 +124,7 @@ class BasicSConstruct(object):
                 scripts.append(os.path.join(root, "SConscript"))
         if sconscriptOrder is None:
             sconscriptOrder = ("lib", "python", "tests", "examples", "doc")
+
         def key(path):
             for i, item in enumerate(sconscriptOrder):
                 if path.startswith(item):
@@ -306,6 +307,8 @@ class BasicSConscript(object):
     #  to our current pseudo-convention: last part of env["packageName"], split by underscores,
     #  with "Lib" appended to the end.
     #
+    #  @return A list of SwigLoadableModule elements.
+    #
     #  @param swigNameList    Sequence of SWIG modules to be built (does not include the file extensions).
     #  @param libs         Libraries to link against, either as a string argument to be passed to
     #                      env.getLibs() or a sequence of actual libraries to pass in.
@@ -329,6 +332,41 @@ class BasicSConscript(object):
         result = []
         for name, src in swigSrc.items():
             result.extend(state.env.SwigLoadableModule("_" + name, src, LIBS=libs))
+        state.targets["python"].extend(result)
+        return result
+
+    ##
+    #  @brief Convenience function to replace standard python/*/SConscript boilerplate.
+    #
+    #  @return A list of Pybind11LoadableModule elements.
+    #
+    #  @param nameList    Sequence of pybind11 modules to be built (does not include the file extensions).
+    #  @param libs        Libraries to link against, either as a string argument to be passed to
+    #                     env.getLibs() or a sequence of actual libraries to pass in.
+    #  @param extraSrc    A dictionary of additional source files that go into the modules.  Each
+    #                     key should be an entry in nameList, and each value should be a list
+    #                     of additional C++ source files.
+    ##
+    @staticmethod
+    def pybind11(nameList=[], libs="main python", extraSrc=None):
+        srcList = extraSrc
+        if srcList is None:
+            srcList = dict([(name, []) for name in nameList])
+        for name in nameList:
+            srcList[name].append(name + ".cc")
+        if isinstance(libs, basestring):
+            libs = state.env.getLibs(libs)
+        elif libs is None:
+            libs = []
+        result = []
+        for name in nameList:
+            # TODO remove this block and always use pyLibName = name;
+            # but we can't do that until all our pybind11 .cc files have a leading underscore
+            if name.startswith("_"):
+                pyLibName = name
+            else:
+                pyLibName = "_" + name
+            result.extend(state.env.Pybind11LoadableModule(pyLibName, srcList[name], LIBS=libs))
         state.targets["python"].extend(result)
         return result
 
