@@ -98,8 +98,8 @@ def _initVariables():
         SCons.Script.BoolVariable('force', 'Set to force possibly dangerous behaviours', False),
         ('optfile', 'Specify a file to read default options from', None),
         ('prefix', 'Specify the install destination', None),
-        SCons.Script.EnumVariable('opt', 'Set the optimisation level', 0,
-                                  allowed_values=('0', '1', '2', '3')),
+        SCons.Script.EnumVariable('opt', 'Set the optimisation level', 3,
+                                  allowed_values=('g', '0', '1', '2', '3')),
         SCons.Script.EnumVariable('profile', 'Compile/link for profiler', 0,
                                   allowed_values=('0', '1', 'pg', 'gcov')),
         ('version', 'Specify the version to declare', None),
@@ -295,7 +295,9 @@ def _configureCommon():
                 match = re.search(reStr, ccVersDump)
                 if match:
                     compilerVersion = match.groups()[0]
+                    context.Result("%s=%s" % (compilerName, compilerVersion))
                     return (compilerName, compilerVersion)
+        context.Result("unknown")
         return ("unknown", "unknown")
 
     if env.GetOption("clean") or env.GetOption("no_exec") or env.GetOption("help"):
@@ -378,8 +380,8 @@ def _configureCommon():
     # Set the optimization level.
     #
     if env['opt']:
-        env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-O(\d|s)$", o)]
-        env.MergeFlags('-O%d' % int(env['opt']))
+        env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-O(\d|s|g|fast)$", o)]
+        env.MergeFlags('-O%s' % env['opt'])
     #
     # Set compiler-specific warning flags.
     #
