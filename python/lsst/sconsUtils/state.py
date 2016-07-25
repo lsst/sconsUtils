@@ -98,7 +98,7 @@ def _initVariables():
         SCons.Script.BoolVariable('force', 'Set to force possibly dangerous behaviours', False),
         ('optfile', 'Specify a file to read default options from', None),
         ('prefix', 'Specify the install destination', None),
-        SCons.Script.EnumVariable('opt', 'Set the optimisation level', 0,
+        SCons.Script.EnumVariable('opt', 'Set the optimisation level', 3,
                                   allowed_values=('0', '1', '2', '3')),
         SCons.Script.EnumVariable('profile', 'Compile/link for profiler', 0,
                                   allowed_values=('0', '1', 'pg', 'gcov')),
