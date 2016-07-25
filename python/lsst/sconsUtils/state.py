@@ -295,7 +295,9 @@ def _configureCommon():
                 match = re.search(reStr, ccVersDump)
                 if match:
                     compilerVersion = match.groups()[0]
+                    context.Result("%s=%s" % (compilerName, compilerVersion))
                     return (compilerName, compilerVersion)
+        context.Result("unknown")
         return ("unknown", "unknown")
 
     if env.GetOption("clean") or env.GetOption("no_exec") or env.GetOption("help"):
