@@ -380,7 +380,7 @@ def _configureCommon():
     # Set the optimization level.
     #
     if env['opt']:
-        env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-O(\d|s|g)$", o)]
+        env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-O(\d|s|g|fast)$", o)]
         env.MergeFlags('-O%s' % env['opt'])
     #
     # Set compiler-specific warning flags.
