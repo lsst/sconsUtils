@@ -99,7 +99,7 @@ def _initVariables():
         ('optfile', 'Specify a file to read default options from', None),
         ('prefix', 'Specify the install destination', None),
         SCons.Script.EnumVariable('opt', 'Set the optimisation level', 3,
-                                  allowed_values=('0', '1', '2', '3')),
+                                  allowed_values=('g', '0', '1', '2', '3')),
         SCons.Script.EnumVariable('profile', 'Compile/link for profiler', 0,
                                   allowed_values=('0', '1', 'pg', 'gcov')),
         ('version', 'Specify the version to declare', None),
@@ -378,8 +378,8 @@ def _configureCommon():
     # Set the optimization level.
     #
     if env['opt']:
-        env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-O(\d|s)$", o)]
-        env.MergeFlags('-O%d' % int(env['opt']))
+        env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-O(\d|s|g)$", o)]
+        env.MergeFlags('-O%s' % env['opt'])
     #
     # Set compiler-specific warning flags.
     #
