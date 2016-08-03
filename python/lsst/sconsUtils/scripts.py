@@ -9,7 +9,6 @@
 from __future__ import absolute_import, division, print_function
 import os.path
 import re
-import sys
 import pipes
 from stat import ST_MODE
 from SCons.Script import SConscript, File, Dir, Glob, BUILD_TARGETS
@@ -243,7 +242,7 @@ class BasicSConscript(object):
         def rewrite_shebang(target, source, env):
             """Copy source to target, rewriting the shebang"""
             # Currently just use this python
-            usepython = sys.executable
+            usepython = utils.whichPython()
             for targ, src in zip(target, source):
                 with open(str(src), "r") as srcfd:
                     with open(str(targ), "w") as outfd:
