@@ -73,6 +73,24 @@ def libraryPathPassThrough():
     return None
 
 
+# Cache variable for whichPython() function
+_pythonPath = None
+
+
+##
+#  @brief Returns the full path to the Python executable as determined
+#  from the PATH. Does not return the full path of the Python running
+#  SCons. Caches result and assumes the PATH does not change between
+#  calls. Runs the "python" command and asks where it is rather than
+#  scanning the PATH.
+def whichPython():
+    global _pythonPath
+    if _pythonPath is None:
+        output = subprocess.check_output(["python", "-c", "import sys; print(sys.executable)"])
+        _pythonPath = output.decode()
+    return _pythonPath
+
+
 ##
 #  @brief Returns True if the shebang lines of executables should be rewritten
 ##
