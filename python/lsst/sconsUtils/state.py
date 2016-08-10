@@ -401,6 +401,7 @@ def _configureCommon():
             "parentheses": "equality comparison with extraneous parentheses",
             "shorten-64-to-32": "implicit conversion loses integer precision",
             "self-assign": "x = x",
+            "unused-local-typedefs": "unused typedef", # lots from boost
             "unknown-pragmas": "unknown pragma ignored",
             "deprecated-register": "register is deprecated",
         }
