@@ -82,7 +82,7 @@ class BasicSConstruct(object):
     #  @param cleanExt             Whitespace delimited sequence of globs for files to remove with --clean.
     #  @param versionModuleName    If non-None, builds a version.py module as this file; '%s' is replaced with
     #                              the name of the package.
-    # @param noCfgFile             If True, this package has no .cfg file
+    #  @param noCfgFile            If True, this package has no .cfg file
     #  @param sconscriptOrder      A sequence of directory names that set the order for processing
     #                              SConscript files discovered in nested directories.  Full directories
     #                              need not be specified, but paths must begin at the root.  For example,
