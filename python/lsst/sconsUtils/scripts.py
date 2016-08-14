@@ -58,9 +58,10 @@ class BasicSConstruct(object):
     def __new__(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None, cleanExt=None,
                 defaultTargets=DEFAULT_TARGETS,
                 subDirList=None, ignoreRegex=None,
-                versionModuleName="python/lsst/%s/version.py", noCfgFile=False):
+                versionModuleName="python/lsst/%s/version.py", noCfgFile=False,
+                sconscriptOrder=None):
         cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt,
-                       versionModuleName, noCfgFile=noCfgFile)
+                       versionModuleName, noCfgFile=noCfgFile, sconscriptOrder=sconscriptOrder)
         cls.finish(defaultTargets, subDirList, ignoreRegex)
         return state.env
 
@@ -81,13 +82,23 @@ class BasicSConstruct(object):
     #  @param cleanExt             Whitespace delimited sequence of globs for files to remove with --clean.
     #  @param versionModuleName    If non-None, builds a version.py module as this file; '%s' is replaced with
     #                              the name of the package.
-    # @param noCfgFile             If True, this package has no .cfg file
+    #  @param noCfgFile            If True, this package has no .cfg file
+    #  @param sconscriptOrder      A sequence of directory names that set the order for processing
+    #                              SConscript files discovered in nested directories.  Full directories
+    #                              need not be specified, but paths must begin at the root.  For example,
+    #                              ["lib", "python"] will ensure that "lib/SConscript" is run before
+    #                              both "python/foo/SConscript" and "python/bar/SConscript".  The default
+    #                              order should work for most LSST SCons builds, as it provides the correct
+    #                              ordering for the lib, python, tests, examples, and doc targets.  If this
+    #                              argument is provided, it must include the subset of that list that is valid
+    #                              for the package, in that order.
     #
     #  @returns an SCons Environment object (which is also available as lsst.sconsUtils.env).
     ##
     @classmethod
     def initialize(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None,
-                   cleanExt=None, versionModuleName="python/lsst/%s/version.py", noCfgFile=False):
+                   cleanExt=None, versionModuleName="python/lsst/%s/version.py", noCfgFile=False,
+                   sconscriptOrder=None):
         if cls._initializing:
             state.log.fail("Recursion detected; an SConscript file should not call BasicSConstruct.")
         cls._initializing = True
@@ -102,15 +113,26 @@ class BasicSConstruct(object):
             except TypeError:
                 pass
             state.targets["version"] = state.env.VersionModule(versionModuleName)
+        scripts = []
         for root, dirs, files in os.walk("."):
             if "SConstruct" in files and root != ".":
                 dirs[:] = []
                 continue
             dirs[:] = [d for d in dirs if not d.startswith('.')]
-            dirs.sort()  # happy coincidence that include < libs < python < tests
+            dirs.sort()  # os.walk order is not specified, but we want builds to be deterministic
             if "SConscript" in files:
-                state.log.info("Using Sconscript at %s/SConscript" % root)
-                SConscript(os.path.join(root, "SConscript"))
+                scripts.append(os.path.join(root, "SConscript"))
+        if sconscriptOrder is None:
+            sconscriptOrder = ("lib", "python", "tests", "examples", "doc")
+        def key(path):
+            for i, item in enumerate(sconscriptOrder):
+                if path.startswith(item):
+                    return i
+            return len(sconscriptOrder)
+        scripts.sort(key=key)
+        for script in scripts:
+            state.log.info("Using SConscript at %s" % script)
+            SConscript(script)
         cls._initializing = False
         return state.env
 
