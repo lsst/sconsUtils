@@ -342,16 +342,24 @@ class BasicSConscript(object):
     #  @param nameList    Sequence of pybind11 modules to be built (does not include the file extensions).
     #  @param libs        Libraries to link against, either as a string argument to be passed to
     #                     env.getLibs() or a sequence of actual libraries to pass in.
+    #  @param extraSrc    A dictionary of additional source files that go into the modules.  Each
+    #                     key should be an entry in nameList, and each value should be a list
+    #                     of additional C++ source files.
     ##
     @staticmethod
-    def pybind11(nameList=[], libs="main python"):
+    def pybind11(nameList=[], libs="main python", extraSrc=None):
+        srcList = extraSrc
+        if srcList is None:
+            srcList = dict([(name, []) for name in nameList])
+        for name in nameList:
+            srcList[name].append(name + ".cc")
         if isinstance(libs, basestring):
             libs = state.env.getLibs(libs)
         elif libs is None:
             libs = []
         result = []
         for name in nameList:
-            result.extend(state.env.Pybind11LoadableModule("_" + name, name + ".cc", LIBS=libs))
+            result.extend(state.env.Pybind11LoadableModule("_" + name, srcList[name], LIBS=libs))
         state.targets["python"].extend(result)
         return result
 
