@@ -68,8 +68,8 @@ def SourcesForSharedLibrary(self, files):
     files = [SCons.Script.File(file) for file in files]
 
     if not (self.get("optFiles") or self.get("noOptFiles")):
-        files.sort()
-        return files
+        objs = [self.SharedObject(ccFile) for ccFile in sorted(state.env.Flatten(files), key=str)]
+        return objs
 
     if self.get("optFiles"):
         optFiles = self["optFiles"].replace(".", r"\.")  # it'll be used in an RE
@@ -96,19 +96,18 @@ def SourcesForSharedLibrary(self, files):
     CCFLAGS_OPT = re.sub(r"-O(\d|s)\s*", "-O%d " % opt, " ".join(self["CCFLAGS"]))
     CCFLAGS_NOOPT = re.sub(r"-O(\d|s)\s*", "-O0 ", " ".join(self["CCFLAGS"]))  # remove -O flags from CCFLAGS
 
-    sources = []
+    objs = []
     for ccFile in files:
         if optFilesRe and re.search(optFilesRe, ccFile.abspath):
-            self.SharedObject(ccFile, CCFLAGS=CCFLAGS_OPT)
-            ccFile = os.path.splitext(ccFile.abspath)[0] + self["SHOBJSUFFIX"]
+            obj = self.SharedObject(ccFile, CCFLAGS=CCFLAGS_OPT)
         elif noOptFilesRe and re.search(noOptFilesRe, ccFile.abspath):
-            self.SharedObject(ccFile, CCFLAGS=CCFLAGS_NOOPT)
-            ccFile = os.path.splitext(ccFile.abspath)[0] + self["SHOBJSUFFIX"]
+            obj = self.SharedObject(ccFile, CCFLAGS=CCFLAGS_NOOPT)
+        else:
+            obj = self.SharedObject(ccFile)
+        objs.append(obj)
 
-        sources.append(ccFile)
-
-    sources.sort()
-    return sources
+    objs = sorted(state.env.Flatten(sources), key=str)
+    return objs
 
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
