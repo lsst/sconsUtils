@@ -359,7 +359,13 @@ class BasicSConscript(object):
             libs = []
         result = []
         for name in nameList:
-            result.extend(state.env.Pybind11LoadableModule("_" + name, srcList[name], LIBS=libs))
+            # TODO remove this block and always use pyLibName = name;
+            # but we can't do that until all our pybind11 .cc files have a leading underscore
+            if name.startswith("_"):
+                pyLibName = name
+            else:
+                pyLibName = "_" + name
+            result.extend(state.env.Pybind11LoadableModule(pyLibName, srcList[name], LIBS=libs))
         state.targets["python"].extend(result)
         return result
 
