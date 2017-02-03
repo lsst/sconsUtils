@@ -124,6 +124,7 @@ class BasicSConstruct(object):
                 scripts.append(os.path.join(root, "SConscript"))
         if sconscriptOrder is None:
             sconscriptOrder = ("lib", "python", "tests", "examples", "doc")
+
         def key(path):
             for i, item in enumerate(sconscriptOrder):
                 if path.startswith(item):
