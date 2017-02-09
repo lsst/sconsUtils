@@ -73,10 +73,19 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     # XCPPPATH is a new variable defined by sconsUtils - it's like CPPPATH, but the headers
     # found there aren't treated as dependencies.  This can make scons a lot faster.
     state.env['XCPPPATH'] = []
+
+    # XCPPPPREFIX is a replacement for SCons' built-in INCPREFIX. It is used
+    # when compiling headers in XCPPPATH directories. Here, we set it to
+    # `-isystem`, so that those are regarded as "system headers" and warnings
+    # are suppressed.
+    state.env['XCPPPREFIX'] = "-isystem "
+
     state.env['_CPPINCFLAGS'] = \
         "$( ${_concat(INCPREFIX, CPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)}"\
-        " ${_concat(INCPREFIX, XCPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)} $)"
-    state.env['_SWIGINCFLAGS'] = state.env['_CPPINCFLAGS'].replace("CPPPATH", "SWIGPATH")
+        " ${_concat(XCPPPREFIX, XCPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)} $)"
+    state.env['_SWIGINCFLAGS'] = state.env['_CPPINCFLAGS'] \
+                                      .replace("CPPPATH", "SWIGPATH") \
+                                      .replace("XCPPPREFIX", "SWIGINCPREFIX")
 
     if state.env.linkFarmDir:
         for d in [state.env.linkFarmDir, "#"]:
@@ -272,7 +281,9 @@ class Configuration(object):
 # ExternalConfiguration doesn't assume the package uses SWIG or Doxygen,
 # and tells SCons not to consider header files this package provides as dependencies
 # (by setting XCPPPATH instead of CPPPATH).  This means things SCons won't waste time
-# looking for changes in it every time you build.
+# looking for changes in it every time you build.  Header files in external
+# packages are treated as "system headers": that is, most warnings generated when
+# they are being compiled are suppressed.
 ##
 class ExternalConfiguration(Configuration):
 
