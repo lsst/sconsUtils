@@ -127,7 +127,7 @@ class BasicSConstruct(object):
 
         def key(path):
             for i, item in enumerate(sconscriptOrder):
-                if path.startswith(item):
+                if path.lstrip("./").startswith(item):
                     return i
             return len(sconscriptOrder)
         scripts.sort(key=key)
