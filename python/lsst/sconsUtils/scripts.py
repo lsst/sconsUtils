@@ -346,9 +346,13 @@ class BasicSConscript(object):
     #  @param extraSrc    A dictionary of additional source files that go into the modules.  Each
     #                     key should be an entry in nameList, and each value should be a list
     #                     of additional C++ source files.
+    #  @param addUnderscore  Add an underscore to each library name (if the source file name
+    #                     does not already start with underscore)? If false the library name
+    #                     is always the same as the source file name
+    #                     DEPRECATED: always use False for new code.
     ##
     @staticmethod
-    def pybind11(nameList=[], libs="main python", extraSrc=None):
+    def pybind11(nameList=[], libs="main python", extraSrc=None, addUnderscore=True):
         srcList = extraSrc
         if srcList is None:
             srcList = dict([(name, []) for name in nameList])
@@ -360,12 +364,15 @@ class BasicSConscript(object):
             libs = []
         result = []
         for name in nameList:
-            # TODO remove this block and always use pyLibName = name;
-            # but we can't do that until all our pybind11 .cc files have a leading underscore
-            if name.startswith("_"):
-                pyLibName = name
+            # TODO remove this block and the `addUnderscore` argument and always use pyLibName = name;
+            # but we can't do that until all our pybind11 SConscript files have been converted
+            if addUnderscore:
+                if name.startswith("_"):
+                    pyLibName = name
+                else:
+                    pyLibName = "_" + name
             else:
-                pyLibName = "_" + name
+                pyLibName = name
             result.extend(state.env.Pybind11LoadableModule(pyLibName, srcList[name], LIBS=libs))
         state.targets["python"].extend(result)
         return result
