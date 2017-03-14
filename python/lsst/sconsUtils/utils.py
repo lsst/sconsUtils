@@ -101,17 +101,34 @@ def needShebangRewrite():
 ##
 #  @brief Returns library loader path environment string to be prepended to external commands
 #         Will be "" if nothing is required.
+#
+# If we have an OS X with System Integrity Protection enabled or similar
+# we need to pass through both DYLD_LIBRARY_PATH and LSST_LIBRARY_PATH
+# to the external command.
+# DYLD_LIBRARY_PATH for Python code
+# LSST_LIBRARY_PATH for shell scripts
+#
+# If both are already defined then pass them each through
+# If only one is defined, then set both to the defined env variable
+# If neither is defined then pass through nothing.
 ##
 def libraryLoaderEnvironment():
     libpathstr = ""
-    # If we have an OS X with System Integrity Protection enabled or similar we need
-    # to pass through DYLD_LIBRARY_PATH to the external command.
-    pass_through_var = libraryPathPassThrough()
-    if pass_through_var is not None:
-        for varname in (pass_through_var, "LSST_LIBRARY_PATH"):
+    lib_pass_through_var = libraryPathPassThrough()
+    aux_pass_through_var = "LSST_LIBRARY_PATH"
+    if lib_pass_through_var is not None:
+        for varname in (lib_pass_through_var, aux_pass_through_var):
             if varname in os.environ:
-                libpathstr = '{}="{}"'.format(pass_through_var, os.environ[varname])
-                break
+                libpathstr += '{}="{}" '.format(varname, os.environ[varname])
+
+        if aux_pass_through_var in os.environ and \
+           lib_pass_through_var not in os.environ:
+                libpathstr += '{}="{}" '.format(lib_pass_through_var, os.environ[aux_pass_through_var])
+
+        if lib_pass_through_var in os.environ and \
+           aux_pass_through_var not in os.environ:
+                libpathstr += '{}="{}" '.format(aux_pass_through_var, os.environ[lib_pass_through_var])
+
     return libpathstr
 
 
