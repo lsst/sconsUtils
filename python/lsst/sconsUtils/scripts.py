@@ -222,18 +222,21 @@ class BasicSConscript(object):
     #  With no arguments, this will build a shared library with the same name as the package.
     #  This uses env.SourcesForSharedLibrary to support the optFiles/noOptFiles command-line variables.
     #
-    #  @param libName    Name of the shared libray to be built (defaults to env["packageName"]).
-    #  @param src        Source to compile into the library.  Defaults to a 4-directory deep glob
-    #                    of all *.cc files in \#src.
-    #  @param libs       Libraries to link against, either as a string argument to be passed to
-    #                    env.getLibs() or a sequence of actual libraries to pass in.
+    #  @param libName     Name of the shared libray to be built (defaults to env["packageName"]).
+    #  @param src         Source to compile into the library.  Defaults to a 4-directory deep glob
+    #                     of all *.cc files in \#src.
+    #  @param libs        Libraries to link against, either as a string argument to be passed to
+    #                     env.getLibs() or a sequence of actual libraries to pass in.
+    #  @param noBuildList List of source files to exclude from building.
     ##
     @staticmethod
-    def lib(libName=None, src=None, libs="self"):
+    def lib(libName=None, src=None, libs="self", noBuildList=None):
         if libName is None:
             libName = state.env["packageName"]
         if src is None:
             src = Glob("#src/*.cc") + Glob("#src/*/*.cc") + Glob("#src/*/*/*.cc") + Glob("#src/*/*/*/*.cc")
+        if noBuildList is not None:
+            src = [node for node in src if os.path.basename(str(node)) not in noBuildList]
         src = state.env.SourcesForSharedLibrary(src)
         if isinstance(libs, basestring):
             libs = state.env.getLibs(libs)
