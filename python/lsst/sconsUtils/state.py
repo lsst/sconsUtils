@@ -449,9 +449,12 @@ def _saveState():
     if env.GetOption("clean"):
         return
 
-    import ConfigParser
+    try:
+        from configparser import ConfigParser
+    except ImportError:
+        from ConfigParser import ConfigParser
 
-    config = ConfigParser.ConfigParser()
+    config = ConfigParser()
     config.add_section('Build')
     config.set('Build', 'cc', env.whichCc)
     if env['opt']:
@@ -459,7 +462,7 @@ def _saveState():
 
     try:
         confFile = os.path.join(env.Dir(env["CONFIGUREDIR"]).abspath, "build.cfg")
-        with open(confFile, 'wb') as configfile:
+        with open(confFile, 'w') as configfile:
             config.write(configfile)
     except Exception as e:
         log.warn("Unexpected exception in _saveState: %s" % e)

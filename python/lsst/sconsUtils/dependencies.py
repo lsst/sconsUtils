@@ -496,7 +496,7 @@ class PackageTree(object):
             return self.packages.get(name)
 
     def keys(self):
-        k = self.packages.keys()
+        k = list(self.packages.keys())
         k.append(self.name)
         return k
 

@@ -136,6 +136,7 @@ def libraryLoaderEnvironment():
 #  @brief Safe wrapper for running external programs, reading stdout, and sanitizing error messages.
 #
 #  Note that the entire program output is returned, not just a single line.
+# Returns strings not bytes
 ##
 def runExternal(cmd, fatal=False, msg=None):
     if msg is None:
@@ -151,7 +152,7 @@ def runExternal(cmd, fatal=False, msg=None):
         else:
             from . import state  # can't import at module scope due to circular dependency
             state.log.warn("%s: %s" % (msg, stderr))
-    return stdout
+    return stdout.decode()
 
 
 ##
