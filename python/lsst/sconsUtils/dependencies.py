@@ -584,6 +584,7 @@ def getLibs(env, categories="main"):
             pass
     return libs
 
+
 SConsEnvironment.getLibs = getLibs
 
 ## @}

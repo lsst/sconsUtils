@@ -401,7 +401,7 @@ def _configureCommon():
             "parentheses": "equality comparison with extraneous parentheses",
             "shorten-64-to-32": "implicit conversion loses integer precision",
             "self-assign": "x = x",
-            "unused-local-typedefs": "unused typedef", # lots from boost
+            "unused-local-typedefs": "unused typedef",  # lots from boost
             "unknown-pragmas": "unknown pragma ignored",
             "deprecated-register": "register is deprecated",
         }
@@ -467,6 +467,7 @@ def _saveState():
             config.write(configfile)
     except Exception as e:
         log.warn("Unexpected exception in _saveState: %s" % e)
+
 
 _initOptions()
 _initLog()

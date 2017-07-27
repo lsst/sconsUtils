@@ -46,6 +46,7 @@ def SwigLoadableModule(self, target, source, **keywords):
         pass
     return myenv.LoadableModule(target, source, **keywords)
 
+
 #  @brief Like LoadableModule, but don't insist that all symbols are resolved, and set
 #         some pybind11-specific flags.
 @memberOf(SConsEnvironment)
