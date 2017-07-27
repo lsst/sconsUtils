@@ -11,6 +11,7 @@ except ImportError:
 def haveEups():
     return eupsLoaded
 
+
 if not haveEups():
     #
     # Fake what we can so sconsUtils can limp along without eups

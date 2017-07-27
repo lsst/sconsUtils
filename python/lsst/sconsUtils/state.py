@@ -401,7 +401,7 @@ def _configureCommon():
             "parentheses": "equality comparison with extraneous parentheses",
             "shorten-64-to-32": "implicit conversion loses integer precision",
             "self-assign": "x = x",
-            "unused-local-typedefs": "unused typedef", # lots from boost
+            "unused-local-typedefs": "unused typedef",  # lots from boost
             "unknown-pragmas": "unknown pragma ignored",
             "deprecated-register": "register is deprecated",
         }
@@ -449,9 +449,13 @@ def _saveState():
     if env.GetOption("clean"):
         return
 
-    import ConfigParser
+    # Python 2 uses ConfigParser, Python 3 uses configparser
+    try:
+        from configparser import ConfigParser
+    except ImportError:
+        from ConfigParser import ConfigParser
 
-    config = ConfigParser.ConfigParser()
+    config = ConfigParser()
     config.add_section('Build')
     config.set('Build', 'cc', env.whichCc)
     if env['opt']:
@@ -459,10 +463,11 @@ def _saveState():
 
     try:
         confFile = os.path.join(env.Dir(env["CONFIGUREDIR"]).abspath, "build.cfg")
-        with open(confFile, 'wb') as configfile:
+        with open(confFile, 'w') as configfile:
             config.write(configfile)
     except Exception as e:
         log.warn("Unexpected exception in _saveState: %s" % e)
+
 
 _initOptions()
 _initLog()

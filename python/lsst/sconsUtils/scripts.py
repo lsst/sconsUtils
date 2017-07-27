@@ -13,6 +13,7 @@ import pipes
 from stat import ST_MODE
 from SCons.Script import SConscript, File, Dir, Glob, BUILD_TARGETS
 from distutils.spawn import find_executable
+from past.builtins import basestring
 
 from . import dependencies
 from . import state

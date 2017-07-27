@@ -46,6 +46,7 @@ def SwigLoadableModule(self, target, source, **keywords):
         pass
     return myenv.LoadableModule(target, source, **keywords)
 
+
 #  @brief Like LoadableModule, but don't insist that all symbols are resolved, and set
 #         some pybind11-specific flags.
 @memberOf(SConsEnvironment)
@@ -496,7 +497,7 @@ def VersionModule(self, filename, versionString=None):
     def calcMd5(filename):
         try:
             import hashlib
-            md5 = hashlib.md5("\n".join(open(filename).readlines())).hexdigest()
+            md5 = hashlib.md5(open(filename, "rb").read()).hexdigest()
         except IOError:
             md5 = None
 

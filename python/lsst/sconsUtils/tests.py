@@ -8,6 +8,7 @@ import glob
 import os
 import re
 import sys
+from past.builtins import basestring
 from SCons.Script import *    # So that this file has the same namespace as SConstruct/SConscript
 from . import state
 from . import utils
