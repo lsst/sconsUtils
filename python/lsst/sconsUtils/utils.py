@@ -50,7 +50,7 @@ class Log(object):
 
 ##
 #  @brief Internal function indicating that the OS has System
-#   Integrity Protection.
+#  Integrity Protection.
 ##
 def _has_OSX_SIP():
     hasSIP = False
@@ -67,6 +67,7 @@ def _has_OSX_SIP():
 ##
 #  @brief Returns name of library path environment variable to be passed through
 #  or else returns None if no pass through is required on this platform.
+##
 def libraryPathPassThrough():
     if _has_OSX_SIP():
         return "DYLD_LIBRARY_PATH"
@@ -83,6 +84,7 @@ _pythonPath = None
 #  SCons. Caches result and assumes the PATH does not change between
 #  calls. Runs the "python" command and asks where it is rather than
 #  scanning the PATH.
+##
 def whichPython():
     global _pythonPath
     if _pythonPath is None:
@@ -136,7 +138,7 @@ def libraryLoaderEnvironment():
 #  @brief Safe wrapper for running external programs, reading stdout, and sanitizing error messages.
 #
 #  Note that the entire program output is returned, not just a single line.
-# Returns strings not bytes
+#  @returns Strings not bytes.
 ##
 def runExternal(cmd, fatal=False, msg=None):
     if msg is None:

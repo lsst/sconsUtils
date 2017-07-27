@@ -449,6 +449,7 @@ def _saveState():
     if env.GetOption("clean"):
         return
 
+    # Python 2 uses ConfigParser, Python 3 uses configparser
     try:
         from configparser import ConfigParser
     except ImportError:
