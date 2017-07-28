@@ -1,4 +1,5 @@
 setupRequired(scons)
+setupRequired(python_future)
 setupOptional(doxygen)
 envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
 envPrepend(PATH, ${PRODUCT_DIR}/bin)
