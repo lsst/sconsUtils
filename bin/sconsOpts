@@ -42,4 +42,3 @@ else:
       print("File %s doesn't exist" % args.configFile, file=sys.stderr)
 
 print("cc=%s opt=%s" % (cc, opt))
-      

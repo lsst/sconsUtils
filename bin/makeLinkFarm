@@ -45,7 +45,7 @@ creates a link farm for your current selection of products.
 
     parser.add_argument('--force', '-f', action='store_true', help="Force creation of farm even if it exists")
     parser.add_argument('--verbose', '-v', action='count', help="Be chatty")
-    
+
     args = parser.parse_args()
 
     linkFarmDir = os.path.abspath(args.linkFarmDir)
@@ -73,7 +73,7 @@ creates a link farm for your current selection of products.
         pd = eups.productDir(productName)
         if not pd:                      # no product
             continue
-        
+
         binDir = os.path.join(pd, "bin")
         incDir = os.path.join(pd, "include")
         libDir = os.path.join(pd, "lib")
@@ -111,4 +111,3 @@ creates a link farm for your current selection of products.
 
 if __name__ == "__main__":
     main()
-    
