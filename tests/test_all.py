@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 #
 # LSST Data Management System
 # Copyright 2008, 2009, 2010 LSST Corporation.
@@ -26,10 +24,9 @@
 Tests for sconsUtils
 
 Run with:
-   testAll.py
-or
-   python
-   >>> import testAll; testAll.run()
+   python test_all.py
+or by typing
+   pytest
 """
 
 import os
