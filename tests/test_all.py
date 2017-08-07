@@ -32,9 +32,6 @@ or by typing
 import os
 import subprocess
 import unittest
-import sys
-
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 
 class SconsUtilsTestCase(unittest.TestCase):
