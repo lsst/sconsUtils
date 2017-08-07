@@ -92,7 +92,7 @@ creates a link farm for your current selection of products.
 
         if os.path.exists(libDir):
             for src in os.listdir(libDir):
-                if not re.search(r"^lib", src):
+                if not src.startswith("lib"):
                     continue
 
                 fullSrc = os.path.join(libDir, src)

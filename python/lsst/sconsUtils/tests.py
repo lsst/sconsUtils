@@ -69,7 +69,7 @@ class Control(object):
         self._info = {}                 # information about processing targets
         if ignoreList:
             for f in ignoreList:
-                if re.search(r"^@", f):    # @dfilename => don't complain if filename doesn't exist
+                if f.startswith("@"):  # @dfilename => don't complain if filename doesn't exist
                     f = f[1:]
                 else:
                     if not os.path.exists(f):
@@ -149,7 +149,7 @@ class Control(object):
             for a in self.args(f).split(" "):
                 # if a is a file, make it an absolute name as scons runs from the root directory
                 filePrefix = "file:"
-                if re.search(r"^" + filePrefix, a):  # they explicitly said that this was a file
+                if a.startswith(filePrefix):  # they explicitly said that this was a file
                     a = os.path.join(self._cwd, a[len(filePrefix):])
                 else:
                     try:                # see if it's a file
