@@ -55,37 +55,6 @@ class SconsUtilsTestCase(unittest.TestCase):
             """ % os.path.dirname(__file__), shell=True),
             "Failed to detect failed tests")
 
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-#
-# Copied from utils/python/lsst/utils/tests.py as I don't want to make sconsUtils depend on utils
-#
-
-
-def tests_run(suite, exit=True):
-    """Exit with the status code resulting from running the provided test suite"""
-
-    if unittest.TextTestRunner().run(suite).wasSuccessful():
-        status = 0
-    else:
-        status = 1
-
-    if exit:
-        sys.exit(status)
-    else:
-        return status
-
-
-def suite():
-    """Returns a suite containing all the test cases in this module."""
-
-    suites = []
-    suites += unittest.makeSuite(SconsUtilsTestCase)
-    return unittest.TestSuite(suites)
-
-
-def run(shouldExit=False):
-    """Run the tests"""
-    tests_run(suite(), shouldExit)
 
 if __name__ == "__main__":
-    run(True)
+    unittest.main()
