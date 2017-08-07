@@ -47,7 +47,7 @@ class SconsUtilsTestCase(unittest.TestCase):
 
     def testCheckErrorCode(self):
         self.assertTrue(subprocess.call("""
-                cd %s/testFailedTests
+                cd "%s/testFailedTests"
                 scons > /dev/null 2>&1
             """ % os.path.dirname(__file__), shell=True),
             "Failed to detect failed tests")
