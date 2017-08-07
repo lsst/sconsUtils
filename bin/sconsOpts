@@ -2,6 +2,7 @@
 #
 # Print the options last passed to scons
 #
+from __future__ import print_function
 import os, sys
 import ConfigParser
 import argparse
@@ -32,13 +33,13 @@ if os.path.exists(args.configFile):
 
       cc = config.get("Build", 'cc')
       opt = config.get("Build", 'opt', 'opt')
-   except Exception, e:
+   except Exception as e:
       if not args.quiet:
-         print >> sys.stderr, "File %s: error %s" % (args.configFile, e)
+         print("File %s: error %s" % (args.configFile, e), file=sys.stderr)
 
 else:
    if not args.quiet:
-      print >> sys.stderr, "File %s doesn't exist" % args.configFile
+      print("File %s doesn't exist" % args.configFile, file=sys.stderr)
 
-print "cc=%s opt=%s" % (cc, opt)
+print("cc=%s opt=%s" % (cc, opt))
       
