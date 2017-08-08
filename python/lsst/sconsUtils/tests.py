@@ -103,7 +103,7 @@ class Control(object):
             return ""
 
     def ignore(self, test):
-        if not re.search(r"\.py$", test) and \
+        if not test.endswith(".py") and \
            len(self._env.Glob(test)) == 0:  # we don't know how to build it
             return True
 
@@ -135,7 +135,7 @@ class Control(object):
         for f in glob.glob(fileGlob):
             interpreter = ""            # interpreter to run test, if needed
 
-            if re.search(r"\.cc", f):   # look for executable
+            if f.endswith(".cc"):  # look for executable
                 f = os.path.splitext(f)[0]
             else:
                 interpreter = "pytest -v --junit-xml=${TARGET}.xml"
