@@ -138,7 +138,7 @@ class Control(object):
             if re.search(r"\.cc", f):   # look for executable
                 f = os.path.splitext(f)[0]
             else:
-                interpreter = "python"
+                interpreter = "pytest -v --junit-xml=${TARGET}.xml"
 
             if self.ignore(f):
                 continue
