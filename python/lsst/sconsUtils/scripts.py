@@ -299,8 +299,10 @@ class BasicSConscript(object):
         if src is None:
             src = Glob("#bin.src/*")
         for s in src:
-            if str(s) != "SConscript":
-                result = state.env.Command(target=os.path.join(Dir("#bin").abspath, str(s)),
+            filename = str(s)
+            # Do not try to rewrite files starting with non-letters
+            if filename != "SConscript" and re.match("[A-Za-z]", filename):
+                result = state.env.Command(target=os.path.join(Dir("#bin").abspath, filename),
                                            source=s, action=rewrite_shebang)
                 state.targets["shebang"].extend(result)
 
