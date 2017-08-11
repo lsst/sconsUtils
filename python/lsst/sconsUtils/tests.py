@@ -138,7 +138,7 @@ class Control(object):
             if f.endswith(".cc"):  # look for executable
                 f = os.path.splitext(f)[0]
             else:
-                interpreter = "pytest -v --junit-xml=${TARGET}.xml"
+                interpreter = "pytest -Wd --junit-xml=${TARGET}.xml"
 
             if self.ignore(f):
                 continue
