@@ -426,6 +426,7 @@ class BasicSConscript(object):
     #  @param pyList           A sequence of Python tests to run (including .py extensions).
     #                          Defaults to a *.py glob of the tests directory, minus any
     #                          files corresponding to the SWIG modules in swigFileList.
+    #                          An empty list will enable automated test discovery.
     #  @param ccList           A sequence of C++ unit tests to run (including .cc extensions).
     #                          Defaults to a *.cc glob of the tests directory, minus any
     #                          files that end with *_wrap.cc and files present in swigSrc.
@@ -484,8 +485,9 @@ class BasicSConscript(object):
                 state.env.SwigLoadableModule("_" + name, src, LIBS=state.env.getLibs("main python"))
             )
         ccList = [control.run(str(node)) for node in ccList]
-        pyList = [control.run(str(node)) for node in pyList]
+        pyList = [control.runPythonTests(pyList)]
         for pyTest in pyList:
+            state.env.Depends(pyTest, ccList)
             state.env.Depends(pyTest, swigMods)
             state.env.Depends(pyTest, state.targets["python"])
             state.env.Depends(pyTest, state.targets["shebang"])

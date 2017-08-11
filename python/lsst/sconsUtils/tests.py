@@ -195,3 +195,55 @@ class Control(object):
             self._env.Clean(target, self._tmpDir)
 
         return targets
+
+    def runPythonTests(self, pyList):
+        """Add a single target for testing all python files.
+        pyList is a list of nodes corresponding to python test files.
+        The IgnoreList is respected when scanning for entries.
+        If pyList is None, we will use automated test discovery within
+        pytest. Returns a list containing a single target."""
+
+        if pyList is None:
+            pyList = []
+
+        # Determine any library load path values that we have to prepend
+        # to the command.
+        libpathstr = utils.libraryLoaderEnvironment()
+
+        # Get list of python files with the path included.
+        pythonTestFiles = []
+        for fileGlob in pyList:
+            if not isinstance(fileGlob, basestring):  # env.Glob() returns an scons Node
+                fileGlob = str(fileGlob)
+            for f in glob.glob(fileGlob):
+                if self.ignore(f):
+                    continue
+                pythonTestFiles.append(os.path.join(self._cwd, f))
+
+        # Now set up the python testing target
+        # We always want to run this with the tests target.
+        # We have decided to use pytest caching so that on reruns we only
+        # run failed tests.
+        interpreter = "pytest -Wd --lf --junit-xml=${TARGET}"
+        target = os.path.join(self._tmpDir, "pytest-{}.xml".format(self._env['eupsProduct']))
+
+        # Remove target so that we always trigger pytest
+        if os.path.exists(target):
+            os.unlink(target)
+
+        if not pythonTestFiles:
+            print("pytest: automated test discovery mode enabled.")
+        else:
+            nfiles = len(pythonTestFiles)
+            print("pytest: running on {} Python test file{}.".format(nfiles, "" if nfiles == 1 else "s"))
+
+        result = self._env.Command(target, None, """
+        @rm -f ${{TARGET}};
+        @ printf "%s\\n" 'running pytest... ';
+        @ {2} TRAVIS=1 {0} {1};
+        """.format(interpreter, " ".join(pythonTestFiles), libpathstr))
+
+        self._env.Alias(os.path.basename(target), target)
+        self._env.Clean(target, self._tmpDir)
+
+        return [result]
