@@ -117,7 +117,7 @@ def SourcesForSharedLibrary(self, files):
             obj = self.SharedObject(ccFile)
         objs.append(obj)
 
-    objs = sorted(state.env.Flatten(sources), key=str)
+    objs = sorted(state.env.Flatten(objs), key=str)
     return objs
 
 
