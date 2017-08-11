@@ -427,6 +427,12 @@ class BasicSConscript(object):
     #                          Defaults to a *.py glob of the tests directory, minus any
     #                          files corresponding to the SWIG modules in swigFileList.
     #                          An empty list will enable automated test discovery.
+    #  @param pySingles        A sequence of Python tests to run (including .py extensions)
+    #                          as independent single tests. By default this list is empty
+    #                          and all tests are run in a single pytest call.
+    #                          Items specified here will not appear in the default pyList
+    #                          and should not start with "test_" (such that they will not
+    #                          be auto-discoverable by pytest).
     #  @param ccList           A sequence of C++ unit tests to run (including .cc extensions).
     #                          Defaults to a *.cc glob of the tests directory, minus any
     #                          files that end with *_wrap.cc and files present in swigSrc.
@@ -442,10 +448,12 @@ class BasicSConscript(object):
     ##
     @staticmethod
     def tests(pyList=None, ccList=None, swigNameList=None, swigSrc=None,
-              ignoreList=None, noBuildList=None,
+              ignoreList=None, noBuildList=None, pySingles=None,
               args=None):
         if noBuildList is None:
             noBuildList = []
+        if pySingles is None:
+            pySingles = []
         if swigNameList is None:
             swigFileList = Glob("*.i")
             swigNameList = [_getFileBase(node) for node in swigFileList]
@@ -484,8 +492,22 @@ class BasicSConscript(object):
             swigMods.extend(
                 state.env.SwigLoadableModule("_" + name, src, LIBS=state.env.getLibs("main python"))
             )
+
+        # Warn about insisting that a test in pySingles starts with test_ and therefore
+        # might be automatically discovered by pytest. This warning could only be issued
+        # if test discovery is enabled.
+        for node in pySingles:
+            if str(node).startswith("test_"):
+                print("Warning: {} should be run independently but"
+                      " can be automatically discovered".format(node))
+
+        # Ensure that python tests listed in pySingles are not included in pyList.
+        pyList = [str(node) for node in pyList if str(node) not in pySingles]
+
         ccList = [control.run(str(node)) for node in ccList]
+        pySingles = [control.run(str(node)) for node in pySingles]
         pyList = [control.runPythonTests(pyList)]
+        pyList.extend(pySingles)
         for pyTest in pyList:
             state.env.Depends(pyTest, ccList)
             state.env.Depends(pyTest, swigMods)
