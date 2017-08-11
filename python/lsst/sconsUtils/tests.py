@@ -127,11 +127,19 @@ class Control(object):
                     "false", "failed")
 
     def run(self, fileGlob):
+        """Create a test target for each file matching the supplied glob.
+        """
+
         if not isinstance(fileGlob, basestring):  # env.Glob() returns an scons Node
             fileGlob = str(fileGlob)
         targets = []
         if not self.runExamples:
             return targets
+
+        # Determine any library load path values that we have to prepend
+        # to the command.
+        libpathstr = utils.libraryLoaderEnvironment()
+
         for f in glob.glob(fileGlob):
             interpreter = ""            # interpreter to run test, if needed
 
@@ -161,10 +169,6 @@ class Control(object):
                 args += [a]
 
             (should_pass, passedMsg, should_fail, failedMsg) = self.messages(f)
-
-            # Determine any library load path values that we have to prepend
-            # to the command.
-            libpathstr = utils.libraryLoaderEnvironment()
 
             # The TRAVIS environment variable is set to allow us to disable
             # the matplotlib font cache. See ticket DM-3856.
