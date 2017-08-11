@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
-import argparse, os, re, sys
+import argparse
+import os
+import sys
 import eups
+
 
 def linkFiles(dstDir, srcDir, verbose=0, force=False):
     """Link all the regular files in srcDir into dstDir; mkdir all the directories in srcDir and
@@ -29,6 +32,7 @@ def linkFiles(dstDir, srcDir, verbose=0, force=False):
                     sys.exit(1)
 
             os.symlink(fullSrc, fullDst)
+
 
 def main():
     parser = argparse.ArgumentParser(description='''Build a link farm to replace long -I/-L argument lists.
@@ -108,6 +112,7 @@ creates a link farm for your current selection of products.
                         sys.exit(1)
 
                 os.symlink(fullSrc, fullDst)
+
 
 if __name__ == "__main__":
     main()

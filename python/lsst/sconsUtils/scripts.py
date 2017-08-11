@@ -537,4 +537,4 @@ class BasicSConscript(object):
         state.targets["examples"].extend(results)
         return results
 
-## @}
+## @}  # noqa E266

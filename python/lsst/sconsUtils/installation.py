@@ -335,7 +335,7 @@ def InstallEups(env, dest, files=[], presetup=""):
 
             path = eups.Eups.setEupsPath()
             if path:
-                locks = eups.lock.takeLocks("setup", path, eups.lock.LOCK_SH)
+                locks = eups.lock.takeLocks("setup", path, eups.lock.LOCK_SH)  # noqa F841 keep locks active
                 env["ENV"]["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", "-1")
         except ImportError:
             state.log.warn("Unable to import eups; not locking")
