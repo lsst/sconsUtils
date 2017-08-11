@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import glob
 import os
 import sys
+import pipes
 from past.builtins import basestring
 from SCons.Script import *  # noqa So that this file has the same namespace as SConstruct/SConscript
 from . import state
@@ -240,7 +241,7 @@ class Control(object):
         @rm -f ${{TARGET}};
         @ printf "%s\\n" 'running pytest... ';
         @ {2} TRAVIS=1 {0} {1};
-        """.format(interpreter, " ".join(pythonTestFiles), libpathstr))
+        """.format(interpreter, " ".join([pipes.quote(p) for p in pythonTestFiles]), libpathstr))
 
         self._env.Alias(os.path.basename(target), target)
         self._env.Clean(target, self._tmpDir)
