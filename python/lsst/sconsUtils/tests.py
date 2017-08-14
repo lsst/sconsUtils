@@ -224,7 +224,7 @@ class Control(object):
         # We always want to run this with the tests target.
         # We have decided to use pytest caching so that on reruns we only
         # run failed tests.
-        interpreter = "pytest -Wd --lf --junit-xml=${TARGET}"
+        interpreter = "pytest -Wd --lf --junit-xml=${TARGET} --session2file=${TARGET}.out"
         target = os.path.join(self._tmpDir, "pytest-{}.xml".format(self._env['eupsProduct']))
 
         # Remove target so that we always trigger pytest
@@ -238,9 +238,14 @@ class Control(object):
             print("pytest: running on {} Python test file{}.".format(nfiles, "" if nfiles == 1 else "s"))
 
         result = self._env.Command(target, None, """
-        @rm -f ${{TARGET}};
-        @ printf "%s\\n" 'running pytest... ';
-        @ {2} TRAVIS=1 {0} {1};
+        @rm -f ${{TARGET}} ${{TARGET}}.failed;
+        @printf "%s\\n" 'running global pytest... ';
+        @if {2} TRAVIS=1 {0} {1}; then \
+            echo "Global pytest run completed successfully"; \
+        else \
+            echo "Global pytest run: failed"; \
+            mv ${{TARGET}}.out ${{TARGET}}.failed; \
+        fi;
         """.format(interpreter, " ".join([pipes.quote(p) for p in pythonTestFiles]), libpathstr))
 
         self._env.Alias(os.path.basename(target), target)
