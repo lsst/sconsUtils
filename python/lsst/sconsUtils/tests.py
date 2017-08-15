@@ -227,6 +227,14 @@ class Control(object):
         interpreter = "pytest -Wd --lf --junit-xml=${TARGET} --session2file=${TARGET}.out"
         target = os.path.join(self._tmpDir, "pytest-{}.xml".format(self._env['eupsProduct']))
 
+        # Work out how many jobs scons has been configured to use
+        # and use that number with pytest. This could cause trouble
+        # if there are lots of binary tests to run and lots of singles.
+        njobs = self._env.GetOption("num_jobs")
+        print("Running pytest with {} processes".format(njobs))
+        if njobs > 1:
+            interpreter = interpreter + " -n {}".format(njobs)
+
         # Remove target so that we always trigger pytest
         if os.path.exists(target):
             os.unlink(target)
