@@ -479,6 +479,10 @@ class BasicSConscript(object):
             pyList = [node for node in Glob("*.py")
                       if _getFileBase(node) not in swigNameList and
                       os.path.basename(str(node)) not in noBuildList]
+            # if we got no matches, reset to None so we do not enabled
+            # auto test detection in pytest
+            if not pyList:
+                pyList = None
         if ccList is None:
             ccList = [node for node in Glob("*.cc")
                       if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc and
@@ -487,6 +491,8 @@ class BasicSConscript(object):
             ignoreList = []
 
         def s(l):
+            if l is None:
+                return ['None']
             return [str(i) for i in l]
         state.log.info("SWIG modules for tests: %s" % s(swigFileList))
         state.log.info("Python tests: %s" % s(pyList))
@@ -511,11 +517,18 @@ class BasicSConscript(object):
                       " can be automatically discovered".format(node))
 
         # Ensure that python tests listed in pySingles are not included in pyList.
-        pyList = [str(node) for node in pyList if str(node) not in pySingles]
+        if pyList is not None:
+            pyList = [str(node) for node in pyList if str(node) not in pySingles]
 
         ccList = [control.run(str(node)) for node in ccList]
         pySingles = [control.run(str(node)) for node in pySingles]
-        pyList = [control.runPythonTests(pyList)]
+
+        # If we tried to discover .py files and found none, do not then
+        # try to use auto test discovery.
+        if pyList is not None:
+            pyList = [control.runPythonTests(pyList)]
+        else:
+            pyList = []
         pyList.extend(pySingles)
         for pyTest in pyList:
             state.env.Depends(pyTest, ccList)
