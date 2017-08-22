@@ -494,6 +494,7 @@ class BasicSConscript(object):
             if l is None:
                 return ['None']
             return [str(i) for i in l]
+
         state.log.info("SWIG modules for tests: %s" % s(swigFileList))
         state.log.info("Python tests: %s" % s(pyList))
         state.log.info("C++ tests: %s" % s(ccList))
