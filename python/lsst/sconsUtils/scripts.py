@@ -514,8 +514,8 @@ class BasicSConscript(object):
         # should not be discovered automatically.
         for node in pySingles:
             if str(node).startswith("test_"):
-                print("Warning: {} should be run independently but"
-                      " can be automatically discovered".format(node))
+                state.log.warn("Warning: {} should be run independently but"
+                               " can be automatically discovered".format(node))
 
         # Ensure that python tests listed in pySingles are not included in pyList.
         if pyList is not None:
