@@ -509,9 +509,9 @@ class BasicSConscript(object):
                 state.env.SwigLoadableModule("_" + name, src, LIBS=state.env.getLibs("main python"))
             )
 
-        # Warn about insisting that a test in pySingles starts with test_ and therefore
-        # might be automatically discovered by pytest. This warning could only be issued
-        # if test discovery is enabled.
+        # Warn about insisting that a test in pySingles starts with test_ and
+        # therefore might be automatically discovered by pytest. These files
+        # should not be discovered automatically.
         for node in pySingles:
             if str(node).startswith("test_"):
                 print("Warning: {} should be run independently but"

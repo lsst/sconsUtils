@@ -197,11 +197,11 @@ class Control(object):
         return targets
 
     def runPythonTests(self, pyList):
-        """Add a single target for testing all python files.
-        pyList is a list of nodes corresponding to python test files.
-        The IgnoreList is respected when scanning for entries.
-        If pyList is None, we will use automated test discovery within
-        pytest. Returns a list containing a single target."""
+        """Add a single target for testing all python files. pyList is
+        a list of nodes corresponding to python test files. The
+        IgnoreList is respected when scanning for entries. If pyList
+        is None, we will use automated test discovery within pytest.
+        Returns a list containing a single target."""
 
         if pyList is None:
             pyList = []
