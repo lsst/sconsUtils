@@ -231,7 +231,7 @@ class Control(object):
         # and use that number with pytest. This could cause trouble
         # if there are lots of binary tests to run and lots of singles.
         njobs = self._env.GetOption("num_jobs")
-        print("Running pytest with {} processes".format(njobs))
+        print("Running pytest with {} process{}".format(njobs, "" if njobs == 1 else "es"))
         if njobs > 1:
             interpreter = interpreter + " -n {}".format(njobs)
 
