@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 import os
 
 try:
-    from eups import *  # noqa Importing everything into this namespace
+    from eups import *  # noqa F403 F401 Importing everything into this namespace
     eupsLoaded = True
 except ImportError:
     eupsLoaded = False

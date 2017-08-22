@@ -9,7 +9,7 @@ import os
 import sys
 import pipes
 from past.builtins import basestring
-from SCons.Script import *  # noqa So that this file has the same namespace as SConstruct/SConscript
+from SCons.Script import *  # noqa F403 F401 So that this file has the same namespace as SConstruct/SConscript
 from . import state
 from . import utils
 
