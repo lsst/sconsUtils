@@ -200,8 +200,10 @@ class Control(object):
         """Add a single target for testing all python files. pyList is
         a list of nodes corresponding to python test files. The
         IgnoreList is respected when scanning for entries. If pyList
-        is None, we will use automated test discovery within pytest.
-        Returns a list containing a single target."""
+        is None, or an empty list, it uses automated test discovery
+        within pytest. This differs from the behavior of scripts.tests()
+        where a distinction is made. Returns a list containing a single
+        target."""
 
         if pyList is None:
             pyList = []
