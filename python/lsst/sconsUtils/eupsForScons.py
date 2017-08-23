@@ -2,7 +2,10 @@ from __future__ import absolute_import, division, print_function
 import os
 
 try:
-    from eups import *  # noqa F403 F401 Importing everything into this namespace
+    # Prefer to use native EUPS but if that is not available, fallback
+    # versions are defined. Only a subset of EUPS functions are required
+    # but all are imported to prevent warnings from redefinitions below.
+    from eups import *  # noqa F403 F401
     eupsLoaded = True
 except ImportError:
     eupsLoaded = False
