@@ -147,6 +147,7 @@ class Control(object):
                 f = os.path.splitext(f)[0]
             else:
                 interpreter = "pytest -Wd --junit-xml=${TARGET}.xml"
+                interpreter += " --junit-prefix={0}".format(self.junitPrefix())
 
             if self.ignore(f):
                 continue
@@ -227,6 +228,7 @@ class Control(object):
         # We have decided to use pytest caching so that on reruns we only
         # run failed tests.
         interpreter = "pytest -Wd --lf --junit-xml=${TARGET} --session2file=${TARGET}.out"
+        interpreter += " --junit-prefix={0}".format(self.junitPrefix())
         target = os.path.join(self._tmpDir, "pytest-{}.xml".format(self._env['eupsProduct']))
 
         # Work out how many jobs scons has been configured to use
@@ -262,3 +264,12 @@ class Control(object):
         self._env.Clean(target, self._tmpDir)
 
         return [result]
+
+    def junitPrefix(self):
+        controlVar = "LSST_JUNIT_PREFIX"
+        prefix = self._env['eupsProduct']
+
+        if controlVar in os.environ:
+            prefix += ".{0}".format(os.environ[controlVar])
+
+        return prefix
