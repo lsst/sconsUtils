@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 
-import argparse, os, re, sys
+from __future__ import print_function
+import argparse
+import os
+import sys
 import eups
+
 
 def linkFiles(dstDir, srcDir, verbose=0, force=False):
     """Link all the regular files in srcDir into dstDir; mkdir all the directories in srcDir and
@@ -18,16 +22,17 @@ def linkFiles(dstDir, srcDir, verbose=0, force=False):
             linkFiles(fullDst, fullSrc, verbose, force)
         else:
             if verbose > 1:
-                print "%s -> %s" % (fullSrc, fullDst)
+                print("%s -> %s" % (fullSrc, fullDst))
 
             if os.path.exists(fullDst):
                 if force:
                     os.unlink(fullDst)
                 else:
-                    print >> sys.stderr, "%s already exists; use --force to overwrite" % fullDst
+                    print("%s already exists; use --force to overwrite" % fullDst, file=sys.stderr)
                     sys.exit(1)
 
             os.symlink(fullSrc, fullDst)
+
 
 def main():
     parser = argparse.ArgumentParser(description='''Build a link farm to replace long -I/-L argument lists.
@@ -44,13 +49,13 @@ creates a link farm for your current selection of products.
 
     parser.add_argument('--force', '-f', action='store_true', help="Force creation of farm even if it exists")
     parser.add_argument('--verbose', '-v', action='count', help="Be chatty")
-    
+
     args = parser.parse_args()
 
     linkFarmDir = os.path.abspath(args.linkFarmDir)
 
     if not args.force and os.path.exists(linkFarmDir):
-        print >> sys.stderr, "Path %s already exists; use --force to overwrite" % args.linkFarmDir
+        print("Path %s already exists; use --force to overwrite" % args.linkFarmDir, file=sys.stderr)
         sys.exit(1)
 
     #
@@ -64,7 +69,7 @@ creates a link farm for your current selection of products.
     products = {}
     for productName, versionName, optional, recursionDepth in \
             eups.getDependencies(args.productName, None, setup=True):
-        if products.has_key(productName):
+        if productName in products:
             continue
 
         products[productName] = 1
@@ -72,7 +77,7 @@ creates a link farm for your current selection of products.
         pd = eups.productDir(productName)
         if not pd:                      # no product
             continue
-        
+
         binDir = os.path.join(pd, "bin")
         incDir = os.path.join(pd, "include")
         libDir = os.path.join(pd, "lib")
@@ -80,7 +85,7 @@ creates a link farm for your current selection of products.
         if args.verbose:
             if args.verbose > 1 or \
                     os.path.exists(binDir) or os.path.exists(incDir) or os.path.exists(libDir):
-                print "%-15s %s" % (productName, pd)
+                print("%-15s %s" % (productName, pd))
 
         if os.path.exists(binDir):
             fullDstDir = os.path.join(linkFarmDir, "bin")
@@ -92,22 +97,22 @@ creates a link farm for your current selection of products.
 
         if os.path.exists(libDir):
             for src in os.listdir(libDir):
-                if not re.search(r"^lib", src):
+                if not src.startswith("lib"):
                     continue
 
                 fullSrc = os.path.join(libDir, src)
                 fullDst = os.path.join(linkFarmDir, "lib", src)
                 if args.verbose > 1:
-                    print src, fullSrc, fullDst
+                    print(src, fullSrc, fullDst)
                 if os.path.exists(fullDst):
                     if args.force:
                         os.unlink(fullDst)
                     else:
-                        print >> sys.stderr, "%s already exists; use --force to overwrite" % fullDst
+                        print("%s already exists; use --force to overwrite" % fullDst, file=sys.stderr)
                         sys.exit(1)
 
                 os.symlink(fullSrc, fullDst)
 
+
 if __name__ == "__main__":
     main()
-    

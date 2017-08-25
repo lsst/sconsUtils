@@ -6,10 +6,10 @@
 from __future__ import print_function, absolute_import
 import glob
 import os
-import re
 import sys
+import pipes
 from past.builtins import basestring
-from SCons.Script import *    # So that this file has the same namespace as SConstruct/SConscript
+from SCons.Script import *  # noqa F403 F401 So that this file has the same namespace as SConstruct/SConscript
 from . import state
 from . import utils
 
@@ -69,7 +69,7 @@ class Control(object):
         self._info = {}                 # information about processing targets
         if ignoreList:
             for f in ignoreList:
-                if re.search(r"^@", f):    # @dfilename => don't complain if filename doesn't exist
+                if f.startswith("@"):  # @dfilename => don't complain if filename doesn't exist
                     f = f[1:]
                 else:
                     if not os.path.exists(f):
@@ -103,7 +103,7 @@ class Control(object):
             return ""
 
     def ignore(self, test):
-        if not re.search(r"\.py$", test) and \
+        if not test.endswith(".py") and \
            len(self._env.Glob(test)) == 0:  # we don't know how to build it
             return True
 
@@ -127,18 +127,27 @@ class Control(object):
                     "false", "failed")
 
     def run(self, fileGlob):
+        """Create a test target for each file matching the supplied glob.
+        """
+
         if not isinstance(fileGlob, basestring):  # env.Glob() returns an scons Node
             fileGlob = str(fileGlob)
         targets = []
         if not self.runExamples:
             return targets
+
+        # Determine any library load path values that we have to prepend
+        # to the command.
+        libpathstr = utils.libraryLoaderEnvironment()
+
         for f in glob.glob(fileGlob):
             interpreter = ""            # interpreter to run test, if needed
 
-            if re.search(r"\.cc", f):   # look for executable
+            if f.endswith(".cc"):  # look for executable
                 f = os.path.splitext(f)[0]
             else:
-                interpreter = "python"
+                interpreter = "pytest -Wd --junit-xml=${TARGET}.xml"
+                interpreter += " --junit-prefix={0}".format(self.junitPrefix())
 
             if self.ignore(f):
                 continue
@@ -149,7 +158,7 @@ class Control(object):
             for a in self.args(f).split(" "):
                 # if a is a file, make it an absolute name as scons runs from the root directory
                 filePrefix = "file:"
-                if re.search(r"^" + filePrefix, a):  # they explicitly said that this was a file
+                if a.startswith(filePrefix):  # they explicitly said that this was a file
                     a = os.path.join(self._cwd, a[len(filePrefix):])
                 else:
                     try:                # see if it's a file
@@ -161,10 +170,6 @@ class Control(object):
                 args += [a]
 
             (should_pass, passedMsg, should_fail, failedMsg) = self.messages(f)
-
-            # Determine any library load path values that we have to prepend
-            # to the command.
-            libpathstr = utils.libraryLoaderEnvironment()
 
             # The TRAVIS environment variable is set to allow us to disable
             # the matplotlib font cache. See ticket DM-3856.
@@ -191,3 +196,80 @@ class Control(object):
             self._env.Clean(target, self._tmpDir)
 
         return targets
+
+    def runPythonTests(self, pyList):
+        """Add a single target for testing all python files. pyList is
+        a list of nodes corresponding to python test files. The
+        IgnoreList is respected when scanning for entries. If pyList
+        is None, or an empty list, it uses automated test discovery
+        within pytest. This differs from the behavior of scripts.tests()
+        where a distinction is made. Returns a list containing a single
+        target."""
+
+        if pyList is None:
+            pyList = []
+
+        # Determine any library load path values that we have to prepend
+        # to the command.
+        libpathstr = utils.libraryLoaderEnvironment()
+
+        # Get list of python files with the path included.
+        pythonTestFiles = []
+        for fileGlob in pyList:
+            if not isinstance(fileGlob, basestring):  # env.Glob() returns an scons Node
+                fileGlob = str(fileGlob)
+            for f in glob.glob(fileGlob):
+                if self.ignore(f):
+                    continue
+                pythonTestFiles.append(os.path.join(self._cwd, f))
+
+        # Now set up the python testing target
+        # We always want to run this with the tests target.
+        # We have decided to use pytest caching so that on reruns we only
+        # run failed tests.
+        interpreter = "pytest -Wd --lf --junit-xml=${TARGET} --session2file=${TARGET}.out"
+        interpreter += " --junit-prefix={0}".format(self.junitPrefix())
+        target = os.path.join(self._tmpDir, "pytest-{}.xml".format(self._env['eupsProduct']))
+
+        # Work out how many jobs scons has been configured to use
+        # and use that number with pytest. This could cause trouble
+        # if there are lots of binary tests to run and lots of singles.
+        njobs = self._env.GetOption("num_jobs")
+        print("Running pytest with {} process{}".format(njobs, "" if njobs == 1 else "es"))
+        if njobs > 1:
+            interpreter = interpreter + " -n {}".format(njobs)
+
+        # Remove target so that we always trigger pytest
+        if os.path.exists(target):
+            os.unlink(target)
+
+        if not pythonTestFiles:
+            print("pytest: automated test discovery mode enabled.")
+        else:
+            nfiles = len(pythonTestFiles)
+            print("pytest: running on {} Python test file{}.".format(nfiles, "" if nfiles == 1 else "s"))
+
+        result = self._env.Command(target, None, """
+        @rm -f ${{TARGET}} ${{TARGET}}.failed;
+        @printf "%s\\n" 'running global pytest... ';
+        @if {2} TRAVIS=1 {0} {1}; then \
+            echo "Global pytest run completed successfully"; \
+        else \
+            echo "Global pytest run: failed"; \
+            mv ${{TARGET}}.out ${{TARGET}}.failed; \
+        fi;
+        """.format(interpreter, " ".join([pipes.quote(p) for p in pythonTestFiles]), libpathstr))
+
+        self._env.Alias(os.path.basename(target), target)
+        self._env.Clean(target, self._tmpDir)
+
+        return [result]
+
+    def junitPrefix(self):
+        controlVar = "LSST_JUNIT_PREFIX"
+        prefix = self._env['eupsProduct']
+
+        if controlVar in os.environ:
+            prefix += ".{0}".format(os.environ[controlVar])
+
+        return prefix

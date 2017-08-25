@@ -587,4 +587,4 @@ def getLibs(env, categories="main"):
 
 SConsEnvironment.getLibs = getLibs
 
-## @}
+## @}  # noqa E266

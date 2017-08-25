@@ -195,7 +195,16 @@ class BasicSConstruct(object):
                       nfail=`find {0} -name \*.failed | wc -l | sed -e 's/ //g'`; \
                       if [ $$nfail -gt 0 ]; then \
                           echo "Failed test output:" >&2; \
-                          find {0} -name \*.failed -exec cat {{}} \; >&2; \
+                          for f in `find {0} -name \*.failed`; do \
+                              case "$$f" in \
+                              *.xml.failed) \
+                                echo "Global pytest output is in $$f" >&2; \
+                                ;; \
+                              *.failed) \
+                                cat $$f >&2; \
+                                ;; \
+                              esac; \
+                          done; \
                           echo "The following tests failed:" >&2;\
                           find {0} -name \*.failed >&2; \
                           echo "$$nfail tests failed" >&2; exit 1; \
@@ -299,8 +308,10 @@ class BasicSConscript(object):
         if src is None:
             src = Glob("#bin.src/*")
         for s in src:
-            if str(s) != "SConscript":
-                result = state.env.Command(target=os.path.join(Dir("#bin").abspath, str(s)),
+            filename = str(s)
+            # Do not try to rewrite files starting with non-letters
+            if filename != "SConscript" and re.match("[A-Za-z]", filename):
+                result = state.env.Command(target=os.path.join(Dir("#bin").abspath, filename),
                                            source=s, action=rewrite_shebang)
                 state.targets["shebang"].extend(result)
 
@@ -424,6 +435,13 @@ class BasicSConscript(object):
     #  @param pyList           A sequence of Python tests to run (including .py extensions).
     #                          Defaults to a *.py glob of the tests directory, minus any
     #                          files corresponding to the SWIG modules in swigFileList.
+    #                          An empty list will enable automated test discovery.
+    #  @param pySingles        A sequence of Python tests to run (including .py extensions)
+    #                          as independent single tests. By default this list is empty
+    #                          and all tests are run in a single pytest call.
+    #                          Items specified here will not appear in the default pyList
+    #                          and should not start with "test_" (such that they will not
+    #                          be auto-discoverable by pytest).
     #  @param ccList           A sequence of C++ unit tests to run (including .cc extensions).
     #                          Defaults to a *.cc glob of the tests directory, minus any
     #                          files that end with *_wrap.cc and files present in swigSrc.
@@ -439,10 +457,12 @@ class BasicSConscript(object):
     ##
     @staticmethod
     def tests(pyList=None, ccList=None, swigNameList=None, swigSrc=None,
-              ignoreList=None, noBuildList=None,
+              ignoreList=None, noBuildList=None, pySingles=None,
               args=None):
         if noBuildList is None:
             noBuildList = []
+        if pySingles is None:
+            pySingles = []
         if swigNameList is None:
             swigFileList = Glob("*.i")
             swigNameList = [_getFileBase(node) for node in swigFileList]
@@ -459,6 +479,10 @@ class BasicSConscript(object):
             pyList = [node for node in Glob("*.py")
                       if _getFileBase(node) not in swigNameList and
                       os.path.basename(str(node)) not in noBuildList]
+            # if we got no matches, reset to None so we do not enabled
+            # auto test detection in pytest
+            if not pyList:
+                pyList = None
         if ccList is None:
             ccList = [node for node in Glob("*.cc")
                       if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc and
@@ -467,7 +491,10 @@ class BasicSConscript(object):
             ignoreList = []
 
         def s(l):
+            if l is None:
+                return ['None']
             return [str(i) for i in l]
+
         state.log.info("SWIG modules for tests: %s" % s(swigFileList))
         state.log.info("Python tests: %s" % s(pyList))
         state.log.info("C++ tests: %s" % s(ccList))
@@ -481,9 +508,31 @@ class BasicSConscript(object):
             swigMods.extend(
                 state.env.SwigLoadableModule("_" + name, src, LIBS=state.env.getLibs("main python"))
             )
+
+        # Warn about insisting that a test in pySingles starts with test_ and
+        # therefore might be automatically discovered by pytest. These files
+        # should not be discovered automatically.
+        for node in pySingles:
+            if str(node).startswith("test_"):
+                state.log.warn("Warning: {} should be run independently but"
+                               " can be automatically discovered".format(node))
+
+        # Ensure that python tests listed in pySingles are not included in pyList.
+        if pyList is not None:
+            pyList = [str(node) for node in pyList if str(node) not in pySingles]
+
         ccList = [control.run(str(node)) for node in ccList]
-        pyList = [control.run(str(node)) for node in pyList]
+        pySingles = [control.run(str(node)) for node in pySingles]
+
+        # If we tried to discover .py files and found none, do not then
+        # try to use auto test discovery.
+        if pyList is not None:
+            pyList = [control.runPythonTests(pyList)]
+        else:
+            pyList = []
+        pyList.extend(pySingles)
         for pyTest in pyList:
+            state.env.Depends(pyTest, ccList)
             state.env.Depends(pyTest, swigMods)
             state.env.Depends(pyTest, state.targets["python"])
             state.env.Depends(pyTest, state.targets["shebang"])
@@ -533,4 +582,4 @@ class BasicSConscript(object):
         state.targets["examples"].extend(results)
         return results
 
-## @}
+## @}  # noqa E266
