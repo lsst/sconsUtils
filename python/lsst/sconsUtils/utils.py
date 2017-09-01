@@ -89,7 +89,7 @@ def whichPython():
     global _pythonPath
     if _pythonPath is None:
         output = subprocess.check_output(["python", "-c", "import sys; print(sys.executable)"])
-        _pythonPath = output.decode()
+        _pythonPath = output.decode().strip()
     return _pythonPath
 
 
