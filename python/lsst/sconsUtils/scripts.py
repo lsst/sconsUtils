@@ -289,7 +289,8 @@ class BasicSConscript(object):
                         match = FIRST_LINE_RE.match(first_line)
                         if match and doRewrite:
                             post_interp = match.group(1) or ''
-                            outfd.write("#!{}{}\n".format(usepython, post_interp))
+                            # Paths can be long so ensure that flake8 won't complain
+                            outfd.write("#!{}{}  # noqa\n".format(usepython, post_interp))
                         else:
                             if not match:
                                 state.log.warn("Could not rewrite shebang of {}. Please check"
