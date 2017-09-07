@@ -127,7 +127,7 @@ class BasicSConstruct(object):
             sconscriptOrder = DEFAULT_TARGETS
 
         # directory for shebang target is bin.src
-        sconscriptOrder = [t if t != "shebang" else "bin.src" for t in targets]
+        sconscriptOrder = [t if t != "shebang" else "bin.src" for t in sconscriptOrder]
 
         def key(path):
             for i, item in enumerate(sconscriptOrder):
