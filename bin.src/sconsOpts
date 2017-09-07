@@ -5,8 +5,11 @@
 from __future__ import print_function
 import os
 import sys
-import ConfigParser
 import argparse
+try:
+    import configparser
+except ImportError:
+    import ConfigParser as configparser
 
 parser = argparse.ArgumentParser(description="Tell us how scons was invoked")
 parser.add_argument('configFile', type=str, nargs="?", default=None,
@@ -29,12 +32,12 @@ cc = args.cc
 opt = args.opt
 
 if os.path.exists(args.configFile):
-    config = ConfigParser.ConfigParser()
+    config = configparser.ConfigParser()
     try:
         config.read(args.configFile)
 
         cc = config.get("Build", 'cc')
-        opt = config.get("Build", 'opt', 'opt')
+        opt = config.get("Build", 'opt')
     except Exception as e:
         if not args.quiet:
             print("File %s: error %s" % (args.configFile, e), file=sys.stderr)

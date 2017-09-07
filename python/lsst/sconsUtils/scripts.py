@@ -20,7 +20,7 @@ from . import state
 from . import tests
 from . import utils
 
-DEFAULT_TARGETS = ("lib", "python", "tests", "examples", "doc", "shebang")
+DEFAULT_TARGETS = ("lib", "python", "shebang", "tests", "examples", "doc")
 
 
 def _getFileBase(node):
@@ -124,7 +124,10 @@ class BasicSConstruct(object):
             if "SConscript" in files:
                 scripts.append(os.path.join(root, "SConscript"))
         if sconscriptOrder is None:
-            sconscriptOrder = ("lib", "python", "tests", "examples", "doc")
+            sconscriptOrder = DEFAULT_TARGETS
+
+        # directory for shebang target is bin.src
+        sconscriptOrder = [t if t != "shebang" else "bin.src" for t in targets]
 
         def key(path):
             for i, item in enumerate(sconscriptOrder):
@@ -174,10 +177,11 @@ class BasicSConstruct(object):
         state.env.Requires(state.targets["python"], state.targets["version"])
         declarer = state.env.Declare()
         state.env.Requires(declarer, install)  # Ensure declaration fires after installation available
-        state.env.Default([t for t in defaultTargets if os.path.exists(t)])
-        # shebang target is not named same as relevant directory so we must be explicit
-        if "shebang" in defaultTargets and os.path.exists("bin.src"):
-            state.env.Default("shebang")
+
+        # shebang should be in the list if bin.src exists but the location matters
+        # so we can not append it afterwards.
+        state.env.Default([t for t in defaultTargets
+                           if os.path.exists(t) or (t == "shebang" and os.path.exists("bin.src"))])
         if "version" in state.targets:
             state.env.Default(state.targets["version"])
         state.env.Requires(state.targets["tests"], state.targets["version"])
