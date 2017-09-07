@@ -20,7 +20,7 @@ from . import state
 from . import tests
 from . import utils
 
-DEFAULT_TARGETS = ("lib", "python", "tests", "examples", "doc", "shebang")
+DEFAULT_TARGETS = ("lib", "python", "shebang", "tests", "examples", "doc")
 
 
 def _getFileBase(node):
@@ -124,7 +124,7 @@ class BasicSConstruct(object):
             if "SConscript" in files:
                 scripts.append(os.path.join(root, "SConscript"))
         if sconscriptOrder is None:
-            sconscriptOrder = ("lib", "python", "tests", "examples", "doc")
+            sconscriptOrder = DEFAULT_TARGETS
 
         def key(path):
             for i, item in enumerate(sconscriptOrder):
