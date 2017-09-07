@@ -10,6 +10,10 @@ _build.tags
 *.so
 *.cfgc
 *.pyc
+pytest_session.txt
+bin/
+bin/makeLinkFarm
+bin/sconsOpts
 python/lsst/sconsUtils/version.py
 doc/html
 doc/doxygen.conf
