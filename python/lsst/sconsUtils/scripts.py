@@ -126,6 +126,9 @@ class BasicSConstruct(object):
         if sconscriptOrder is None:
             sconscriptOrder = DEFAULT_TARGETS
 
+        # directory for shebang target is bin.src
+        sconscriptOrder = [t if t != "shebang" else "bin.src" for t in targets]
+
         def key(path):
             for i, item in enumerate(sconscriptOrder):
                 if path.lstrip("./").startswith(item):
@@ -174,10 +177,11 @@ class BasicSConstruct(object):
         state.env.Requires(state.targets["python"], state.targets["version"])
         declarer = state.env.Declare()
         state.env.Requires(declarer, install)  # Ensure declaration fires after installation available
-        state.env.Default([t for t in defaultTargets if os.path.exists(t)])
-        # shebang target is not named same as relevant directory so we must be explicit
-        if "shebang" in defaultTargets and os.path.exists("bin.src"):
-            state.env.Default("shebang")
+
+        # shebang should be in the list if bin.src exists but the location matters
+        # so we can not append it afterwards.
+        state.env.Default([t for t in defaultTargets
+                           if os.path.exists(t) or (t == "shebang" and os.path.exists("bin.src"))])
         if "version" in state.targets:
             state.env.Default(state.targets["version"])
         state.env.Requires(state.targets["tests"], state.targets["version"])
