@@ -326,6 +326,14 @@ def _configureCommon():
                 env['CXX'] = CXX
         conf = env.Configure(custom_tests={'ClassifyCc': ClassifyCc})
         env.whichCc, env.ccVersion = conf.ClassifyCc()
+
+        # If we have picked up a default compiler called gcc that is really
+        # clang, we call it clang to avoid confusion (gcc on macOS has subtly
+        # different options)
+        if not env['cc'] and env.whichCc == "clang" and env['CC'] == "gcc":
+            env['CC'] = "clang"
+            env['CXX'] = "clang++"
+
         if not env.GetOption("no_progress"):
             log.info("CC is %s version %s" % (env.whichCc, env.ccVersion))
         conf.Finish()
