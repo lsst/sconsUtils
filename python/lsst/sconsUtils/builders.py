@@ -348,6 +348,11 @@ class DoxygenBuilder(object):
         def _quote_paths(pathList):
             return " ".join(_quote_path(p) for p in pathList)
 
+        # To work in more than one package, tag file's location must be absolute
+        stdlibTag = os.path.join(ProductDir(env, 'sconsUtils'), 'doc/cppreference-doxygen-web.tag.xml')
+        stdlibHtml = 'http://en.cppreference.com/w/'
+        outConfigFile.write('TAGFILES += "%s=%s"\n' % (stdlibTag, stdlibHtml))
+
         for tagPath in self.useTags:
             docDir, tagFile = os.path.split(tagPath)
             htmlDir = os.path.join(docDir, "html")
