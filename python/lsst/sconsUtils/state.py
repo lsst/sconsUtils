@@ -385,6 +385,10 @@ def _configureCommon():
         env.Append(LINKFLAGS=["-Wl,-rpath-link"])
         env.Append(LINKFLAGS=["-Wl,%s" % os.environ["LD_LIBRARY_PATH"]])
     #
+    # Disable LTO
+    #
+    env.Append(CCFLAGS=['-fno-lto'])
+    #
     # Set the optimization level.
     #
     if env['opt']:
