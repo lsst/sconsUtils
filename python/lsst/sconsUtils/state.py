@@ -462,6 +462,12 @@ def _configureCommon():
             env.Append(CCFLAGS=["-wd%s" % (",".join([str(k) for k in filterWarnings]))])
         # Workaround intel bug; cf. RHL's intel bug report 580167
         env.Append(LINKFLAGS=["-Wl,-no_compact_unwind", "-wd,11015"])
+    #
+    # Disable link-time-optimization on GCC, for compatibility with conda binaries
+    #
+    if env.whichCc == "gcc":
+        env.Append(CCFLAGS=['-fno-lto'])
+        env.Append(LINKFLAGS=['-fno-lto'])
 
 
 def _saveState():
