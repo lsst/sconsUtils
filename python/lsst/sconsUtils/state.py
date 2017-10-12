@@ -384,6 +384,7 @@ def _configureCommon():
     if (re.search(r"^(Linux|Linux64)$", env["eupsFlavor"]) and "LD_LIBRARY_PATH" in os.environ):
         env.Append(LINKFLAGS=["-Wl,-rpath-link"])
         env.Append(LINKFLAGS=["-Wl,%s" % os.environ["LD_LIBRARY_PATH"]])
+        env.Append(LINKFLAGS=["-fno-lto"])
     #
     # Set the optimization level.
     #
