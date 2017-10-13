@@ -114,8 +114,22 @@ def _initEnvironment():
     """Construction and basic setup of the state.env variable."""
 
     ourEnv = {}
-    for key in ('EUPS_DIR', 'EUPS_PATH', 'EUPS_SHELL', 'PATH', 'DYLD_LIBRARY_PATH', 'LD_LIBRARY_PATH',
-                'SHELL', 'TMPDIR', 'TEMP', 'TMP', 'EUPS_LOCK_PID', 'XPA_PORT'):
+    preserveVars = """
+      DYLD_LIBRARY_PATH
+      EUPS_DIR
+      EUPS_LOCK_PID
+      EUPS_PATH
+      EUPS_SHELL
+      LD_LIBRARY_PATH
+      PATH
+      SHELL
+      TEMP
+      TMP
+      TMPDIR
+      XPA_PORT
+    """.split()
+
+    for key in preserveVars:
         if key in os.environ:
             ourEnv[key] = os.environ[key]
 
