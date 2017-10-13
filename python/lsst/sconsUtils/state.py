@@ -120,6 +120,7 @@ def _initEnvironment():
       EUPS_LOCK_PID
       EUPS_PATH
       EUPS_SHELL
+      EUPS_USERDATA
       LD_LIBRARY_PATH
       PATH
       SHELL
