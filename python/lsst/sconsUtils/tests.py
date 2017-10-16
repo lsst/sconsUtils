@@ -237,7 +237,7 @@ class Control(object):
         njobs = self._env.GetOption("num_jobs")
         print("Running pytest with {} process{}".format(njobs, "" if njobs == 1 else "es"))
         if njobs > 1:
-            interpreter = interpreter + " -n {}".format(njobs)
+            interpreter = interpreter + " --max-slave-restart=0 -n {}".format(njobs)
 
         # Remove target so that we always trigger pytest
         if os.path.exists(target):
