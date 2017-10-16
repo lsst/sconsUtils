@@ -348,11 +348,6 @@ class DoxygenBuilder(object):
         def _quote_paths(pathList):
             return " ".join(_quote_path(p) for p in pathList)
 
-        for tagPath in self.useTags:
-            docDir, tagFile = os.path.split(tagPath)
-            htmlDir = os.path.join(docDir, "html")
-            outConfigFile.write('TAGFILES += "%s=%s"\n' % (tagPath, htmlDir))
-            self.sources.append(SCons.Script.Dir(docDir))
         docPaths = []
         incFiles = []
         for incPath in self.includes:
@@ -364,6 +359,12 @@ class DoxygenBuilder(object):
             outConfigFile.write('@INCLUDE_PATH = %s\n' % _quote_paths(docPaths))
         for incFile in incFiles:
             outConfigFile.write('@INCLUDE = %s\n' % _quote_path(incFile))
+
+        for tagPath in self.useTags:
+            docDir, tagFile = os.path.split(tagPath)
+            htmlDir = os.path.join(docDir, "html")
+            outConfigFile.write('TAGFILES += "%s=%s"\n' % (tagPath, htmlDir))
+            self.sources.append(SCons.Script.Dir(docDir))
         if self.projectName is not None:
             outConfigFile.write("PROJECT_NAME = %s\n" % self.projectName)
         if self.projectNumber is not None:
