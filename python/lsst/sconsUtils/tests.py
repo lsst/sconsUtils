@@ -237,7 +237,18 @@ class Control(object):
         njobs = self._env.GetOption("num_jobs")
         print("Running pytest with {} process{}".format(njobs, "" if njobs == 1 else "es"))
         if njobs > 1:
-            interpreter = interpreter + " --max-slave-restart=0 -n {}".format(njobs)
+            # We unambiguously specify the Python interpreter to be used to
+            # execute tests. This ensures that all pytest-xdist worker
+            # processes refer to the same Python as the xdist master, and
+            # hence avoids pollution of ``sys.path`` that can happen when we
+            # call the same interpreter by different paths (for example, if
+            # the master process calls ``miniconda/bin/python``, and the
+            # workers call ``current/bin/python``, the workers will end up
+            # with site-packages directories corresponding to both locations
+            # on ``sys.path``, even if the one is a symlink to the other).
+            executable = os.path.realpath(sys.executable)
+            interpreter = (interpreter +
+                           " -d --max-slave-restart=0 --tx={}*popen//python={}".format(njobs, executable))
 
         # Remove target so that we always trigger pytest
         if os.path.exists(target):
