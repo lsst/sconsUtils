@@ -237,7 +237,7 @@ def ProductDir(env, product):
     global _productDirs
     try:
         _productDirs
-    except:
+    except Exception:
         try:
             _productDirs = eupsForScons.productDir(eupsenv=eupsForScons.getEups())
         except TypeError:               # old version of eups (pre r18588)
@@ -377,7 +377,7 @@ class DoxygenBuilder(object):
         for output, path in zip(self.outputs, self.outputPaths):
             try:
                 allOutputs.remove(output.lower())
-            except:
+            except Exception:
                 state.log.fail("Unknown Doxygen output format '%s'." % output)
                 state.log.finish()
             outConfigFile.write("GENERATE_%s = YES\n" % output.upper())

@@ -144,7 +144,7 @@ def runExternal(cmd, fatal=False, msg=None):
     if msg is None:
         try:
             msg = "Error running %s" % cmd.split()[0]
-        except:
+        except Exception:
             msg = "Error running external command"
     process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = process.communicate()
