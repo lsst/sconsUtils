@@ -300,6 +300,7 @@ def _configureCommon():
             (r"LLVM +version +([0-9.a-zA-Z]+) ", "clang"),  # clang on Mac
             (r"clang +version +([0-9.a-zA-Z]+) ", "clang"),  # clang on linux
             (r"\(ICC\) +([0-9.a-zA-Z]+) ", "icc"),
+            (r"cc \(Ubuntu +([0-9\~\-.a-zA-Z]+)\)", "gcc"),  # gcc on Ubuntu (not always caught by #2 above)
         )
 
         context.Message("Checking who built the CC compiler...")
