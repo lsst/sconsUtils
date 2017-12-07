@@ -258,6 +258,23 @@ class BasicSConscript(object):
             libs = []
         result = state.env.SharedLibrary(libName, src, LIBS=libs)
         state.targets["lib"].extend(result)
+        def print_cmd_line_func(s, sources, target, env):
+            import sys
+            import re
+            import os
+            with open("compile_commands.json", "a") as f:
+                m = re.match(r"g\+\+.* ([\/\w]*\.cc)", s)
+                if m:
+                    f.write('{\n')
+                    f.write('\t"directory" : "{0}",\n'.format(os.getcwd()))
+                    f.write('\t"command" : "{0}",\n'.format(m.group(0)))
+                    f.write('\t"file" : "{0}"\n'.format(m.group(1)))
+                    f.write('},\n')
+            sys.stdout.write(s)
+            sys.stdout.write('\n')
+            sys.stdout.flush()
+        state.env['PRINT_CMD_LINE_FUNC'] = print_cmd_line_func
+
         return result
 
     ##
