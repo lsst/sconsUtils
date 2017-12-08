@@ -369,22 +369,22 @@ def _configureCommon():
         env.Append(LINKFLAGS='--coverage')
 
     #
-    # Enable C++11 support (and C99 support for gcc)
+    # Enable C++14 support (and C99 support for gcc)
     #
     if not (env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec")):
         if not env.GetOption("no_progress"):
-            log.info("Checking for C++11 support")
+            log.info("Checking for C++14 support")
         conf = env.Configure()
-        for cpp11Arg in ("-std=%s" % (val,) for val in ("c++11",)):
+        for cpp14Arg in ("-std=%s" % (val,) for val in ("c++14",)):
             conf.env = env.Clone()
-            conf.env.Append(CXXFLAGS=cpp11Arg)
+            conf.env.Append(CXXFLAGS=cpp14Arg)
             if conf.CheckCXX():
-                env.Append(CXXFLAGS=cpp11Arg)
+                env.Append(CXXFLAGS=cpp14Arg)
                 if not env.GetOption("no_progress"):
-                    log.info("C++11 supported with %r" % (cpp11Arg,))
+                    log.info("C++14 supported with %r" % (cpp14Arg,))
                 break
         else:
-            log.fail("C++11 extensions could not be enabled for compiler %r" % env.whichCc)
+            log.fail("C++14 extensions could not be enabled for compiler %r" % env.whichCc)
         conf.Finish()
 
     #
