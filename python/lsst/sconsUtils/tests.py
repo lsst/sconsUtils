@@ -247,8 +247,17 @@ class Control(object):
             # with site-packages directories corresponding to both locations
             # on ``sys.path``, even if the one is a symlink to the other).
             executable = os.path.realpath(sys.executable)
-            interpreter = (interpreter +
-                           " -d --max-slave-restart=0 --tx={}*popen//python={}".format(njobs, executable))
+
+            # if there is a space in the executable path we have to use the original
+            # method and hope things work okay. This will be rare but without
+            # this a space in the path is impossible because of how xdist
+            # currently parses the tx option
+            interpreter = interpreter + " --max-slave-restart=0"
+            if " " not in executable:
+                interpreter = (interpreter +
+                               " -d --tx={}*popen//python={}".format(njobs, executable))
+            else:
+                interpreter = interpreter + "  -n {}".format(njobs)
 
         # Remove target so that we always trigger pytest
         if os.path.exists(target):
