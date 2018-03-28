@@ -284,8 +284,16 @@ def _initEnvironment():
     env['eupsFlavor'] = eupsForScons.flavor()
 
 
+_configured = False
+
+
 def _configureCommon():
     """Configuration checks for the compiler, platform, and standard libraries."""
+    global _configured
+    if _configured:
+        return
+    _configured = True
+
     #
     # Is the C compiler really gcc/g++?
     #
@@ -503,7 +511,5 @@ _initOptions()
 _initLog()
 _initVariables()
 _initEnvironment()
-_configureCommon()
-_saveState()
 
 # @endcond
