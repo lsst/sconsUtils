@@ -60,9 +60,10 @@ class BasicSConstruct(object):
                 defaultTargets=DEFAULT_TARGETS,
                 subDirList=None, ignoreRegex=None,
                 versionModuleName="python/lsst/%s/version.py", noCfgFile=False,
-                sconscriptOrder=None):
+                sconscriptOrder=None, disableCc=False):
         cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt,
-                       versionModuleName, noCfgFile=noCfgFile, sconscriptOrder=sconscriptOrder)
+                       versionModuleName, noCfgFile=noCfgFile, sconscriptOrder=sconscriptOrder,
+                       disableCc=disableCc)
         cls.finish(defaultTargets, subDirList, ignoreRegex)
         return state.env
 
@@ -93,13 +94,19 @@ class BasicSConstruct(object):
     #                              ordering for the lib, python, tests, examples, and doc targets.  If this
     #                              argument is provided, it must include the subset of that list that is valid
     #                              for the package, in that order.
+    # @param disableCC             Should the C++ compiler check be disabled? Disabling this check allows
+    #                              a faster startup and permits building on systems that don't meet the
+    #                              requirements for the C++ compilter (e.g., for pure-python packages).
     #
     #  @returns an SCons Environment object (which is also available as lsst.sconsUtils.env).
     ##
     @classmethod
     def initialize(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None,
                    cleanExt=None, versionModuleName="python/lsst/%s/version.py", noCfgFile=False,
-                   sconscriptOrder=None):
+                   sconscriptOrder=None, disableCc=False):
+        if not disableCc:
+            state._configureCommon()
+            state._saveState()
         if cls._initializing:
             state.log.fail("Recursion detected; an SConscript file should not call BasicSConstruct.")
         cls._initializing = True
