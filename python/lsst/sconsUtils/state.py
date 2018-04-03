@@ -394,6 +394,8 @@ def _configureCommon():
         else:
             log.fail("C++14 extensions could not be enabled for compiler %r" % env.whichCc)
         conf.Finish()
+    # Enforce standards-compliance (e.g. don't just warn about using features from future standards).
+    env.Append(CXXFLAGS="-pedantic-errors")
 
     #
     # Byte order
