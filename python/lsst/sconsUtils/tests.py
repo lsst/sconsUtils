@@ -235,7 +235,9 @@ class Control:
         # We always want to run this with the tests target.
         # We have decided to use pytest caching so that on reruns we only
         # run failed tests.
-        interpreter = "pytest -Wd --lf --junit-xml=${TARGET} --session2file=${TARGET}.out"
+        lfnfOpt = "none" if 'install' in COMMAND_LINE_TARGETS else "all"
+        interpreter = f"pytest -Wd --lf --lfnf={lfnfOpt}"
+        interpreter += " --junit-xml=${TARGET} --session2file=${TARGET}.out"
         interpreter += " --junit-prefix={0}".format(self.junitPrefix())
         interpreter += self._getPytestCoverageCommand()
 
