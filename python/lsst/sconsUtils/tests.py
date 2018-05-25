@@ -7,7 +7,7 @@ import glob
 import os
 import sys
 import pipes
-from SCons.Script import *  # noqa F403 F401 So that this file has the same namespace as SConstruct/SConscript
+import SCons.Script
 from . import state
 from . import utils
 
@@ -235,7 +235,7 @@ class Control:
         # We always want to run this with the tests target.
         # We have decided to use pytest caching so that on reruns we only
         # run failed tests.
-        lfnfOpt = "none" if 'install' in COMMAND_LINE_TARGETS else "all"
+        lfnfOpt = "none" if 'install' in SCons.Script.COMMAND_LINE_TARGETS else "all"
         interpreter = f"pytest -Wd --lf --lfnf={lfnfOpt}"
         interpreter += " --junit-xml=${TARGET} --session2file=${TARGET}.out"
         interpreter += " --junit-prefix={0}".format(self.junitPrefix())
