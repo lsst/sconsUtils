@@ -157,7 +157,7 @@ class Control(object):
             else:
                 interpreter = "pytest -Wd --junit-xml=${TARGET}.xml"
                 interpreter += " --junit-prefix={0}".format(self.junitPrefix())
-                interpreter += self._pytestCoverage(prefix="${TARGET}")
+                interpreter += self._getPytestCoverageCommand()
 
             if self.ignore(f):
                 continue
@@ -239,7 +239,7 @@ class Control(object):
         # run failed tests.
         interpreter = "pytest -Wd --lf --junit-xml=${TARGET} --session2file=${TARGET}.out"
         interpreter += " --junit-prefix={0}".format(self.junitPrefix())
-        interpreter += self._pytestCoverage()
+        interpreter += self._getPytestCoverageCommand()
 
         target = os.path.join(self._tmpDir, "pytest-{}.xml".format(self._env['eupsProduct']))
 
@@ -306,21 +306,32 @@ class Control(object):
 
         return prefix
 
-    def _pytestCoverage(self, prefix="pytest"):
+    def _getPytestCoverageCommand(self):
         """Form the additional arguments required to enable coverage testing.
-        Prefix is used to form the output files.
+
+        Coverage output files are written using ``${TARGET}`` as a base.
+
+        Returns
+        -------
+        options : `str`
+            String defining the coverage-specific arguments to give to the
+            pytest command.
         """
 
         options = ""
 
-        # if we have a standard package layout, restrict coverage to the
-        # python code and do not include the tests.
-        if os.path.exists("python") or os.path.exists(os.path.join(os.path.pardir, "python")):
-            options += " --cov=python"
-        else:
-            # Default to coverage for everything in this directory and below
-            options += " --cov=."
+        # Basis for deriving file names
+        # We use the magic target from SCons.
+        prefix = "${TARGET}"
 
+        # Only report coverage for files in the build tree.
+        # If --cov is used full coverage will be reported for all installed
+        # code as well, but that is probably a distraction as for this
+        # test run we are only interested in coverage of this package.
+        # Use "python" instead of "." to remove test files from coverage.
+        options += " --cov=."
+
+        # Always enabled branch coverage and terminal summary
         options += " --cov-branch --cov-report=term "
 
         covfile = "{}-cov-{}.xml".format(prefix, self._env['eupsProduct'])
@@ -333,10 +344,8 @@ class Control(object):
             covpath = os.path.join(self._tmpDirAbs, covfile)
         options += " --cov-report=xml:'{}'".format(covpath)
 
-        # Use a prefix for the HTML if the prefix is not the default
-        htmlfile = ""
-        if prefix != "pytest":
-            htmlfile = ":'htmlcov-{}'".format(prefix)
+        # Use the prefix for the HTML output directory
+        htmlfile = ":'{}-htmlcov'".format(prefix)
         options += " --cov-report=html{}".format(htmlfile)
         print("Coverage options: ", options)
         return options
