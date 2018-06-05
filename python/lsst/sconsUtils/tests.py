@@ -347,5 +347,5 @@ class Control(object):
         # Use the prefix for the HTML output directory
         htmlfile = ":'{}-htmlcov'".format(prefix)
         options += " --cov-report=html{}".format(htmlfile)
-        print("Coverage options: ", options)
+
         return options
