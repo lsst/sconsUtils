@@ -21,3 +21,4 @@ doc/sconsUtils.tag
 tests/.tests
 tests/testFailedTests/python
 tests/testFailedTests/tests/.tests
+.coverage

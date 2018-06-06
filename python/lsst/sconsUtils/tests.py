@@ -64,6 +64,15 @@ class Control(object):
         self._tmpDir = tmpDir
         self._cwd = os.path.abspath(os.path.curdir)
 
+        # Calculate the absolute path for temp dir if it is relative.
+        # This assumes the temp dir is relative to where the tests SConscript
+        # file is located. SCons will know how to handle this itself but
+        # some options require the code to know where to write things.
+        if os.path.isabs(self._tmpDir):
+            self._tmpDirAbs = self._tmpDir
+        else:
+            self._tmpDirAbs = os.path.join(self._cwd, self._tmpDir)
+
         self._verbose = verbose
 
         self._info = {}                 # information about processing targets
@@ -148,6 +157,7 @@ class Control(object):
             else:
                 interpreter = "pytest -Wd --junit-xml=${TARGET}.xml"
                 interpreter += " --junit-prefix={0}".format(self.junitPrefix())
+                interpreter += self._getPytestCoverageCommand()
 
             if self.ignore(f):
                 continue
@@ -229,6 +239,8 @@ class Control(object):
         # run failed tests.
         interpreter = "pytest -Wd --lf --junit-xml=${TARGET} --session2file=${TARGET}.out"
         interpreter += " --junit-prefix={0}".format(self.junitPrefix())
+        interpreter += self._getPytestCoverageCommand()
+
         target = os.path.join(self._tmpDir, "pytest-{}.xml".format(self._env['eupsProduct']))
 
         # Work out how many jobs scons has been configured to use
@@ -293,3 +305,47 @@ class Control(object):
             prefix += ".{0}".format(os.environ[controlVar])
 
         return prefix
+
+    def _getPytestCoverageCommand(self):
+        """Form the additional arguments required to enable coverage testing.
+
+        Coverage output files are written using ``${TARGET}`` as a base.
+
+        Returns
+        -------
+        options : `str`
+            String defining the coverage-specific arguments to give to the
+            pytest command.
+        """
+
+        options = ""
+
+        # Basis for deriving file names
+        # We use the magic target from SCons.
+        prefix = "${TARGET}"
+
+        # Only report coverage for files in the build tree.
+        # If --cov is used full coverage will be reported for all installed
+        # code as well, but that is probably a distraction as for this
+        # test run we are only interested in coverage of this package.
+        # Use "python" instead of "." to remove test files from coverage.
+        options += " --cov=."
+
+        # Always enabled branch coverage and terminal summary
+        options += " --cov-branch --cov-report=term "
+
+        covfile = "{}-cov-{}.xml".format(prefix, self._env['eupsProduct'])
+
+        # We should specify the output directory explicitly unless the prefix
+        # indicates that we are using the SCons target
+        if covfile.startswith("${TARGET}"):
+            covpath = covfile
+        else:
+            covpath = os.path.join(self._tmpDirAbs, covfile)
+        options += " --cov-report=xml:'{}'".format(covpath)
+
+        # Use the prefix for the HTML output directory
+        htmlfile = ":'{}-htmlcov'".format(prefix)
+        options += " --cov-report=html{}".format(htmlfile)
+
+        return options
