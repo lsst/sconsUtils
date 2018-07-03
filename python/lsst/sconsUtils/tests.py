@@ -281,16 +281,28 @@ class Control:
             nfiles = len(pythonTestFiles)
             print("pytest: running on {} Python test file{}.".format(nfiles, "" if nfiles == 1 else "s"))
 
-        result = self._env.Command(target, None, """
-        @rm -f ${{TARGET}} ${{TARGET}}.failed;
+        # If we ran all the test, then copy the previous test
+        # execution products to `.all' files so we can retrieve later.
+        # If we skip the test (exit code 5), retrieve those `.all' files.
+        cmd = """
         @printf "%s\\n" 'running global pytest... ';
-        @if {2} TRAVIS=1 {0} {1}; then \
+        @({2} TRAVIS=1 {0} {1}); \
+        export rc="$?"; \
+        if [[ $$rc == 0 ]]; then \
             echo "Global pytest run completed successfully"; \
+            cp ${{TARGET}} ${{TARGET}}.all || true; \
+            cp ${{TARGET}}.out ${{TARGET}}.out.all || true; \
+        elif [[ $$rc == 5 ]]; then \
+            echo "Global pytest run completed successfully - no tests ran"; \
+            mv ${{TARGET}}.all ${{TARGET}} || true; \
+            mv ${{TARGET}}.out.all ${{TARGET}}.out || true; \
         else \
-            echo "Global pytest run: failed"; \
+            echo "Global pytest run: failed with $$rc"; \
             mv ${{TARGET}}.out ${{TARGET}}.failed; \
         fi;
-        """.format(interpreter, " ".join([pipes.quote(p) for p in pythonTestFiles]), libpathstr))
+        """
+        testfiles = " ".join([pipes.quote(p) for p in pythonTestFiles])
+        result = self._env.Command(target, None, cmd.format(interpreter, testfiles, libpathstr))
 
         self._env.Alias(os.path.basename(target), target)
         self._env.Clean(target, self._tmpDir)
