@@ -54,6 +54,7 @@ def Pybind11LoadableModule(self, target, source, **keywords):
     if myenv['PLATFORM'] == 'darwin':
         myenv.Append(LDMODULEFLAGS=["-undefined", "suppress",
                                     "-flat_namespace", "-headerpad_max_install_names"])
+        myenv.Append(CCFLAGS=["-fvisibility=hidden"])
     return myenv.LoadableModule(target, source, **keywords)
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
