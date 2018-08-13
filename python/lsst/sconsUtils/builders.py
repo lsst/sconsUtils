@@ -199,7 +199,7 @@ def CleanTree(self, files, dir=".", recurse=True, verbose=False):
             files_expr += " -o "
 
         # quote unquoted * and []
-        files_expr += "-name %s -prune" % re.sub(r"(^|[^\\])([[*])", r"\1\\\2", file)
+        files_expr += "-name %s -prune" % re.sub(r"(^|[^\\])([\[*])", r"\1\\\2", file)
     #
     # don't use xargs --- who knows what needs quoting?
     #
