@@ -260,7 +260,7 @@ def ProductDir(env, product):
 #
 #  This should only be used by the env.Doxygen pseudo-builder method.
 #
-class DoxygenBuilder(object):
+class DoxygenBuilder:
 
     def __init__(self, **kw):
         self.__dict__.update(kw)

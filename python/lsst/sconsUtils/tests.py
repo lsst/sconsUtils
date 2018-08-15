@@ -18,7 +18,7 @@ from . import utils
 #  This class is unchanged from previous versions of sconsUtils, but it will now generally
 #  be called via scripts.BasicSConscript.tests().
 ##
-class Control(object):
+class Control:
     _IGNORE = "IGNORE"
     _EXPECT_FAILURE = "EXPECT_FAILURE"
 

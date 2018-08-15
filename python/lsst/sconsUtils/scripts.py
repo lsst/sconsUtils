@@ -38,7 +38,7 @@ def _getFileBase(node):
 # initialize() and finish(), and should be used when the SConstruct file doesn't need to
 # do anything other than what they provide.
 ##
-class BasicSConstruct(object):
+class BasicSConstruct:
 
     _initializing = False
 
@@ -233,7 +233,7 @@ class BasicSConstruct(object):
 # dictionary of targets used to set default targets and fix build dependencies; if you build anything
 # without using BasicSConscript methods, be sure to manually it to the state.targets dict.
 ##
-class BasicSConscript(object):
+class BasicSConscript:
 
     ##
     #  @brief Convenience function to replace standard lib/SConscript boilerplate.
