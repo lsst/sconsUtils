@@ -4,7 +4,6 @@
 #  Builders and path setup for installation targets.
 ##
 
-from __future__ import absolute_import, division, print_function
 import os.path
 import glob
 import re

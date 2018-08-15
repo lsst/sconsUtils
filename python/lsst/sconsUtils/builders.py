@@ -4,7 +4,6 @@
 #  Extra builders and methods to be injected into the SConsEnvironment class.
 ##
 
-from __future__ import absolute_import, division, print_function
 import os
 import re
 import fnmatch

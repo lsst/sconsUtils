@@ -6,7 +6,6 @@
 # @defgroup sconsUtilsScripts Convenience functions for SConstruct/SConscript files
 # @{
 ##
-from __future__ import absolute_import, division, print_function
 import os.path
 import re
 import pipes

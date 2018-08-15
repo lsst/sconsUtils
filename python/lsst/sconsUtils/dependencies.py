@@ -7,7 +7,6 @@
 #  @{
 ##
 
-from __future__ import absolute_import
 import os.path
 import collections
 import imp
