@@ -7,7 +7,6 @@ import glob
 import os
 import sys
 import pipes
-from past.builtins import basestring
 from SCons.Script import *  # noqa F403 F401 So that this file has the same namespace as SConstruct/SConscript
 from . import state
 from . import utils
@@ -138,7 +137,7 @@ class Control(object):
         """Create a test target for each file matching the supplied glob.
         """
 
-        if not isinstance(fileGlob, basestring):  # env.Glob() returns an scons Node
+        if not isinstance(fileGlob, str):  # env.Glob() returns an scons Node
             fileGlob = str(fileGlob)
         targets = []
         if not self.runExamples:
@@ -225,7 +224,7 @@ class Control(object):
         # Get list of python files with the path included.
         pythonTestFiles = []
         for fileGlob in pyList:
-            if not isinstance(fileGlob, basestring):  # env.Glob() returns an scons Node
+            if not isinstance(fileGlob, str):  # env.Glob() returns an scons Node
                 fileGlob = str(fileGlob)
             for f in glob.glob(fileGlob):
                 if self.ignore(f):

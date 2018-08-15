@@ -1,5 +1,4 @@
 setupRequired(scons)
-setupRequired(python_future)
 setupRequired(pytest)
 setupRequired(pytest_flake8)
 setupRequired(pytest_xdist)
