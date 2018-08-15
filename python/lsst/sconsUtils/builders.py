@@ -4,7 +4,6 @@
 #  Extra builders and methods to be injected into the SConsEnvironment class.
 ##
 
-from __future__ import absolute_import, division, print_function
 import os
 import re
 import fnmatch
@@ -261,7 +260,7 @@ def ProductDir(env, product):
 #
 #  This should only be used by the env.Doxygen pseudo-builder method.
 #
-class DoxygenBuilder(object):
+class DoxygenBuilder:
 
     def __init__(self, **kw):
         self.__dict__.update(kw)

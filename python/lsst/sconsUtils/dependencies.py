@@ -7,7 +7,6 @@
 #  @{
 ##
 
-from __future__ import absolute_import
 import os.path
 import collections
 import imp
@@ -117,7 +116,7 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
 # it may not need to call the base class __init__(), whose only
 # purpose is to define a number of instance variables used by configure().
 ##
-class Configuration(object):
+class Configuration:
 
     # @brief Parse the name of a .cfg file, returning the package name and root directory.
     @staticmethod
@@ -405,7 +404,7 @@ def CustomLinkCheck(context, message, source, extension=".cc"):
 # configured; a package that was not found will have a value of None, while a configured
 # package's value will be its imported .cfg module.
 ##
-class PackageTree(object):
+class PackageTree:
 
     ##
     # @brief Recursively load *.cfg files for packageName and all its dependencies.

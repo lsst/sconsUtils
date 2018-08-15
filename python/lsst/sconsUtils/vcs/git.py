@@ -5,7 +5,6 @@
 # If ever we want to do anything clever, we should use one of
 # the supported python packages
 #
-from __future__ import absolute_import, division, print_function
 import os
 from .. import state
 from .. import utils

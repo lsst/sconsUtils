@@ -1,4 +1,3 @@
-from __future__ import absolute_import, division, print_function
 import os
 
 try:
@@ -35,14 +34,14 @@ if not haveEups():
     def findSetupVersion(eupsProduct):
         return None, None, None, None, flavor()
 
-    class _Eups(object):
+    class _Eups:
         def __call__(self):
             return self
     Eups = _Eups()
 
     Eups.findSetupVersion = findSetupVersion
 
-    class _Utils(object):
+    class _Utils:
         pass
     utils = _Utils()
 

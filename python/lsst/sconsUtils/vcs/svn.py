@@ -4,7 +4,6 @@
 # If ever we want to do anything clever, we should use one of
 # the supported svn/python packages
 #
-from __future__ import absolute_import, division, print_function
 import os
 import re
 import sys

@@ -3,12 +3,10 @@
 #
 #  Control which tests run, and how.
 ##
-from __future__ import print_function, absolute_import
 import glob
 import os
 import sys
 import pipes
-from past.builtins import basestring
 from SCons.Script import *  # noqa F403 F401 So that this file has the same namespace as SConstruct/SConscript
 from . import state
 from . import utils
@@ -20,7 +18,7 @@ from . import utils
 #  This class is unchanged from previous versions of sconsUtils, but it will now generally
 #  be called via scripts.BasicSConscript.tests().
 ##
-class Control(object):
+class Control:
     _IGNORE = "IGNORE"
     _EXPECT_FAILURE = "EXPECT_FAILURE"
 
@@ -139,7 +137,7 @@ class Control(object):
         """Create a test target for each file matching the supplied glob.
         """
 
-        if not isinstance(fileGlob, basestring):  # env.Glob() returns an scons Node
+        if not isinstance(fileGlob, str):  # env.Glob() returns an scons Node
             fileGlob = str(fileGlob)
         targets = []
         if not self.runExamples:
@@ -226,7 +224,7 @@ class Control(object):
         # Get list of python files with the path included.
         pythonTestFiles = []
         for fileGlob in pyList:
-            if not isinstance(fileGlob, basestring):  # env.Glob() returns an scons Node
+            if not isinstance(fileGlob, str):  # env.Glob() returns an scons Node
                 fileGlob = str(fileGlob)
             for f in glob.glob(fileGlob):
                 if self.ignore(f):

@@ -6,14 +6,12 @@
 # @defgroup sconsUtilsScripts Convenience functions for SConstruct/SConscript files
 # @{
 ##
-from __future__ import absolute_import, division, print_function
 import os.path
 import re
 import pipes
 from stat import ST_MODE
 from SCons.Script import SConscript, File, Dir, Glob, BUILD_TARGETS
 from distutils.spawn import find_executable
-from past.builtins import basestring
 
 from . import dependencies
 from . import state
@@ -40,7 +38,7 @@ def _getFileBase(node):
 # initialize() and finish(), and should be used when the SConstruct file doesn't need to
 # do anything other than what they provide.
 ##
-class BasicSConstruct(object):
+class BasicSConstruct:
 
     _initializing = False
 
@@ -235,7 +233,7 @@ class BasicSConstruct(object):
 # dictionary of targets used to set default targets and fix build dependencies; if you build anything
 # without using BasicSConscript methods, be sure to manually it to the state.targets dict.
 ##
-class BasicSConscript(object):
+class BasicSConscript:
 
     ##
     #  @brief Convenience function to replace standard lib/SConscript boilerplate.
@@ -259,7 +257,7 @@ class BasicSConscript(object):
         if noBuildList is not None:
             src = [node for node in src if os.path.basename(str(node)) not in noBuildList]
         src = state.env.SourcesForSharedLibrary(src)
-        if isinstance(libs, basestring):
+        if isinstance(libs, str):
             libs = state.env.getLibs(libs)
         elif libs is None:
             libs = []
@@ -352,7 +350,7 @@ class BasicSConscript(object):
             swigSrc = {}
         for name, node in zip(swigNameList, swigFileList):
             swigSrc.setdefault(name, []).append(node)
-        if isinstance(libs, basestring):
+        if isinstance(libs, str):
             libs = state.env.getLibs(libs)
         elif libs is None:
             libs = []
@@ -385,7 +383,7 @@ class BasicSConscript(object):
             srcList = dict([(name, []) for name in nameList])
         for name in nameList:
             srcList[name].append(name + ".cc")
-        if isinstance(libs, basestring):
+        if isinstance(libs, str):
             libs = state.env.getLibs(libs)
         elif libs is None:
             libs = []

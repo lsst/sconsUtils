@@ -4,7 +4,6 @@
 #  Builders and path setup for installation targets.
 ##
 
-from __future__ import absolute_import, division, print_function
 import os.path
 import glob
 import re
@@ -229,7 +228,7 @@ def Declare(self, products=None):
 #  prerequisites to installing, but if one explicitly marks the install targets
 #  as dependent on the build targets, that should be enough.
 ##
-class DirectoryInstaller(object):
+class DirectoryInstaller:
 
     def __init__(self, ignoreRegex, recursive):
         self.ignoreRegex = re.compile(ignoreRegex)

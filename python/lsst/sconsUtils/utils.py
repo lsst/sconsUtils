@@ -4,7 +4,6 @@
 #  Internal utilities for sconsUtils.
 ##
 
-from __future__ import absolute_import, division, print_function
 import os
 import sys
 import warnings
@@ -20,7 +19,7 @@ import SCons.Script
 #  (the traceback variable) and whether to print extra debug info (the verbose variable).
 #  These are set from command-line options in state.py.
 ##
-class Log(object):
+class Log:
 
     def __init__(self):
         self.traceback = False
@@ -162,7 +161,7 @@ def runExternal(cmd, fatal=False, msg=None):
 #
 #  For example:
 #  @code
-#  class test_class(object):
+#  class test_class:
 #      pass
 #
 #  @memberOf(test_class):
