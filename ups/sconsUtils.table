@@ -1,2 +1,5 @@
 envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
 envPrepend(PATH, ${PRODUCT_DIR}/bin)
+envPrepend(LD_LIBRARY_PATH, $HOME/anaconda3/envs/scipl/lib)
+envPrepend(DYLD_LIBRARY_PATH, $HOME/anaconda3/envs/scipl/lib)
+envPrepend(LSST_LIBRARY_PATH, $HOME/anaconda3/envs/scipl/lib)
