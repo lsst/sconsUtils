@@ -246,6 +246,7 @@ class Configuration:
     ##
     def configure(self, conf, packages, check=False, build=True):
         assert(not (check and build))
+        self.configurePython(conf, packages, check, build)
         conf.env.PrependUnique(**self.paths)
         state.log.info("Configuring package '%s'." % self.name)
         conf.env.doxygen["includes"].extend(self.doxygen["includes"])
@@ -267,6 +268,61 @@ class Configuration:
             for lib in self.libs["main"]:
                 if not conf.CheckLib(lib, autoadd=False, language="C++"):
                     return False
+        return True
+
+    @staticmethod
+    def _get_config_var(name):
+        """The relevant Python is not guaranteed to be the Python
+        that we are using to run SCons so we must shell out to the
+        PATH python."""
+        pycmd = 'import distutils.sysconfig as s; print(s.get_config_var("{}"))'.format(name)
+        result = subprocess.check_output(["python", "-c", pycmd]).decode().strip()
+        # Be consistent with native interface
+        if result == "None":
+            result = None
+        return result
+
+    def configurePython(self, conf, packages, check=False, build=True):
+        lsst.sconsUtils.log.info("Configuring package '%s'." % self.name)
+        python3rdinclude=self._get_config_var("CONFINCLUDEPY")
+        conf.env.AppendUnique(XCPPPATH=python3rdinclude)
+        conf.env.AppendUnique(XCPPPATH=python3rdinclude + "/..")
+        libDir = self._get_config_var("LIBPL")
+        conf.env.AppendUnique(LIBPATH=[libDir])
+        pylibrary = self._get_config_var("LIBRARY")
+        mat = re.search("(python.*)\.(a|so|dylib)$", pylibrary)
+        if mat:
+            conf.env.libs["python"].append(mat.group(1))
+            lsst.sconsUtils.log.info("Adding '%s' to target 'python'." % mat.group(1))
+        for w in (" ".join([self._get_config_var("MODLIBS"),
+                            self._get_config_var("SHLIBS")])).split():
+            mat = re.search(r"^-([Ll])(.*)", w)
+            if mat:
+                lL = mat.group(1)
+                arg = mat.group(2)
+                if lL == "l":
+                    if not arg in conf.env.libs:
+                        conf.env.libs["python"].append(arg)
+                        lsst.sconsUtils.log.info("Adding '%s' to target 'python'." % arg)
+                else:
+                    if os.path.isdir(arg):
+                        conf.env.AppendUnique(LIBPATH=[arg])
+                        lsst.sconsUtils.log.info("Adding '%s' to link path." % arg)
+        if conf.env['PLATFORM'] == 'darwin':
+            frameworkDir = libDir           # search up the libDir tree for the proper home for frameworks
+            while frameworkDir and not re.match("^//*$", frameworkDir):
+                frameworkDir, d2 = os.path.split(frameworkDir)
+                if d2 == "Python.framework":
+                    if not "Python" in os.listdir(os.path.join(frameworkDir, d2)):
+                        lsst.sconUtils.log.warn(
+                            "Expected to find Python in framework directory %s, but it isn't there"
+                            % frameworkDir
+                            )
+                        return False
+                    break
+            opt = "-F%s" % frameworkDir
+            if opt not in conf.env["LDMODULEFLAGS"]:
+                conf.env.Append(LDMODULEFLAGS = [opt,])
         return True
 
 
