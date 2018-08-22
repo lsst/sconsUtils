@@ -6,9 +6,12 @@ __all__ = ("Configuration", "ExternalConfiguration", "PackageTree", "configure")
 import os.path
 import collections
 import imp
+import re
+import subprocess
 import SCons.Script
 from . import eupsForScons
 from SCons.Script.SConscript import SConsEnvironment
+from sys import platform
 
 from . import installation
 from . import state
@@ -211,8 +214,18 @@ class Configuration:
         if version is not None:
             self.version = version
         if productDir is None:
-            state.log.warn("Could not find EUPS product dir for '%s'; using %s."
-                           % (self.eupsProduct, self.root))
+            try:
+                python3rdinclude = self._get_config_var("CONFINCLUDEPY")
+                includeDir, pyFolder = os.path.split(python3rdinclude)
+                if os.path.exists(includeDir):
+                    self.root = os.path.realpath(includeDir)
+                else:
+                    state.log.warn("Could not find Lib package dir for '%s'; using %s."
+                                   % (self.eupsProduct, self.root))
+            except Exception as e:
+                state.log.warn("Could not find EUPS/lib package dir for '%s'; using %s."
+                               % (self.eupsProduct, self.root))
+                state.log.warn(e)
         else:
             self.root = os.path.realpath(productDir)
         self.doxygen = {
@@ -300,6 +313,7 @@ class Configuration:
             present in the packages dict.
         """
         assert(not (check and build))
+        self.configurePython(conf, packages, check, build)
         conf.env.PrependUnique(**self.paths)
         state.log.info("Configuring package '%s'." % self.name)
         conf.env.doxygen["includes"].extend(self.doxygen["includes"])
@@ -321,6 +335,72 @@ class Configuration:
             for lib in self.libs["main"]:
                 if not conf.CheckLib(lib, autoadd=False, language="C++"):
                     return False
+        return True
+
+    @staticmethod
+    def _get_config_var(name):
+        """The relevant Python is not guaranteed to be the Python
+        that we are using to run SCons so we must shell out to the
+        PATH python."""
+        pycmd = 'import distutils.sysconfig as s; print(s.get_config_var("{}"))'.format(name)
+        result = subprocess.check_output(["python", "-c", pycmd]).decode().strip()
+        # Be consistent with native interface
+        if result == "None":
+            result = None
+        return result
+
+    def configurePython(self, conf, packages, check=False, build=True):
+        state.log.info("Configuring package '%s'." % self.name)
+        python3rdinclude = self._get_config_var("CONFINCLUDEPY")
+        conf.env.AppendUnique(XCPPPATH=python3rdinclude)
+        conf.env.AppendUnique(XCPPPATH=python3rdinclude + "/..")
+        conf.env.AppendUnique(XCPPPATH=python3rdinclude + "/../eigen3")
+        usedC = state.env['CXX']
+        coutput = subprocess.run('which ' + usedC, shell=True, stdout=subprocess.PIPE)
+        full_path = coutput.stdout.decode('UTF-8')
+        cpath, fcfile = os.path.split(full_path)
+        conf.env.AppendUnique(LIBPATH=[cpath + "/../lib"])
+        libDir = self._get_config_var("LIBPL")
+        conf.env.AppendUnique(LIBPATH=[libDir])
+        conf.env.AppendUnique(LIBPATH=[libDir+'/../..'])
+        if platform == "darwin":
+            conf.env["_RPATH"] = '-rpath ' + python3rdinclude + '/../../lib'
+        else:
+            conf.env.AppendUnique(RPATH=[python3rdinclude + '/../../lib'])
+        pylibrary = self._get_config_var("LIBRARY")
+        mat = re.search(r"(python.*)\.(a|so|dylib)$", pylibrary)
+        if mat:
+            conf.env.libs["python"].append(mat.group(1))
+            state.log.info("Adding '%s' to target 'python'." % mat.group(1))
+        for w in (" ".join([self._get_config_var("MODLIBS"),
+                            self._get_config_var("SHLIBS")])).split():
+            mat = re.search(r"^-([Ll])(.*)", w)
+            if mat:
+                lL = mat.group(1)
+                arg = mat.group(2)
+                if lL == "l":
+                    if arg not in conf.env.libs:
+                        conf.env.libs["python"].append(arg)
+                        state.log.info("Adding '%s' to target 'python'." % arg)
+                else:
+                    if os.path.isdir(arg):
+                        conf.env.AppendUnique(LIBPATH=[arg])
+                        state.log.info("Adding '%s' to link path." % arg)
+        if conf.env['PLATFORM'] == 'darwin':
+            frameworkDir = libDir           # search up the libDir tree for the proper home for frameworks
+            while frameworkDir and not re.match("^//*$", frameworkDir):
+                frameworkDir, d2 = os.path.split(frameworkDir)
+                if d2 == "Python.framework":
+                    if "Python" not in os.listdir(os.path.join(frameworkDir, d2)):
+                        state.log.warn(
+                            "Expected to find Python in framework directory %s, but it isn't there"
+                            % frameworkDir
+                        )
+                        return False
+                    break
+            opt = "-F%s" % frameworkDir
+            if opt not in conf.env["LDMODULEFLAGS"]:
+                conf.env.Append(LDMODULEFLAGS=[opt, ])
         return True
 
 

@@ -140,6 +140,7 @@ def _initEnvironment():
         if not m:
             continue
         cfgPath.append(os.path.join(os.environ[k], "ups"))
+        cfgPath.append(os.path.join(os.environ[k], "configs"))
         if m.group("extra"):
             cfgPath.append(os.environ[k])
         else:
