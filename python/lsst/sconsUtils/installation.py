@@ -310,7 +310,6 @@ def InstallEups(env, dest, files=[], presetup=""):
         files = [str(f) for f in files]  # in case the user used Glob not glob.glob
         files += glob.glob(os.path.join("ups", "*.build")) + glob.glob(os.path.join("ups", "*.table")) \
             + glob.glob(os.path.join("ups", "*.cfg")) \
-            + glob.glob(os.path.join("configs", "*.cfg")) \
             + glob.glob(os.path.join("ups", "eupspkg*"))
         files = list(set(files))         # remove duplicates
 
