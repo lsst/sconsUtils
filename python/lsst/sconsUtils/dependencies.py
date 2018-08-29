@@ -172,7 +172,7 @@ class Configuration:
             self.version = version
         if productDir is None:
             try:
-                python3rdinclude=self._get_config_var("CONFINCLUDEPY")
+                python3rdinclude = self._get_config_var("CONFINCLUDEPY")
                 includeDir, pyFolder = os.path.split(python3rdinclude)
                 productDir = os.path.join(includeDir, "include")
                 if os.path.exist(productDir):
@@ -180,9 +180,10 @@ class Configuration:
                 else:
                     state.log.warn("Could not find Lib package dir for '%s'; using %s."
                                    % (self.eupsProduct, self.root))
-            except:
+            except Exception as e:
                 state.log.warn("Could not find EUPS/lib package dir for '%s'; using %s."
                                % (self.eupsProduct, self.root))
+                state.log.warn(e)
         else:
             self.root = os.path.realpath(productDir)
         self.doxygen = {
