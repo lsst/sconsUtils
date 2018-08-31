@@ -109,10 +109,10 @@ class BasicSConstruct:
             state.log.fail("Recursion detected; an SConscript file should not call BasicSConstruct.")
         cls._initializing = True
         if cleanExt is None:
-            cleanExt = r"*~ core *.so *.os *.o *.pyc *.pkgc .cache .pytest_cache"
+            cleanExt = r"*~ core core.[1-9]* *.so *.os *.o *.pyc *.pkgc"
         dependencies.configure(packageName, versionString, eupsProduct, eupsProductPath, noCfgFile)
         state.env.BuildETags()
-        state.env.CleanTree(cleanExt)
+        state.env.CleanTree(cleanExt, ".cache .pytest_cache")
         if versionModuleName is not None:
             try:
                 versionModuleName = versionModuleName % "/".join(packageName.split("_"))

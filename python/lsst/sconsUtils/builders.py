@@ -179,40 +179,29 @@ def BuildETags(env, root=None, fileRegex=None, ignoreDirs=None):
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 ##
-#  @brief Remove files matching the argument list starting at dir
+#  @brief Remove files matching the argument list starting at directory
 #         when scons is invoked with -c/--clean and no explicit targets are listed
 #
 #   E.g. CleanTree(r"*~ core")
 #
-#   If recurse is True, recursively descend the file system; if
-#   verbose is True, print each filename after deleting it
+#   dirPatterns allows the specification of directories to be removed
+#   If verbose is True, print each filename after deleting it
 ##
 @memberOf(SConsEnvironment)
-def CleanTree(self, files, dir=".", recurse=True, verbose=False):
+def CleanTree(self, filePatterns, dirPatterns="", directory=".", verbose=False):
     #
     # Generate command that we may want to execute
     #
-    files_expr = ""
-    for file in SCons.Script.Split(files):
-        if files_expr:
-            files_expr += " -o "
+    filesExpr = ""
+    for filePattern in SCons.Script.Split(filePatterns):
+        if filesExpr:
+            filesExpr += " -o "
 
         # quote unquoted * and [
-        files_expr += "-name %s -prune" % re.sub(r"(^|[^\\])([\[*])", r"\1\\\2", file)
-    #
-    # don't use xargs --- who knows what needs quoting?
-    #
-    action = "find %s" % dir
-    action += r" \( -name .svn -prune -o -name \* \) "
-    if not recurse:
-        action += " ! -name . -prune"
-
-    file_action = "rm -f"
-    if recurse:
-        file_action += "r"
-
-    action += r" \( %s \) -exec %s {} \;" % \
-        (files_expr, file_action)
+        filesExpr += "-name %s" % re.sub(r"(^|[^\\])([\[*])", r"\1\\\2", filePattern)
+    action = "find %s" % directory
+    action += r" \( -name .svn -prune -o -name .git -prune -o -name \* \) "
+    action += r" \( %s \) -exec rm -f {} \;" % filesExpr
 
     if verbose:
         action += " -print"
@@ -222,6 +211,17 @@ def CleanTree(self, files, dir=".", recurse=True, verbose=False):
     # so the former is no longer supported.
     #
     action += " ; rm -rf .sconf_temp .sconsign.dblite .sconsign.tmp config.log"
+
+    dirsExpr = ""
+    if dirPatterns != "":
+        for dirPattern in SCons.Script.Split(dirPatterns):
+            if dirsExpr != "":
+                dirsExpr += " -o "
+            dirsExpr += "-name %s -prune" % re.sub(r"(^|[^\\])([\[*])", r"\1\\\2", dirPattern)
+    action += " ; find %s" % directory
+    action += r" \( -name .svn -prune -o -name .git -prune -o -name \* \) "
+    action += r" \( %s \) -exec rm -rf {} \;" % dirsExpr
+
     #
     # Do we actually want to clean up?  We don't if the command is e.g. "scons -c install"
     #
