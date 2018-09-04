@@ -179,56 +179,61 @@ def BuildETags(env, root=None, fileRegex=None, ignoreDirs=None):
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 ##
-#  @brief Remove files matching the argument list starting at dir
+#  @brief Remove files matching the argument list starting at directory
 #         when scons is invoked with -c/--clean and no explicit targets are listed
 #
 #   E.g. CleanTree(r"*~ core")
 #
-#   If recurse is True, recursively descend the file system; if
-#   verbose is True, print each filename after deleting it
+#   dirPatterns allows the specification of directories to be removed
+#   If verbose is True, print each filename after deleting it
 ##
 @memberOf(SConsEnvironment)
-def CleanTree(self, files, dir=".", recurse=True, verbose=False):
-    #
-    # Generate command that we may want to execute
-    #
-    files_expr = ""
-    for file in SCons.Script.Split(files):
-        if files_expr:
-            files_expr += " -o "
+def CleanTree(self, filePatterns, dirPatterns="", directory=".", verbose=False):
 
-        # quote unquoted * and [
-        files_expr += "-name %s -prune" % re.sub(r"(^|[^\\])([\[*])", r"\1\\\2", file)
-    #
-    # don't use xargs --- who knows what needs quoting?
-    #
-    action = "find %s" % dir
-    action += r" \( -name .svn -prune -o -name \* \) "
-    if not recurse:
-        action += " ! -name . -prune"
+    def genFindCommand(patterns, directory, verbose, filesOnly):
+        # Generate find command to clean up (find-glob) patterns, either files
+        # or directories.
+        expr = ""
+        for pattern in SCons.Script.Split(patterns):
+            if expr != "":
+                expr += " -o "
+            # Quote unquoted * and [
+            expr += "-name %s" % re.sub(r"(^|[^\\])([\[*])", r"\1\\\2", pattern)
+            if filesOnly:
+                expr += " -type f"
+            else:
+                expr += " -type d -prune"
 
-    file_action = "rm -f"
-    if recurse:
-        file_action += "r"
+        command = "find " + directory
+        # Don't look into .svn or .git directories to save time.
+        command += r" \( -name .svn -prune -o -name .git -prune -o -name \* \) "
+        command += r" \( " + expr + r" \)"
+        if filesOnly:
+            command += r" -exec rm -f {} \;"
+        else:
+            command += r" -exec rm -rf {} \;"
+        if verbose:
+            command += " -print"
+        return command
 
-    action += r" \( %s \) -exec %s {} \;" % \
-        (files_expr, file_action)
+    action = genFindCommand(filePatterns, directory, verbose, filesOnly=True)
 
-    if verbose:
-        action += " -print"
-    #
-    # Clean up scons files --- users want to be able to say scons -c and get a clean copy
-    # We can't delete .sconsign.dblite if we use "scons clean" instead of "scons --clean",
-    # so the former is no longer supported.
-    #
+    # Clean up scons files --- users want to be able to say scons -c and get a
+    # clean copy.
+    # We can't delete .sconsign.dblite if we use "scons clean" instead of
+    # "scons --clean", so the former is no longer supported.
     action += " ; rm -rf .sconf_temp .sconsign.dblite .sconsign.tmp config.log"
-    #
-    # Do we actually want to clean up?  We don't if the command is e.g. "scons -c install"
-    #
+
+    if dirPatterns != "":
+        action += " ; "
+        action += genFindCommand(dirPatterns, directory, verbose, filesOnly=False)
+    # Do we actually want to clean up?  We don't if the command is e.g.
+    # "scons -c install"
     if "clean" in SCons.Script.COMMAND_LINE_TARGETS:
         state.log.fail("'scons clean' is no longer supported; please use 'scons --clean'.")
     elif not SCons.Script.COMMAND_LINE_TARGETS and self.GetOption("clean"):
         self.Execute(self.Action([action]))
+
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 
