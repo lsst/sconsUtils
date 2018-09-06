@@ -15,6 +15,7 @@ import subprocess
 import SCons.Script
 from . import eupsForScons
 from SCons.Script.SConscript import SConsEnvironment
+from sys import platform
 
 from . import installation
 from . import state
@@ -303,8 +304,10 @@ class Configuration:
         libDir = self._get_config_var("LIBPL")
         conf.env.AppendUnique(LIBPATH=[libDir])
         conf.env.AppendUnique(LIBPATH=[libDir+'/../..'])
-        conf.env.AppendUnique(RPATH=[python3rdinclude + '/../../lib'])
-        conf.env["_RPATH"] = '-rpath ' + python3rdinclude + '/../../lib'
+        if platform == "darwin":
+            conf.env["_RPATH"] = '-rpath ' + python3rdinclude + '/../../lib'
+        else:
+            conf.env.AppendUnique(RPATH=[python3rdinclude + '/../../lib'])
         pylibrary = self._get_config_var("LIBRARY")
         mat = re.search("(python.*)\.(a|so|dylib)$", pylibrary)
         if mat:
