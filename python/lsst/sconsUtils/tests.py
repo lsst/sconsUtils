@@ -7,7 +7,7 @@ import glob
 import os
 import sys
 import pipes
-from SCons.Script import *  # noqa F403 F401 So that this file has the same namespace as SConstruct/SConscript
+import SCons.Script
 from . import state
 from . import utils
 
@@ -235,7 +235,9 @@ class Control:
         # We always want to run this with the tests target.
         # We have decided to use pytest caching so that on reruns we only
         # run failed tests.
-        interpreter = "pytest -Wd --lf --junit-xml=${TARGET} --session2file=${TARGET}.out"
+        lfnfOpt = "none" if 'install' in SCons.Script.COMMAND_LINE_TARGETS else "all"
+        interpreter = f"pytest -Wd --lf --lfnf={lfnfOpt}"
+        interpreter += " --junit-xml=${TARGET} --session2file=${TARGET}.out"
         interpreter += " --junit-prefix={0}".format(self.junitPrefix())
         interpreter += self._getPytestCoverageCommand()
 
@@ -279,16 +281,28 @@ class Control:
             nfiles = len(pythonTestFiles)
             print("pytest: running on {} Python test file{}.".format(nfiles, "" if nfiles == 1 else "s"))
 
-        result = self._env.Command(target, None, """
-        @rm -f ${{TARGET}} ${{TARGET}}.failed;
+        # If we ran all the test, then copy the previous test
+        # execution products to `.all' files so we can retrieve later.
+        # If we skip the test (exit code 5), retrieve those `.all' files.
+        cmd = """
         @printf "%s\\n" 'running global pytest... ';
-        @if {2} TRAVIS=1 {0} {1}; then \
+        @({2} TRAVIS=1 {0} {1}); \
+        export rc="$?"; \
+        if [[ $$rc == 0 ]]; then \
             echo "Global pytest run completed successfully"; \
+            cp ${{TARGET}} ${{TARGET}}.all || true; \
+            cp ${{TARGET}}.out ${{TARGET}}.out.all || true; \
+        elif [[ $$rc == 5 ]]; then \
+            echo "Global pytest run completed successfully - no tests ran"; \
+            mv ${{TARGET}}.all ${{TARGET}} || true; \
+            mv ${{TARGET}}.out.all ${{TARGET}}.out || true; \
         else \
-            echo "Global pytest run: failed"; \
+            echo "Global pytest run: failed with $$rc"; \
             mv ${{TARGET}}.out ${{TARGET}}.failed; \
         fi;
-        """.format(interpreter, " ".join([pipes.quote(p) for p in pythonTestFiles]), libpathstr))
+        """
+        testfiles = " ".join([pipes.quote(p) for p in pythonTestFiles])
+        result = self._env.Command(target, None, cmd.format(interpreter, testfiles, libpathstr))
 
         self._env.Alias(os.path.basename(target), target)
         self._env.Clean(target, self._tmpDir)

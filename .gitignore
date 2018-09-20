@@ -1,4 +1,5 @@
 .cache
+.pytest_cache
 .sconsign.dblite
 config.log
 .sconf_temp
