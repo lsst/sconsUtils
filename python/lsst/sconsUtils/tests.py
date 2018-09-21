@@ -288,11 +288,11 @@ class Control:
         @printf "%s\\n" 'running global pytest... ';
         @({2} TRAVIS=1 {0} {1}); \
         export rc="$?"; \
-        if [[ $$rc == 0 ]]; then \
+        if [ "$$rc" -eq "0" ]; then \
             echo "Global pytest run completed successfully"; \
             cp ${{TARGET}} ${{TARGET}}.all || true; \
             cp ${{TARGET}}.out ${{TARGET}}.out.all || true; \
-        elif [[ $$rc == 5 ]]; then \
+        elif [ "$$rc" -eq "5" ]; then \
             echo "Global pytest run completed successfully - no tests ran"; \
             mv ${{TARGET}}.all ${{TARGET}} || true; \
             mv ${{TARGET}}.out.all ${{TARGET}}.out || true; \
