@@ -284,7 +284,10 @@ class Control:
         # If we ran all the test, then copy the previous test
         # execution products to `.all' files so we can retrieve later.
         # If we skip the test (exit code 5), retrieve those `.all' files.
-        cmd = """
+        cmd = ""
+        if lfnfOpt == "all":
+            cmd += "@rm -f ${{TARGET}} ${{TARGET}}.failed; \\"
+        cmd += """
         @printf "%s\\n" 'running global pytest... ';
         @({2} TRAVIS=1 {0} {1}); \
         export rc="$?"; \
