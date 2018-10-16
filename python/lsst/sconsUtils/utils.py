@@ -87,8 +87,8 @@ _pythonPath = None
 def whichPython():
     global _pythonPath
     if _pythonPath is None:
-        output = subprocess.check_output(["python", "-c", "import sys; print(sys.executable)"])
-        _pythonPath = output.decode().strip()
+        _pythonPath = runExternal(["python", "-c", "import sys; print(sys.executable)"],
+                                  fatal=True, msg="Error getting python path")
     return _pythonPath
 
 
@@ -136,6 +136,8 @@ def libraryLoaderEnvironment():
 ##
 #  @brief Safe wrapper for running external programs, reading stdout, and sanitizing error messages.
 #
+#  Command can be given as a list/tuple of command with separate options.
+#
 #  Note that the entire program output is returned, not just a single line.
 #  @returns Strings not bytes.
 ##
@@ -145,15 +147,21 @@ def runExternal(cmd, fatal=False, msg=None):
             msg = "Error running %s" % cmd.split()[0]
         except Exception:
             msg = "Error running external command"
-    process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = process.communicate()
-    if process.returncode != 0:
+
+    # Run with shell unless given a list of options
+    shell = True
+    if isinstance(cmd, (list, tuple)):
+        shell = False
+
+    try:
+        retval = subprocess.run(cmd, capture_output=True, shell=shell, check=True, text=True)
+    except subprocess.CalledProcessError as e:
         if fatal:
-            raise RuntimeError("%s: %s" % (msg, stderr))
+            raise RuntimeError(f"{msg}: {e.stderr}") from e
         else:
             from . import state  # can't import at module scope due to circular dependency
-            state.log.warn("%s: %s" % (msg, stderr))
-    return stdout.decode()
+            state.log.warn(f"{msg}: {e.stderr}")
+    return retval.stdout.strip()
 
 
 ##
