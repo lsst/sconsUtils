@@ -154,7 +154,8 @@ def runExternal(cmd, fatal=False, msg=None):
         shell = False
 
     try:
-        retval = subprocess.run(cmd, capture_output=True, shell=shell, check=True, text=True)
+        retval = subprocess.run(cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                check=True, text=True)
     except subprocess.CalledProcessError as e:
         if fatal:
             raise RuntimeError(f"{msg}: {e.stderr}") from e
