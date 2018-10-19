@@ -298,9 +298,9 @@ class Configuration:
     def configurePython(self, conf, packages, check=False, build=True):
         state.log.info("Configuring package '%s'." % self.name)
         python3rdinclude = self._get_config_var("CONFINCLUDEPY")
-        print("---- gcm DEBUG --- ",python3rdinclude)
         conf.env.AppendUnique(XCPPPATH=python3rdinclude)
         conf.env.AppendUnique(XCPPPATH=python3rdinclude + "/..")
+        conf.env.AppendUnique(XCPPPATH=python3rdinclude + "/../eigen3")
         libDir = self._get_config_var("LIBPL")
         conf.env.AppendUnique(LIBPATH=[libDir])
         conf.env.AppendUnique(LIBPATH=[libDir+'/../..'])
