@@ -303,6 +303,8 @@ class Configuration:
         conf.env.AppendUnique(XCPPPATH=python3rdinclude + "/..")
         conf.env.AppendUnique(XCPPPATH=python3rdinclude + "/../eigen3")
         libDir = self._get_config_var("LIBPL")
+        usedcompiler = self._get_config_var("CXX")
+        print("--->>>   ",usedcompiler)
         conf.env.AppendUnique(LIBPATH=["/usr/lib"])
         conf.env.AppendUnique(LIBPATH=[libDir])
         conf.env.AppendUnique(LIBPATH=[libDir+'/../..'])
