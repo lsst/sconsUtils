@@ -298,7 +298,6 @@ class Configuration:
     def configurePython(self, conf, packages, check=False, build=True):
         state.log.info("Configuring package '%s'." % self.name)
         python3rdinclude = self._get_config_var("CONFINCLUDEPY")
-        conf.env.AppendUnique(XCPPPATH="/usr/lib")
         conf.env.AppendUnique(XCPPPATH=python3rdinclude)
         conf.env.AppendUnique(XCPPPATH=python3rdinclude + "/..")
         conf.env.AppendUnique(XCPPPATH=python3rdinclude + "/../eigen3")
