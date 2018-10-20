@@ -298,10 +298,12 @@ class Configuration:
     def configurePython(self, conf, packages, check=False, build=True):
         state.log.info("Configuring package '%s'." % self.name)
         python3rdinclude = self._get_config_var("CONFINCLUDEPY")
+        conf.env.AppendUnique(XCPPPATH="/usr/lib")
         conf.env.AppendUnique(XCPPPATH=python3rdinclude)
         conf.env.AppendUnique(XCPPPATH=python3rdinclude + "/..")
         conf.env.AppendUnique(XCPPPATH=python3rdinclude + "/../eigen3")
         libDir = self._get_config_var("LIBPL")
+        conf.env.AppendUnique(LIBPATH=["/usr/lib"])
         conf.env.AppendUnique(LIBPATH=[libDir])
         conf.env.AppendUnique(LIBPATH=[libDir+'/../..'])
         if platform == "darwin":
