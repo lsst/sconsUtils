@@ -303,7 +303,6 @@ class Configuration:
         conf.env.AppendUnique(XCPPPATH=python3rdinclude + "/..")
         conf.env.AppendUnique(XCPPPATH=python3rdinclude + "/../eigen3")
         libDir = self._get_config_var("LIBPL")
-        usedcompiler = self._get_config_var("CC")
         usedC = state.env['CXX']
         coutput = subprocess.run('which ' + usedC, shell=True, stdout=subprocess.PIPE)
         full_path = coutput.stdout.decode('UTF-8')
