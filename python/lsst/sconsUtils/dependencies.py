@@ -304,7 +304,10 @@ class Configuration:
         conf.env.AppendUnique(XCPPPATH=python3rdinclude + "/../eigen3")
         libDir = self._get_config_var("LIBPL")
         usedcompiler = self._get_config_var("CC")
-        print("--->>>   ", usedcompiler)
+        usedC = state.env['CXX']
+        coutput = subprocess.run('which ' + usedC, shell=True, stdout=subprocess.PIPE)
+        full_path = coutput.stdout.decode('UTF-8')
+        cpath, fcfile = os.path.split(full_path)
         conf.env.AppendUnique(LIBPATH=["/usr/lib"])
         conf.env.AppendUnique(LIBPATH=[libDir])
         conf.env.AppendUnique(LIBPATH=[libDir+'/../..'])
