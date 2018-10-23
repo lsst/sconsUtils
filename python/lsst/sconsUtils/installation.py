@@ -230,9 +230,10 @@ def Declare(self, products=None):
 ##
 class DirectoryInstaller:
 
-    def __init__(self, ignoreRegex, recursive):
+    def __init__(self, ignoreRegex, recursive, followLinks=False):
         self.ignoreRegex = re.compile(ignoreRegex)
         self.recursive = recursive
+        self.followLinks = followLinks
 
     def __call__(self, target, source, env):
         prefix = os.path.abspath(os.path.join(target[0].abspath, ".."))
@@ -240,7 +241,7 @@ class DirectoryInstaller:
         if not os.path.isdir(destpath):
             state.log.info("Creating directory %s" % destpath)
             os.makedirs(destpath)
-        for root, dirnames, filenames in os.walk(source[0].path):
+        for root, dirnames, filenames in os.walk(source[0].path, followlinks=self.followLinks):
             if not self.recursive:
                 dirnames[:] = []
             else:
@@ -265,11 +266,11 @@ class DirectoryInstaller:
 #  Omit files and directories that match ignoreRegex
 ##
 @memberOf(SConsEnvironment)
-def InstallDir(self, prefix, dir, ignoreRegex=r"(~$|\.pyc$|\.os?$)", recursive=True):
+def InstallDir(self, prefix, dir, ignoreRegex=r"(~$|\.pyc$|\.os?$)", recursive=True, followLinks=False):
     if not self.installing:
         return []
     result = self.Command(target=os.path.join(self.Dir(prefix).abspath, dir), source=dir,
-                          action=DirectoryInstaller(ignoreRegex, recursive))
+                          action=DirectoryInstaller(ignoreRegex, recursive, followLinks=followLinks))
     self.AlwaysBuild(result)
     return result
 
@@ -376,14 +377,14 @@ def InstallEups(env, dest, files=[], presetup=""):
 
 # @brief Install directories in the usual LSST way, handling "ups" specially.
 @memberOf(SConsEnvironment)
-def InstallLSST(self, prefix, dirs, ignoreRegex=None):
+def InstallLSST(self, prefix, dirs, ignoreRegex=None, followLinks=False):
     results = []
     for d in dirs:
         # if eups is disabled, the .build & .table files will not be "expanded"
         if d == "ups" and not state.env['no_eups']:
             t = self.InstallEups(os.path.join(prefix, "ups"))
         else:
-            t = self.InstallDir(prefix, d, ignoreRegex=ignoreRegex)
+            t = self.InstallDir(prefix, d, ignoreRegex=ignoreRegex, followLinks=followLinks)
         self.Depends(t, d)
         results.extend(t)
         self.Alias("install", t)

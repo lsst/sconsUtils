@@ -58,11 +58,11 @@ class BasicSConstruct:
                 defaultTargets=DEFAULT_TARGETS,
                 subDirList=None, ignoreRegex=None,
                 versionModuleName="python/lsst/%s/version.py", noCfgFile=False,
-                sconscriptOrder=None, disableCc=False):
+                sconscriptOrder=None, disableCc=False, followLinks=False):
         cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt,
                        versionModuleName, noCfgFile=noCfgFile, sconscriptOrder=sconscriptOrder,
                        disableCc=disableCc)
-        cls.finish(defaultTargets, subDirList, ignoreRegex)
+        cls.finish(defaultTargets, subDirList, ignoreRegex, followLinks=followLinks)
         return state.env
 
     ##
@@ -160,12 +160,13 @@ class BasicSConstruct:
     #  @param defaultTargets       A sequence of targets (see state.targets) that should be built when
     #                              scons is run with no arguments.
     #  @param ignoreRegex          Regular expression that matches files that should not be installed.
+    #  @param followLinks          If True, follow symbolic links to directories when installing.
     #
     #  @returns an SCons Environment object (which is also available as lsst.sconsUtils.env).
     ##
     @staticmethod
     def finish(defaultTargets=DEFAULT_TARGETS,
-               subDirList=None, ignoreRegex=None):
+               subDirList=None, ignoreRegex=None, followLinks=False):
         if ignoreRegex is None:
             ignoreRegex = r"(~$|\.pyc$|^\.svn$|\.o|\.os$)"
         if subDirList is None:
@@ -175,7 +176,7 @@ class BasicSConstruct:
                     subDirList.append(path)
         install = state.env.InstallLSST(state.env["prefix"],
                                         [subDir for subDir in subDirList],
-                                        ignoreRegex=ignoreRegex)
+                                        ignoreRegex=ignoreRegex, followLinks=followLinks)
         for name, target in state.targets.items():
             state.env.Requires(install, target)
             state.env.Alias(name, target)
