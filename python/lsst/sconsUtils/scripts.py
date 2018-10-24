@@ -201,10 +201,10 @@ class BasicSConstruct:
             testsDir = pipes.quote(os.path.join(os.getcwd(), "tests", ".tests"))
             checkTestStatus_command = state.env.Command('checkTestStatus', [], """
                 @ if [ -d {0} ]; then \
-                      nfail=`find {0} -name \*.failed | wc -l | sed -e 's/ //g'`; \
+                      nfail=`find {0} -name "*.failed" | wc -l | sed -e 's/ //g'`; \
                       if [ $$nfail -gt 0 ]; then \
                           echo "Failed test output:" >&2; \
-                          for f in `find {0} -name \*.failed`; do \
+                          for f in `find {0} -name "*.failed"`; do \
                               case "$$f" in \
                               *.xml.failed) \
                                 echo "Global pytest output is in $$f" >&2; \
@@ -215,7 +215,7 @@ class BasicSConstruct:
                               esac; \
                           done; \
                           echo "The following tests failed:" >&2;\
-                          find {0} -name \*.failed >&2; \
+                          find {0} -name "*.failed" >&2; \
                           echo "$$nfail tests failed" >&2; exit 1; \
                       fi; \
                   fi; \
