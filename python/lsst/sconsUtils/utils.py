@@ -155,14 +155,14 @@ def runExternal(cmd, fatal=False, msg=None):
 
     try:
         retval = subprocess.run(cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                check=True, text=True)
+                                check=True)
     except subprocess.CalledProcessError as e:
         if fatal:
-            raise RuntimeError(f"{msg}: {e.stderr}") from e
+            raise RuntimeError(f"{msg}: {e.stderr.decode()}") from e
         else:
             from . import state  # can't import at module scope due to circular dependency
             state.log.warn(f"{msg}: {e.stderr}")
-    return retval.stdout.strip()
+    return retval.stdout.decode().strip()
 
 
 ##
