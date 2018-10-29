@@ -314,7 +314,7 @@ class Configuration:
         else:
             conf.env.AppendUnique(RPATH=[python3rdinclude + '/../../lib'])
         pylibrary = self._get_config_var("LIBRARY")
-        mat = re.search("(python.*)\.(a|so|dylib)$", pylibrary)
+        mat = re.search(r"(python.*)\.(a|so|dylib)$", pylibrary)
         if mat:
             conf.env.libs["python"].append(mat.group(1))
             state.log.info("Adding '%s' to target 'python'." % mat.group(1))
