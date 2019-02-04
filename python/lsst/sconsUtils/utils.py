@@ -124,11 +124,11 @@ def libraryLoaderEnvironment():
 
         if aux_pass_through_var in os.environ and \
            lib_pass_through_var not in os.environ:
-                libpathstr += '{}="{}" '.format(lib_pass_through_var, os.environ[aux_pass_through_var])
+            libpathstr += '{}="{}" '.format(lib_pass_through_var, os.environ[aux_pass_through_var])
 
         if lib_pass_through_var in os.environ and \
            aux_pass_through_var not in os.environ:
-                libpathstr += '{}="{}" '.format(aux_pass_through_var, os.environ[lib_pass_through_var])
+            libpathstr += '{}="{}" '.format(aux_pass_through_var, os.environ[lib_pass_through_var])
 
     return libpathstr
 
