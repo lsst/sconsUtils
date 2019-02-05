@@ -473,7 +473,7 @@ class PackageTree:
         # of another appear after it. required by the linker to successfully resolve symbols
         # in static libraries.
         for target in env.libs:
-                env.libs[target].reverse()
+            env.libs[target].reverse()
         env = conf.Finish()
         return env
 
