@@ -1,8 +1,4 @@
-##
-#  @file utils.py
-#
-#  Internal utilities for sconsUtils.
-##
+"""Internal utilities for sconsUtils."""
 
 import os
 import sys
@@ -15,11 +11,16 @@ import SCons.Script
 ##
 #  @brief A dead-simple logger for all messages.
 #
-#  This simply centralizes decisions about whether to throw exceptions or print user-friendly messages
-#  (the traceback variable) and whether to print extra debug info (the verbose variable).
-#  These are set from command-line options in state.py.
+
 ##
 class Log:
+    """A dead-simple logger for all messages.
+
+    Centralizes decisions about whether to throw exceptions or print
+    user-friendly messages (the traceback variable) and whether to print
+    extra debug info (the verbose variable).  These are set from command-line
+    options in `lsst.sconsUtils.state`.
+    """
 
     def __init__(self):
         self.traceback = False
@@ -47,11 +48,15 @@ class Log:
         sys.stderr.flush()
 
 
-##
-#  @brief Internal function indicating that the OS has System
-#  Integrity Protection.
-##
 def _has_OSX_SIP():
+    """Internal function indicating that the OS has System
+    Integrity Protection.
+
+    Returns
+    -------
+    hasSIP : `bool`
+        `True` if SIP is present in this operationing system version.
+    """
     hasSIP = False
     os_platform = SCons.Platform.platform_default()
     # SIP is enabled on OS X >=10.11 equivalent to darwin >= 15
@@ -63,11 +68,15 @@ def _has_OSX_SIP():
     return hasSIP
 
 
-##
-#  @brief Returns name of library path environment variable to be passed through
-#  or else returns None if no pass through is required on this platform.
-##
 def libraryPathPassThrough():
+    """Name of library path environment variable to be passed throughself.
+
+    Returns
+    -------
+    library : `str`
+        Name of library path environment variable. `None` if no pass through
+        is required.
+    """
     if _has_OSX_SIP():
         return "DYLD_LIBRARY_PATH"
     return None
@@ -77,14 +86,18 @@ def libraryPathPassThrough():
 _pythonPath = None
 
 
-##
-#  @brief Returns the full path to the Python executable as determined
-#  from the PATH. Does not return the full path of the Python running
-#  SCons. Caches result and assumes the PATH does not change between
-#  calls. Runs the "python" command and asks where it is rather than
-#  scanning the PATH.
-##
 def whichPython():
+    """Path of Python executable to use.
+
+    Returns
+    -------
+    pythonPath : `str`
+        Full path to the Python executable as determined
+        from the PATH. Does not return the full path of the Python running
+        SCons. Caches result and assumes the PATH does not change between
+        calls. Runs the "python" command and asks where it is rather than
+        scanning the PATH.
+    """
     global _pythonPath
     if _pythonPath is None:
         _pythonPath = runExternal(["python", "-c", "import sys; print(sys.executable)"],
@@ -92,28 +105,33 @@ def whichPython():
     return _pythonPath
 
 
-##
-#  @brief Returns True if the shebang lines of executables should be rewritten
-##
 def needShebangRewrite():
+    """Is shebang rewriting required?
+
+    Returns
+    -------
+    rewrite : `bool`
+        Returns True if the shebang lines of executables should be rewritten.
+    """
     return _has_OSX_SIP()
 
 
-##
-#  @brief Returns library loader path environment string to be prepended to external commands
-#         Will be "" if nothing is required.
-#
-# If we have an OS X with System Integrity Protection enabled or similar
-# we need to pass through both DYLD_LIBRARY_PATH and LSST_LIBRARY_PATH
-# to the external command.
-# DYLD_LIBRARY_PATH for Python code
-# LSST_LIBRARY_PATH for shell scripts
-#
-# If both are already defined then pass them each through
-# If only one is defined, then set both to the defined env variable
-# If neither is defined then pass through nothing.
-##
 def libraryLoaderEnvironment():
+    """Calculate library loader path environment string to be prepended to
+    external commands.
+
+    Returns
+    -------
+    loader : `str`
+        If we have an macOS with System Integrity Protection enabled or similar
+        we need to pass through both DYLD_LIBRARY_PATH and LSST_LIBRARY_PATH
+        to the external command:  DYLD_LIBRARY_PATH for Python code
+        LSST_LIBRARY_PATH for shell scripts
+
+        If both are already defined then pass them each through.
+        If only one is defined, then set both to the defined env variable
+        If neither is defined then pass through nothing.
+    """
     libpathstr = ""
     lib_pass_through_var = libraryPathPassThrough()
     aux_pass_through_var = "LSST_LIBRARY_PATH"
@@ -133,15 +151,30 @@ def libraryLoaderEnvironment():
     return libpathstr
 
 
-##
-#  @brief Safe wrapper for running external programs, reading stdout, and sanitizing error messages.
-#
-#  Command can be given as a list/tuple of command with separate options.
-#
-#  Note that the entire program output is returned, not just a single line.
-#  @returns Strings not bytes.
-##
 def runExternal(cmd, fatal=False, msg=None):
+    """Safe wrapper for running external programs, reading stdout, and
+    sanitizing error messages.
+
+    Parameters
+    ----------
+    cmd : `str` or `list` or `tuple`
+        Command to execute. Shell usage is disabled if a sequence is given.
+        Shell is used if a single command string is given.
+    fatal : `bool`, optional
+        Control whether command failure is fatal or not.
+    msg : `str`
+        Message to report on command failure.
+
+    Returns
+    -------
+    output : `str`
+        Entire program output is returned, not just a single line.
+
+    Raises
+    ------
+    RuntimeError
+        If the command fails and ``fatal`` is `True`.
+    """
     if msg is None:
         try:
             msg = "Error running %s" % cmd.split()[0]
@@ -165,24 +198,36 @@ def runExternal(cmd, fatal=False, msg=None):
     return retval.stdout.decode().strip()
 
 
-##
-#  @brief A Python decorator that injects functions into a class.
-#
-#  For example:
-#  @code
-#  class test_class:
-#      pass
-#
-#  @memberOf(test_class):
-#  def test_method(self):
-#      print "test_method!"
-#  @endcode
-#  ...will cause test_method to appear as as if it were defined within test_class.
-#
-#  The function or method will still be added to the module scope as well, replacing any
-#  existing module-scope function with that name; this appears to be unavoidable.
-##
 def memberOf(cls, name=None):
+    """A Python decorator that injects functions into a class.
+
+    Parameters
+    ----------
+    cls : `class`
+        Class in which to inject this method.
+    name : `str`, optional
+        Name of the method. Will be determined from function name if not
+        define.
+
+    Notes
+    -----
+    For example:
+
+    .. code-block :: python
+        class test_class:
+            pass
+
+        @memberOf(test_class):
+        def test_method(self):
+            print "test_method!"
+
+    ...will cause ``test_method`` to appear as as if it were defined within
+    ``test_class``.
+
+    The function or method will still be added to the module scope as well,
+    replacing any existing module-scope function with that name; this appears
+    to be unavoidable.
+    """
     if isinstance(cls, type):
         classes = (cls,)
     else:

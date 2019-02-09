@@ -1,9 +1,8 @@
-#
-# A simple python interface to svn, using os.popen
-#
-# If ever we want to do anything clever, we should use one of
-# the supported svn/python packages
-#
+"""A simple python interface to svn, using `os.popen`.
+
+If ever we want to do anything clever, we should use one of
+the supported svn/python packages
+"""
 import os
 import re
 import sys
@@ -17,7 +16,8 @@ def isSvnFile(file):
 
 
 def getInfo(file="."):
-    """Return a dictionary of all the information returned by "svn info" for the specified file"""
+    """Return a dictionary of all the information returned by "svn info" for
+    the specified file"""
 
     if not isSvnFile(file):
         raise RuntimeError("%s is not under svn control" % file)
@@ -42,7 +42,9 @@ def isTrunk(file="."):
 
 
 def revision(file=None, lastChanged=False):
-    """Return file's Revision as a string; if file is None return
+    """Return file's Revision as a string.
+
+    If file is None return
     a tuple (oldestRevision, youngestRevision, flags) as reported
     by svnversion; e.g. (4123, 4168, ("M", "S")) (oldestRevision
     and youngestRevision may be equal)
@@ -71,7 +73,8 @@ def revision(file=None, lastChanged=False):
         if not matches["youngest"]:
             matches["youngest"] = matches["oldest"]
             # OK, we have only one revision present.  Find the newest revision
-            # that actually changed anything in this product and ignore "oldest" (#522)
+            # that actually changed anything in this product and ignore
+            # "oldest" (#522)
             res = os.popen("svnversion --committed . 2>&1").readline()
             mat = re.search(versionRe, res)
             if mat:
@@ -83,11 +86,8 @@ def revision(file=None, lastChanged=False):
     raise RuntimeError("svnversion returned unexpected result \"%s\"" % res[:-1])
 
 
-#
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-#
 def guessVersionName(HeadURL):
-    """Guess a version name given a HeadURL"""
+    """Guess a version name given a HeadURL."""
 
     if re.search(r"/trunk$", HeadURL):
         versionName = ""
@@ -130,13 +130,13 @@ def guessVersionName(HeadURL):
 
 def parseVersionName(versionName):
     """A callback that knows about the LSST convention that a tagname such as
-    ticket_374
-    means the top of ticket 374, and
-    ticket_374+svn6021
-    means revision 6021 on ticket 374.  You may replace "ticket" with "branch" if you wish
+    ticket_374 means the top of ticket 374, and ticket_374+svn6021
+    means revision 6021 on ticket 374.
 
-    The "versionName" may actually be the directory part of a URL, and ".../(branches|tags|tickets)/tagname"
-    is also supported
+    You may replace "ticket" with "branch" if you wish.
+
+    The "versionName" may actually be the directory part of a URL, and
+    ``.../(branches|tags|tickets)/tagname`` is also supported
     """
 
     mat = re.search(r"/(branche|tag|ticket)s/(\d+(?:\.\d+)*)(?:([-+])((svn)?(\d+)))?$", versionName)

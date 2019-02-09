@@ -1,16 +1,17 @@
-##
-#  @file state.py
-#
-# This module acts like a singleton, holding all global state for sconsUtils.
-# This includes the primary Environment object (state.env), the message log (state.log),
-# the command-line variables object (state.opts), and a dictionary of command-line targets
-# used to setup aliases, default targets, and dependencies (state.targets).  All four of
-# these variables are aliased to the main lsst.sconsUtils scope, so there should be no
-# need for users to deal with the state module directly.
-#
-# These are all initialized when the module is imported, but may be modified by other code
-# (particularly dependencies.configure()).
-##
+"""Global state for sconsUtils.
+
+This module acts like a singleton, holding all global state for sconsUtils.
+This includes the primary Environment object (`lsst.sconsUtils.state.env`),
+the message log (`lsst.sconsUtils.state.log`), the command-line variables
+object (`lsst.sconsUtils.state.state.opts`), and a dictionary of command-line
+targets used to setup aliases, default targets, and dependencies
+(`lsst.sconsUtils.state.targets`).  All four of these variables are aliased
+to the main `lsst.sconsUtils` scope, so there should be no need for users to
+deal with the state module directly.
+
+These are all initialized when the module is imported, but may be modified
+by other code (particularly `lsst.sconsUtils.dependencies.configure`).
+"""
 
 import os
 import re
@@ -21,24 +22,22 @@ from . import eupsForScons
 
 SCons.Script.EnsureSConsVersion(2, 1, 0)
 
-##
-#  @brief A dictionary of SCons aliases and targets.
-#
-#  These are used to setup aliases, default targets, and dependencies by BasicSConstruct.finish().
-#  While one can still use env.Alias to setup aliases (and should for "install"), putting targets
-#  here will generally provide better build-time dependency handling (like ensuring everything
-#  is built before we try to install, and making sure SCons doesn't rebuild the world before
-#  installing).
-#
-#  Users can add additional keys to the dictionary if desired.
-#
-#  Targets should be added by calling extend() or using += on the dict values, to keep the lists of
-#  targets from turning into lists-of-lists.
-##
+"""A dictionary of SCons aliases and targets.
+
+These are used to setup aliases, default targets, and dependencies by
+`lsst.sconsUtils.scripts.BasicSConstruct.finish`.
+While one can still use env.Alias to setup aliases (and should for "install"),
+putting targets here will generally provide better build-time dependency
+handling (like ensuring everything is built before we try to install, and
+making sure SCons doesn't rebuild the world before installing).
+
+Users can add additional keys to the dictionary if desired.
+
+Targets should be added by calling extend() or using ``+=`` on the dict
+values, to keep the lists of targets from turning into lists-of-lists.
+"""
 targets = {"doc": [], "tests": [], "lib": [], "python": [], "examples": [], "include": [], "version": [],
            "shebang": []}
-
-# @cond INTERNAL
 
 env = None
 log = None
@@ -195,9 +194,9 @@ def _initEnvironment():
         env['ENV']['MACOSX_DEPLOYMENT_TARGET'] = env['macosx_deployment_target']
         log.info("Setting OS X binary compatibility level: %s" % env['ENV']['MACOSX_DEPLOYMENT_TARGET'])
         #
-        # For XCode 7.3 we need to explicitly add a trailing slash to library paths.
-        # This does not hurt things on older XCodes. We can remove this once XCode
-        # is fixed. See Apple radar rdr://25313838
+        # For XCode 7.3 we need to explicitly add a trailing slash to library
+        # paths. This does not hurt things on older XCodes. We can remove this
+        # once XCode is fixed. See Apple radar rdr://25313838
         #
         env['LIBDIRSUFFIX'] = '/'
 
@@ -287,19 +286,27 @@ _configured = False
 
 
 def _configureCommon():
-    """Configuration checks for the compiler, platform, and standard libraries."""
+    """Configuration checks for the compiler, platform, and standard
+    libraries."""
     global _configured
     if _configured:
         return
     _configured = True
 
-    #
-    # Is the C compiler really gcc/g++?
-    #
     def ClassifyCc(context):
-        """Return a pair of string identifying the compiler in use
+        """Return a pair of string identifying the compiler in use.
 
-        @return (compiler, version) as a pair of strings, or ("unknown", "unknown") if unknown
+        Parameters
+        ----------
+        context : context
+            Context.
+
+        Returns
+        -------
+        compiler : `str`
+            Compiler to use, or "unknown".
+        version : `str`
+            Compiler version or "unknown".
         """
         versionNameList = (
             (r"gcc(?:\-.+)? +\(.+\) +([0-9.a-zA-Z]+)", "gcc"),
@@ -471,7 +478,8 @@ def _configureCommon():
         # Workaround intel bug; cf. RHL's intel bug report 580167
         env.Append(LINKFLAGS=["-Wl,-no_compact_unwind", "-wd,11015"])
     #
-    # Disable link-time-optimization on GCC, for compatibility with conda binaries
+    # Disable link-time-optimization on GCC, for compatibility with conda
+    # binaries
     #
     if env.whichCc == "gcc":
         env.Append(CCFLAGS=['-fno-lto'])
@@ -479,8 +487,12 @@ def _configureCommon():
 
 
 def _saveState():
-    """Save state such as optimization level used.  The scons mailing lists were unable to tell
-    RHL how to get this back from .sconsign.dblite
+    """Save state such as optimization level used.
+
+    Notes
+    -----
+    The scons mailing lists were unable to tell RHL how to get this back
+    from ``.sconsign.dblite``.
     """
 
     if env.GetOption("clean"):
@@ -510,5 +522,3 @@ _initOptions()
 _initLog()
 _initVariables()
 _initEnvironment()
-
-# @endcond

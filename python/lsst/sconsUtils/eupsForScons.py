@@ -52,7 +52,7 @@ if not haveEups():
 
 
 def getEups():
-    """ Return a cached Eups instance, auto-creating if necessary """
+    """Return a cached Eups instance, auto-creating if necessary."""
     try:
         return getEups._eups
     except AttributeError:
