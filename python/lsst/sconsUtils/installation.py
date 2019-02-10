@@ -1,5 +1,7 @@
 """Builders and path setup for installation targets."""
 
+__all__ = ("makeProductPath", "determineVersion", "getFingerprint", "setPrefix", "DirectoryInstaller")
+
 import os.path
 import glob
 import re

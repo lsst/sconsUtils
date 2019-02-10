@@ -1,6 +1,8 @@
 
 """Dependency configuration and definition."""
 
+__all__ = ("Configuration", "ExternalConfiguration", "PackageTree", "configure")
+
 import os.path
 import collections
 import imp

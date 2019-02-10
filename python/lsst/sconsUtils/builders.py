@@ -1,6 +1,8 @@
 """Extra builders and methods to be injected into the SConsEnvironment class.
 """
 
+__all__ = ("filesToTag", "DoxygenBuilder")
+
 import os
 import re
 import fnmatch

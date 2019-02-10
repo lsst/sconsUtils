@@ -1,5 +1,9 @@
 """Internal utilities for sconsUtils."""
 
+__all__ = ("Log", "_has_OSX_SIP", "libraryPathPassThrough", "whichPython",
+           "needShebangRewrite", "libraryLoaderEnvironment", "runExternal",
+           "memberOf")
+
 import os
 import sys
 import warnings

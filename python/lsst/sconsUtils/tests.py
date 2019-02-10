@@ -1,6 +1,8 @@
 """Control which tests run, and how.
 """
 
+__all__ = ("Control", )
+
 import glob
 import os
 import sys
