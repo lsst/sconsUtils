@@ -557,7 +557,7 @@ class BasicSConscript:
             as independent single tests. By default this list is empty
             and all tests are run in a single pytest call.
             Items specified here will not appear in the default pyList
-            and should not start with "test_" (such that they will not
+            and should not start with ``test_`` (such that they will not
             be auto-discoverable by pytest).
         args : `dict`, optional
             A dictionary of program arguments for tests, passed directly

@@ -376,7 +376,7 @@ def InstallEups(env, dest, files=[], presetup=""):
 
     Notes
     -----
-    .. code-block :: python
+    .. code-block:: python
 
         env.InstallEups(os.path.join(env['prefix'], "ups"),
                         presetup={"sconsUtils" : env['version']})

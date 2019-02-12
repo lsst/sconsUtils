@@ -12,11 +12,6 @@ import platform
 import SCons.Script
 
 
-##
-#  @brief A dead-simple logger for all messages.
-#
-
-##
 class Log:
     """A dead-simple logger for all messages.
 
@@ -217,13 +212,14 @@ def memberOf(cls, name=None):
     -----
     For example:
 
-    .. code-block :: python
+    .. code-block:: python
+
         class test_class:
             pass
 
         @memberOf(test_class):
         def test_method(self):
-            print "test_method!"
+            print("test_method!")
 
     ...will cause ``test_method`` to appear as as if it were defined within
     ``test_class``.
