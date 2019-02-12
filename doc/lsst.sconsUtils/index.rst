@@ -24,15 +24,24 @@ You can find Jira issues for this module under the `sconsUtils <https://jira.lss
 Python API reference
 ====================
 
-.. automodapi:: lsst.sconsUtils
-   :no-main-docstr:
-.. automodapi:: lsst.sconsUtils.dependencies
-   :no-main-docstr:
+Many of the methods defined in this package are injected directly into
+the base SConsEnvironment.
+The `~lsst.sconsUtils.installation.SConsUtilsEnvironment` class solely exists to allow these methods to be documented.
+The class will not be used when writing SCons files.
+
 .. automodapi:: lsst.sconsUtils.scripts
+   :no-main-docstr:
+   :no-inheritance-diagram:
+.. automodapi:: lsst.sconsUtils.dependencies
    :no-main-docstr:
 .. automodapi:: lsst.sconsUtils.tests
    :no-main-docstr:
+   :no-inheritance-diagram:
 .. automodapi:: lsst.sconsUtils.installation
    :no-main-docstr:
 .. automodapi:: lsst.sconsUtils.builders
    :no-main-docstr:
+   :no-inheritance-diagram:
+.. automodapi:: lsst.sconsUtils.utils
+   :no-main-docstr:
+   :no-inheritance-diagram:
