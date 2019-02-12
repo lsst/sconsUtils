@@ -32,3 +32,7 @@ Python API reference
    :no-main-docstr:
 .. automodapi:: lsst.sconsUtils.tests
    :no-main-docstr:
+.. automodapi:: lsst.sconsUtils.installation
+   :no-main-docstr:
+.. automodapi:: lsst.sconsUtils.builders
+   :no-main-docstr:

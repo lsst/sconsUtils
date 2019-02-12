@@ -1,6 +1,7 @@
 """Builders and path setup for installation targets."""
 
-__all__ = ("makeProductPath", "determineVersion", "getFingerprint", "setPrefix", "DirectoryInstaller")
+__all__ = ("makeProductPath", "determineVersion", "getFingerprint", "setPrefix", "DirectoryInstaller",
+           "SConsUtilsEnvironment")
 
 import os.path
 import glob
@@ -16,6 +17,12 @@ from .vcs import git
 
 from . import state
 from .utils import memberOf
+
+
+class SConsUtilsEnvironment(SConsEnvironment):
+    """Dummy class to make visible the methods injected into the SCons
+    parent environment.
+    """
 
 
 def makeProductPath(env, pathFormat):
