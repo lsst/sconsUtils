@@ -6,8 +6,7 @@
 lsst.sconsUtils
 ###############
 
-The ``sconsUtils`` module provides tooling to support the building of standard
-LSST packages using SCons.
+The ``sconsUtils`` module provides tooling to support the building of standard LSST packages using SCons.
 
 .. Add subsections with toctree to individual topic pages.
 
@@ -24,10 +23,11 @@ You can find Jira issues for this module under the `sconsUtils <https://jira.lss
 Python API reference
 ====================
 
-Many of the methods defined in this package are injected directly into
-the base SConsEnvironment.
-The `~lsst.sconsUtils.installation.SConsUtilsEnvironment` class solely exists to allow these methods to be documented.
-The class will not be used when writing SCons files.
+.. note::
+
+   Many of the methods defined in this package are injected directly into the base SConsEnvironment.
+   The `~lsst.sconsUtils.installation.SConsUtilsEnvironment` class exists solely to allow these methods to be documented.
+   The class will not be used when writing SCons files.
 
 .. automodapi:: lsst.sconsUtils.scripts
    :no-main-docstr:

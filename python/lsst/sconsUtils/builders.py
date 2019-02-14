@@ -141,7 +141,7 @@ def filesToTag(root=None, fileRegex=None, ignoreDirs=None):
 
     Files are chosen if they match fileRegex; toplevel directories in list
     ignoreDirs are ignored.
-    This routine won't do anything unless you specified a "TAGS" target
+    This routine won't do anything unless you specified a "TAGS" target.
     """
 
     if root is None:

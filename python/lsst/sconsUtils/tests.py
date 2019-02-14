@@ -28,7 +28,7 @@ class Control:
         with glob patterns.  If a file is listed as "@fileName", the @ is
         stripped and we don't bother to check if fileName exists (useful for
         machine-generated files).
-    expectedFalures  : `dict`, optional
+    expectedFailures  : `dict`, optional
         A dictionary; the keys are tests that are known to fail; the values
         are strings to print.
     args : `dict`, optional
@@ -44,6 +44,7 @@ class Control:
 
     Notes
     -----
+    Sample usage:
 
     .. code-block:: python
 

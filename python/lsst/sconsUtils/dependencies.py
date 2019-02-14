@@ -130,7 +130,7 @@ class Configuration:
         The name of the calling .cfg file, usually just passed in with the
         special variable ``__file__``.  This will be parsed to extract the
         package name and root.
-    headers : `list`, optional
+    headers : `list` of `str`, optional
         A list of headers provided by the package, to be used in autoconf-style
         tests.
     libs : `list` or `dict`, optional
@@ -441,7 +441,7 @@ def CustomCompileCheck(context, message, source, extension=".cc"):
     Returns
     -------
     result : `bool`
-        Did the flag work?
+        Did the code compile?
     """
     context.Message(message)
 
@@ -475,7 +475,7 @@ def CustomLinkCheck(context, message, source, extension=".cc"):
     Returns
     -------
     result : `bool`
-        Did the flag work?
+        Did the code compile and link?
     """
     context.Message(message)
     result = context.TryLink(source, extension)

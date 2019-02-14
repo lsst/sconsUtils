@@ -376,6 +376,8 @@ def InstallEups(env, dest, files=[], presetup=""):
 
     Notes
     -----
+    Sample usage:
+
     .. code-block:: python
 
         env.InstallEups(os.path.join(env['prefix'], "ups"),

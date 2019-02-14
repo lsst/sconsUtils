@@ -54,7 +54,7 @@ def _has_OSX_SIP():
     Returns
     -------
     hasSIP : `bool`
-        `True` if SIP is present in this operationing system version.
+        `True` if SIP is present in this operating system version.
     """
     hasSIP = False
     os_platform = SCons.Platform.platform_default()
