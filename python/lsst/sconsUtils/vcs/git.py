@@ -1,17 +1,23 @@
-#
-# A simple python interface to git, using os.popen
-# Based on the svn interface.
-#
-# If ever we want to do anything clever, we should use one of
-# the supported python packages
-#
+"""A simple python interface to git, using `os.popen`.
+
+Based on the svn interface.
+
+If ever we want to do anything clever, we should use one of
+the supported python packages
+"""
 import os
 from .. import state
 from .. import utils
 
 
 def guessVersionName():
-    """Guess a version name"""
+    """Guess a version name
+
+    Returns
+    -------
+    name : `str`
+        Descriptive name of the repository version state.
+    """
 
     if not os.path.exists(".git"):
         state.log.warn("Cannot guess version without .git directory; version will be set to 'unknown'.")
@@ -24,7 +30,15 @@ def guessVersionName():
 
 
 def guessFingerprint():
-    """Return (fingerprint, modified) where fingerprint is the repository's SHA1"""
+    """Guess a unique fingerprint.
+
+    Returns
+    -------
+    fingerprint : `str`
+        SHA1 of current repository state.
+    modified : `bool`
+        Flag to indicate whether the repository is in a modified state.
+    """
     fingerprint, modified = "0x0", False
 
     if not os.path.exists(".git"):

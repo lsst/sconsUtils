@@ -1,8 +1,8 @@
-##
-#  @file tests.py
-#
-#  Control which tests run, and how.
-##
+"""Control which tests run, and how.
+"""
+
+__all__ = ("Control", )
+
 import glob
 import os
 import sys
@@ -12,46 +12,60 @@ from . import state
 from . import utils
 
 
-##
-#  @brief A class to control unit tests.
-#
-#  This class is unchanged from previous versions of sconsUtils, but it will now generally
-#  be called via scripts.BasicSConscript.tests().
-##
 class Control:
+    """A class to control and run unit tests.
+
+    This class is unchanged from previous versions of sconsUtils, but it will
+    now generally be called via
+    `lsst.sconsUtils.scripts.BasicSConscript.tests`.
+
+    Parameters
+    ----------
+    env : `SCons.Environment`
+        An SCons Environment (almost always `lsst.sconsUtils.env`).
+    ignoreList : `list`, optional
+        A list of tests that should NOT be run --- useful in conjunction
+        with glob patterns.  If a file is listed as "@fileName", the @ is
+        stripped and we don't bother to check if fileName exists (useful for
+        machine-generated files).
+    expectedFailures  : `dict`, optional
+        A dictionary; the keys are tests that are known to fail; the values
+        are strings to print.
+    args : `dict`, optional
+        A dictionary with testnames as keys, and argument strings as values.
+        As scons always runs from the top-level directory, tests has to fiddle
+        with paths.  If an argument is a file this is done automatically; if
+        it's e.g., just a basename then you have to tell tests that it's
+        really (part of a) filename by prefixing the name by ``file:``.
+    tmpDir : `str`, optional
+        The location of the test outputs.
+    verbose : `bool`, optional
+        How chatty you want the test code to be.
+
+    Notes
+    -----
+    Sample usage:
+
+    .. code-block:: python
+
+        tests = lsst.tests.Control(
+            env,
+            args={
+                 "MaskIO_1" :      "data/871034p_1_MI_msk.fits",
+                 "MaskedImage_1" : "file:data/871034p_1_MI foo",
+            },
+            ignoreList=["Measure_1"],
+            expectedFailures={"BBox_1": "Problem with single-pixel BBox"}
+       )
+
+    This class is unchanged from previous versions of sconsUtils, but it will
+    now generally be called via
+    `lsst.sconsUtils.scripts.BasicSConscript.tests`.
+    """
+
     _IGNORE = "IGNORE"
     _EXPECT_FAILURE = "EXPECT_FAILURE"
 
-    ##
-    #  @brief Create an object to run tests
-    #
-    #  @param env           An SCons Environment (almost always lsst.sconsUtils.env).
-    #  @param ignoreList    A list of tests that should NOT be run --- useful in conjunction
-    #                       with glob patterns.  If a file is listed as "@fileName", the @ is stripped and
-    #                       we don't bother to check if fileName exists (useful for machine-generated files).
-    #  @param expectedFalures   A dictionary; the keys are tests that are known to fail; the values
-    #                           are strings to print.
-    #  @param args          A dictionary with testnames as keys, and argument strings as values.
-    #                       As scons always runs from the top-level directory, tests has to fiddle with
-    #                       paths.  If an argument is a file this is done automatically; if it's e.g.
-    #                       just a basename then you have to tell tests that it's really (part of a)
-    #                       filename by prefixing the name by "file:".
-    #
-    #  @param tmpDir        The location of the test outputs.
-    #  @param verbose       How chatty you want the test code to be.
-    #
-    #  @code
-    #  tests = lsst.tests.Control(
-    #      env,
-    #      args={
-    #           "MaskIO_1" :      "data/871034p_1_MI_msk.fits",
-    #           "MaskedImage_1" : "file:data/871034p_1_MI foo",
-    #      },
-    #      ignoreList=["Measure_1"],
-    #      expectedFailures={"BBox_1": "Problem with single-pixel BBox"}
-    # )
-    # @endcode
-    ##
     def __init__(self, env, ignoreList=None, expectedFailures=None, args=None,
                  tmpDir=".tests", verbose=False):
         if 'PYTHONPATH' in os.environ:
@@ -104,12 +118,37 @@ class Control:
                   file=sys.stderr)
 
     def args(self, test):
+        """Arguments to use for this test.
+
+        Parameters
+        ----------
+        test : `str`
+            Test file to be run.
+
+        Returns
+        -------
+        args : `str`
+            The arguments as a single string. An empty string is returned
+            if no arguments were specified in the constructor.
+        """
         try:
             return self._args[test]
         except KeyError:
             return ""
 
     def ignore(self, test):
+        """Should the test be ignored.
+
+        Parameters
+        ----------
+        test : `str`
+            The test target name.
+
+        Returns
+        -------
+        ignore : `bool`
+            Whether the test should be ignored or not.
+        """
         if not test.endswith(".py") and \
            len(self._env.Glob(test)) == 0:  # we don't know how to build it
             return True
@@ -122,8 +161,20 @@ class Control:
         return ignoreFile
 
     def messages(self, test):
-        """Return the messages to be used in case of success/failure; the logicals
-        (note that they are strings) tell whether the test is expected to pass"""
+        """Return the messages to be used in case of success/failure.
+
+        Parameters
+        ----------
+        test : `str`
+            The test target.
+
+        Returns
+        -------
+        messages : `tuple`
+            A `tuple` containing four strings: whether the test should pass
+            (as a value "true" or "false") and the associated message, and
+            whether the test should fail and the associated message.
+        """
 
         if test in self._info and self._info[test][0] == self._EXPECT_FAILURE:
             msg = self._info[test][1]
@@ -135,6 +186,16 @@ class Control:
 
     def run(self, fileGlob):
         """Create a test target for each file matching the supplied glob.
+
+        Parameters
+        ----------
+        fileGlob : `str` or `SCons.Environment.Glob`
+            File matching glob.
+
+        Returns
+        -------
+        targets :
+            Test target for each matching file.
         """
 
         if not isinstance(fileGlob, str):  # env.Glob() returns an scons Node
@@ -164,7 +225,8 @@ class Control:
 
             args = []
             for a in self.args(f).split(" "):
-                # if a is a file, make it an absolute name as scons runs from the root directory
+                # if a is a file, make it an absolute name as scons runs from
+                # the root directory
                 filePrefix = "file:"
                 if a.startswith(filePrefix):  # they explicitly said that this was a file
                     a = os.path.join(self._cwd, a[len(filePrefix):])
@@ -206,13 +268,23 @@ class Control:
         return targets
 
     def runPythonTests(self, pyList):
-        """Add a single target for testing all python files. pyList is
-        a list of nodes corresponding to python test files. The
-        IgnoreList is respected when scanning for entries. If pyList
-        is None, or an empty list, it uses automated test discovery
-        within pytest. This differs from the behavior of scripts.tests()
-        where a distinction is made. Returns a list containing a single
-        target."""
+        """Add a single target for testing all python files.
+
+        Parameters
+        ----------
+        pyList : `list`
+            A list of nodes corresponding to python test files. The
+            IgnoreList is respected when scanning for entries. If pyList
+            is `None`, or an empty list, it uses automated test discovery
+            within pytest. This differs from the behavior of
+            `lsst.sconsUtils.BasicSconscript.tests`
+            where a distinction is made.
+
+        Returns
+        -------
+        target : `list`
+            Returns a list containing a single target.
+        """
 
         if pyList is None:
             pyList = []
@@ -260,10 +332,10 @@ class Control:
             # on ``sys.path``, even if the one is a symlink to the other).
             executable = os.path.realpath(sys.executable)
 
-            # if there is a space in the executable path we have to use the original
-            # method and hope things work okay. This will be rare but without
-            # this a space in the path is impossible because of how xdist
-            # currently parses the tx option
+            # if there is a space in the executable path we have to use the
+            # original method and hope things work okay. This will be rare but
+            # without this a space in the path is impossible because of how
+            # xdist currently parses the tx option
             interpreter = interpreter + " --max-slave-restart=0"
             if " " not in executable:
                 interpreter = (interpreter +
@@ -313,6 +385,18 @@ class Control:
         return [result]
 
     def junitPrefix(self):
+        """Calculate the prefix to use for the JUnit output.
+
+        Returns
+        -------
+        prefix : `str`
+            Prefix string to use.
+
+        Notes
+        -----
+        Will use the EUPS product being built and the value of the
+        ``LSST_JUNIT_PREFIX`` environment variable if that is set.
+        """
         controlVar = "LSST_JUNIT_PREFIX"
         prefix = self._env['eupsProduct']
 

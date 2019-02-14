@@ -1,8 +1,7 @@
-#
-#  @file builders.py
-#
-#  Extra builders and methods to be injected into the SConsEnvironment class.
-##
+"""Extra builders and methods to be injected into the SConsEnvironment class.
+"""
+
+__all__ = ("filesToTag", "DoxygenBuilder")
 
 import os
 import re
@@ -17,19 +16,21 @@ from .installation import determineVersion, getFingerprint
 from . import state
 
 
-# @brief Like SharedLibrary, but don't insist that all symbols are resolved
 @memberOf(SConsEnvironment)
 def SharedLibraryIncomplete(self, target, source, **keywords):
+    """Like SharedLibrary, but don't insist that all symbols are resolved.
+    """
     myenv = self.Clone()
     if myenv['PLATFORM'] == 'darwin':
         myenv['SHLINKFLAGS'] += ["-undefined", "suppress", "-flat_namespace", "-headerpad_max_install_names"]
     return myenv.SharedLibrary(target, source, **keywords)
 
 
-#  @brief Like LoadableModule, but don't insist that all symbols are resolved, and set
-#         some pybind11-specific flags.
 @memberOf(SConsEnvironment)
 def Pybind11LoadableModule(self, target, source, **keywords):
+    """Like LoadableModule, but don't insist that all symbols are resolved, and
+    set some pybind11-specific flags.
+    """
     myenv = self.Clone()
     myenv.Append(CCFLAGS=["-fvisibility=hidden"])
     if myenv['PLATFORM'] == 'darwin':
@@ -37,24 +38,38 @@ def Pybind11LoadableModule(self, target, source, **keywords):
                                     "-flat_namespace", "-headerpad_max_install_names"])
     return myenv.LoadableModule(target, source, **keywords)
 
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-
-##
-#  @brief Prepare the list of files to be passed to a SharedLibrary constructor
-#
-#  In particular, ensure that any files listed in env.NoOptFiles (set by the command line option
-#  noOptFile="file1 file2") are built without optimisation and files listed in env.optFiles are
-#  built with optimisation
-#
-#  The usage pattern in an SConscript file is:
-#  ccFiles = env.SourcesForSharedLibrary(Glob("../src/*/*.cc"))
-#  env.SharedLibrary('afw', ccFiles, LIBS=env.getLibs("self")))
-#
-#  This is automatically used by scripts.BasicSConscript.lib().
-##
 @memberOf(SConsEnvironment)
 def SourcesForSharedLibrary(self, files):
+    """Prepare the list of files to be passed to a SharedLibrary constructor.
+
+    Parameters
+    ----------
+    files :
+        List of files to be processed.
+
+    Returns
+    -------
+    objs : `list`
+        Object files.
+
+    Notes
+    -----
+    In particular, ensure that any files listed in ``env.NoOptFiles`` (set by
+    the command line option ``noOptFile="file1 file2"``) are built without
+    optimisation and files listed in ``env.optFiles`` are built with
+    optimisation.
+
+    The usage pattern in an SConscript file is:
+
+    .. code-block:: python
+
+        ccFiles = env.SourcesForSharedLibrary(Glob("../src/*/*.cc"))
+        env.SharedLibrary('afw', ccFiles, LIBS=env.getLibs("self")))
+
+    This is automatically used by
+    `lsst.sconsUtils.scripts.BasicSConscript.lib()`.
+    """
 
     files = [SCons.Script.File(file) for file in files]
 
@@ -101,17 +116,34 @@ def SourcesForSharedLibrary(self, files):
     return objs
 
 
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-#
-#  @brief Return a list of files that need to be scanned for tags, starting at directory root
-#
-#  These tags are for advanced Emacs users, and should not be confused with SVN tags or Doxygen tags.
-#
-#  Files are chosen if they match fileRegex; toplevel directories in list ignoreDirs are ignored
-#  This routine won't do anything unless you specified a "TAGS" target
-#
 def filesToTag(root=None, fileRegex=None, ignoreDirs=None):
+    """Return a list of files that need to be scanned for tags, starting at
+    directory root.
+
+    Parameters
+    ----------
+    root : `str`, optional
+        Directory root to search.
+    fileRegex : `str`, optional
+        Matching regular expression for files.
+    ignoreDirs : `list`
+        List of directories to ignore when searching.
+
+    Returns
+    -------
+    files : `list`
+        List of matching files.
+
+    Notes
+    -----
+    These tags are for advanced Emacs users, and should not be confused with
+    SVN tags or Doxygen tags.
+
+    Files are chosen if they match fileRegex; toplevel directories in list
+    ignoreDirs are ignored.
+    This routine won't do anything unless you specified a "TAGS" target.
+    """
+
     if root is None:
         root = "."
     if fileRegex is None:
@@ -129,7 +161,8 @@ def filesToTag(root=None, fileRegex=None, ignoreDirs=None):
 
         dirnames[:] = [d for d in dirnames if not re.search(r"^(\.svn)$", d)]  # ignore .svn tree
         #
-        # List of possible files to tag, but there's some cleanup required for machine-generated files
+        # List of possible files to tag, but there's some cleanup required
+        # for machine-generated files
         #
         candidates = [f for f in filenames if re.search(fileRegex, f)]
         #
@@ -144,32 +177,56 @@ def filesToTag(root=None, fileRegex=None, ignoreDirs=None):
     return files
 
 
-##
-#  @brief Build Emacs tags (see man etags for more information).
-#
-#  Files are chosen if they match fileRegex; toplevel directories in list ignoreDirs are ignored
-#  This routine won't do anything unless you specified a "TAGS" target
-##
 @memberOf(SConsEnvironment)
 def BuildETags(env, root=None, fileRegex=None, ignoreDirs=None):
+    """Build Emacs tags (see man etags for more information).
+
+    Parameters
+    ----------
+    env : `SCons.Environment`
+        Environment to use to run ``etags`` command.
+    root : `str`, optional
+        Directory to begin search.
+    fileRegex : `str`
+        Regular expression to match files.
+    ignoreDirs : `list`
+        List of directories to ignore.
+
+    Notes
+    -----
+    Files are chosen if they match fileRegex; toplevel directories in list
+    ignoreDirs are ignored.  This routine won't do anything unless you
+    specified a "TAGS" target."""
+
     toTag = filesToTag(root, fileRegex, ignoreDirs)
     if toTag:
         return env.Command("TAGS", toTag, "etags -o $TARGET $SOURCES")
 
 
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-##
-#  @brief Remove files matching the argument list starting at directory
-#         when scons is invoked with -c/--clean and no explicit targets are listed
-#
-#   E.g. CleanTree(r"*~ core")
-#
-#   dirPatterns allows the specification of directories to be removed
-#   If verbose is True, print each filename after deleting it
-##
 @memberOf(SConsEnvironment)
 def CleanTree(self, filePatterns, dirPatterns="", directory=".", verbose=False):
+    """Remove files matching the argument list starting at directory
+    when scons is invoked with -c/--clean and no explicit targets are listed.
+
+    Parameters
+    ----------
+    filePatterns : `str`
+        Glob to match for files to be deleted.
+    dirPatterns : `str`, optional
+        Specification of directories to be removed.
+    directory : `str`, optional
+        Directory to clean.
+    verbose : `bool`, optional
+        If `True` print each filename after deleting it.
+
+    Notes
+    -----
+    Can be run as:
+
+    .. code-block:: python
+
+        env.CleanTree(r"*~ core")
+    """
 
     def genFindCommand(patterns, directory, verbose, filesOnly):
         # Generate find command to clean up (find-glob) patterns, either files
@@ -215,12 +272,21 @@ def CleanTree(self, filePatterns, dirPatterns="", directory=".", verbose=False):
     elif not SCons.Script.COMMAND_LINE_TARGETS and self.GetOption("clean"):
         self.Execute(self.Action([action]))
 
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-
-# @brief Return a product's PRODUCT_DIR, or None
 @memberOf(SConsEnvironment)
 def ProductDir(env, product):
+    """Return the product directory.
+
+    Parameters
+    ----------
+    product : `str`
+        The EUPS product name.
+
+    Returns
+    -------
+    dir : `str`
+        The product directory. `None` if the product is not known.
+    """
     from . import eupsForScons
     global _productDirs
     try:
@@ -239,14 +305,11 @@ def ProductDir(env, product):
     return pdir
 
 
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-##
-#  @brief A callable to be used as an SCons Action to run Doxygen.
-#
-#  This should only be used by the env.Doxygen pseudo-builder method.
-#
 class DoxygenBuilder:
+    """A callable to be used as an SCons Action to run Doxygen.
+
+    This should only be used by the env.Doxygen pseudo-builder method.
+    """
 
     def __init__(self, **kw):
         self.__dict__.update(kw)
@@ -326,8 +389,8 @@ class DoxygenBuilder:
         # but can not use pipes.quote because it has to be
         # a double quote for doxygen.conf
         # Do not quote a string if it is already quoted
-        # Also have a version that quotes each item in a sequence and generates the
-        # final quoted entry.
+        # Also have a version that quotes each item in a sequence and generates
+        # the final quoted entry.
         def _quote_path(path):
             if " " in path and not path.startswith('"') and not path.endswith('"'):
                 return '"{}"'.format(path)
@@ -384,73 +447,77 @@ class DoxygenBuilder:
         outConfigFile.close()
 
 
-##
-#  @brief Generate a Doxygen config file and run Doxygen on it.
-#
-#  Rather than parse a complete Doxygen config file for SCons sources
-#  and targets, this Doxygen builder builds a Doxygen config file,
-#  adding INPUT, FILE_PATTERNS, RECUSRIVE, EXCLUDE, XX_OUTPUT and
-#  GENERATE_XX options (and possibly others) to an existing
-#  proto-config file.  Generated settings will override those in
-#  the proto-config file.
-#
-#  @param config        A Doxygen config file, usually with the
-#                       extension .conf.in; a new file with the .in
-#                       removed will be generated and passed to
-#                       Doxygen.  Settings in the original config
-#                       file will be overridden by those generated
-#                       by this method.
-#  @param inputs        A sequence of folders or files to be passed
-#                       as the INPUT setting for Doxygen.  This list
-#                       will be turned into absolute paths by SCons,
-#                       so the "#folder" syntax will work.
-#                       Otherwise, the list is passed in as-is, but
-#                       the builder will also examine those
-#                       directories to find which source files the
-#                       Doxygen output actually depends on.
-#  @param patterns      A sequence of glob patterns for the
-#                       FILE_PATTERNS Doxygen setting.  This will be
-#                       passed directly to Doxygen, but it is also
-#                       used to determine which source files should
-#                       be considered dependencies.
-#  @param recursive     Whether the inputs should be searched
-#                       recursively (used for the Doxygen RECURSIVE
-#                       setting).
-#  @param outputs       A sequence of output formats which will also
-#                       be used as output directories.
-#  @param exclude       A sequence of folders or files (not globs)
-#                       to be ignored by Doxygen (the Doxygen
-#                       EXCLUDE setting).  Hidden directories are
-#                       automatically ignored.
-#  @param includes      A sequence of Doxygen config files to
-#                       include.  These will automatically be
-#                       separated into paths and files to fill in
-#                       the \@INCLUDE_PATH and \@INCLUDE settings.
-#  @param useTags       A sequence of Doxygen tag files to use.  It
-#                       will be assumed that the html directory for
-#                       each tag file is in an "html" subdirectory
-#                       in the same directory as the tag file.
-#  @param makeTag       A string indicating the name of a tag file
-#                       to be generated.
-#  @param projectName   Sets the Doxygen PROJECT_NAME setting.
-#  @param projectNumber Sets the Doxygen PROJECT_NUMBER setting.
-#  @param excludeSwig   If True (default), looks for SWIG .i files
-#                       in the input directories and adds Python
-#                       and C++ files generated by SWIG to the
-#                       list of files to exclude.  For this to work,
-#                       the SWIG-generated filenames must be the
-#                       default ones ("module.i" generates "module.py"
-#                       and "moduleLib_wrap.cc").
-#
-# @note When building documentation from a clean source tree,
-#       generated source files (like headers generated with M4)
-#       will not be included among the dependencies, because
-#       they aren't present when we walk the input folders.
-#       The workaround is just to build the docs after building
-#       the source.
-##
 @memberOf(SConsEnvironment)
-def Doxygen(self, config, **kw):
+def Doxygen(self, config, **kwargs):
+    """Generate a Doxygen config file and run Doxygen on it.
+
+    Rather than parse a complete Doxygen config file for SCons sources
+    and targets, this Doxygen builder builds a Doxygen config file,
+    adding INPUT, FILE_PATTERNS, RECURSIVE, EXCLUDE, XX_OUTPUT and
+    GENERATE_XX options (and possibly others) to an existing
+    proto-config file.  Generated settings will override those in
+    the proto-config file.
+
+    Parameters
+    ----------
+    config : `str`
+        A Doxygen config file, usually with the extension .conf.in; a new file
+        with the ``.in`` removed will be generated and passed to Doxygen.
+        Settings in the original config file will be overridden by those
+        generated by this method.
+    **kwargs
+        Keyword arguments.
+
+        - ``inputs`` :     A sequence of folders or files to be passed
+                           as the INPUT setting for Doxygen.  This list
+                           will be turned into absolute paths by SCons,
+                           so the ``#folder`` syntax will work.
+                           Otherwise, the list is passed in as-is, but
+                           the builder will also examine those
+                           directories to find which source files the
+                           Doxygen output actually depends on.
+        - ``patterns`` :   A sequence of glob patterns for the
+                           FILE_PATTERNS Doxygen setting.  This will be
+                           passed directly to Doxygen, but it is also
+                           used to determine which source files should
+                           be considered dependencies.
+        - ``recursive`` :  Whether the inputs should be searched
+                           recursively (used for the Doxygen RECURSIVE
+                           setting).
+        - ``outputs`` :    A sequence of output formats which will also
+                           be used as output directories.
+        - ``exclude`` :    A sequence of folders or files (not globs)
+                           to be ignored by Doxygen (the Doxygen
+                           EXCLUDE setting).  Hidden directories are
+                           automatically ignored.
+        - ``includes`` :   A sequence of Doxygen config files to
+                           include.  These will automatically be
+                           separated into paths and files to fill in
+                           the ``@INCLUDE_PATH`` and ``@INCLUDE`` settings.
+        - ``useTags`` :    A sequence of Doxygen tag files to use.  It
+                           will be assumed that the html directory for
+                           each tag file is in an "html" subdirectory
+                           in the same directory as the tag file.
+        - ``makeTag``      A string indicating the name of a tag file
+                           to be generated.
+        - ``projectName`` : Sets the Doxygen PROJECT_NAME setting.
+        - ``projectNumber`` : Sets the Doxygen PROJECT_NUMBER setting.
+        - ``excludeSwig`` : If True (default), looks for SWIG .i files
+                            in the input directories and adds Python
+                            and C++ files generated by SWIG to the
+                            list of files to exclude.  For this to work,
+                            the SWIG-generated filenames must be the
+                            default ones ("module.i" generates "module.py"
+                            and "moduleLib_wrap.cc").
+
+    Notes
+    -----
+    When building documentation from a clean source tree, generated source
+    files (like headers generated with M4) will not be included among the
+    dependencies, because they aren't present when we walk the input folders.
+    The workaround is just to build the docs after building the source.
+    """
+
     inputs = [d for d in ["#doc", "#include", "#python", "#src"]
               if os.path.exists(SCons.Script.Entry(d).abspath)]
     defaults = {
@@ -467,9 +534,9 @@ def Doxygen(self, config, **kw):
         "excludeSwig": True
     }
     for k in defaults:
-        if kw.get(k) is None:
-            kw[k] = defaults[k]
-    builder = DoxygenBuilder(**kw)
+        if kwargs.get(k) is None:
+            kwargs[k] = defaults[k]
+    builder = DoxygenBuilder(**kwargs)
     return builder(self, config)
 
 

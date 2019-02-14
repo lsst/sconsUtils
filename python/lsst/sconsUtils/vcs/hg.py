@@ -1,10 +1,10 @@
-#
-# A simple python interface to hg (Mercurial), using os.popen
-# Based on the svn interface.
-#
-# If ever we want to do anything clever, we should use one of
-# the supported svn/python packages
-#
+"""A simple python interface to hg (Mercurial), using `os.popen`
+
+Based on the svn interface.
+
+If ever we want to do anything clever, we should use one of
+the supported svn/python packages
+"""
 import os
 import re
 from .. import state
@@ -12,7 +12,13 @@ from .. import utils
 
 
 def guessVersionName():
-    """Guess a version name"""
+    """Guess a version name.
+
+    Returns
+    -------
+    name : `str`
+        Descriptive name of the repository version state.
+    """
     version = "unknown"
     if not os.path.exists(".hg"):
         state.log.warn("Cannot guess version without .hg directory; will be set to '%s'." % version)
@@ -43,7 +49,15 @@ def guessVersionName():
 
 
 def guessFingerprint():
-    """Return (fingerprint, modified) where fingerprint is the repository's SHA1"""
+    """Guess a unique fingerprint.
+
+    Returns
+    -------
+    fingerprint : `str`
+        SHA1 of current repository state.
+    modified : `bool`
+        Flag to indicate whether the repository is in a modified state.
+    """
     fingerprint, modified = "0x0", False
     if not os.path.exists(".hg"):
         state.log.warn("Cannot guess fingerprint without .hg directory; will be set to '%s'." % fingerprint)

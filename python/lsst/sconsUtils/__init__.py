@@ -1,4 +1,13 @@
 # Explain what happens when you try to import outside scons
+# When building documentation you want to force a SCons import
+import os
+import sys
+
+if ("pydoc" in sys.modules or "sphinx" in sys.modules) and "SCONS_DIR" in os.environ:
+    scons_path = os.path.join(os.environ["SCONS_DIR"], "lib", "scons")
+    if scons_path not in sys.path:
+        sys.path.append(scons_path)
+
 try:
     import SCons.Script
 except ImportError:
