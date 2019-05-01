@@ -123,6 +123,7 @@ def _initEnvironment():
       PATH
       SHELL
       TEMP
+      TERM
       TMP
       TMPDIR
       XPA_PORT
