@@ -155,11 +155,6 @@ def _initEnvironment():
     # requiring <product name>_DIR to be in the env
     cfgPath.append(os.path.join(SCons.Script.Dir('#').abspath, 'ups'))
 
-    # Recursively walk LSST_CFG_PATH
-    for root in os.environ.get("LSST_CFG_PATH", "").split(":"):
-        for base, dirs, files in os.walk(root):
-            dirs = [d for d in dirs if not d.startswith(".")]
-            cfgPath.insert(0, base)
     #
     # Add any values marked as export=FOO=XXX[,GOO=YYY] to ourEnv
     #
