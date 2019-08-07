@@ -312,6 +312,7 @@ class Control:
         interpreter += " --junit-xml=${TARGET} --session2file=${TARGET}.out"
         interpreter += " --junit-prefix={0}".format(self.junitPrefix())
         interpreter += self._getPytestCoverageCommand()
+        interpreter += " --doctest-plus"
 
         target = os.path.join(self._tmpDir, "pytest-{}.xml".format(self._env['eupsProduct']))
 
