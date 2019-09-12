@@ -68,8 +68,35 @@ class Control:
 
     def __init__(self, env, ignoreList=None, expectedFailures=None, args=None,
                  tmpDir=".tests", verbose=False):
-        if 'PYTHONPATH' in os.environ:
-            env.AppendENVPath('PYTHONPATH', os.environ['PYTHONPATH'])
+
+        # Need to define our own Astropy cache directories.
+        # Unfortunately we can not simply set XDG_CACHE_HOME
+        # to $HOME/.astropy. Do not forward $HOME or the XDG_CONFIG_HOME
+        # environment variables since those may affect test outcomes.
+        xdgCacheVar = "XDG_CACHE_HOME"
+        if xdgCacheVar not in os.environ:
+            if "~" in os.path.expanduser("~"):
+                state.log.warn(f"Neither $HOME nor ${xdgCacheVar} defined. No Astropy cache enabled.")
+            else:
+                # We need a directory for the cache and that directory
+                # has to have an "astropy" directory inside it. We can
+                # use ~/.astropy or ~/.lsst or a tmp directory but choose
+                # ~/.lsst initially.
+                cacheDir = os.path.expanduser("~/.lsst")
+                astropyCacheDir = os.path.join(cacheDir, "astropy")
+                if not os.path.exists(astropyCacheDir):
+                    os.makedirs(astropyCacheDir, exist_ok=True)  # Race condition is okay
+                os.environ[xdgCacheVar] = cacheDir
+        else:
+            if not os.path.exists(os.path.expanduser(os.path.join(os.environ[xdgCacheVar],
+                                                                  "astropy"))):
+                state.log.warn(f"{xdgCacheVar} is set but will not be used for "
+                               "astropy due to lack of astropy directory within it")
+
+        # Forward some environment to the tests
+        for envvar in ["PYTHONPATH", xdgCacheVar]:
+            if envvar in os.environ:
+                env.AppendENVPath(envvar, os.environ[envvar])
 
         self._env = env
 
