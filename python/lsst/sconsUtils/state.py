@@ -20,6 +20,7 @@ import shlex
 import SCons.Script
 import SCons.Conftest
 from . import eupsForScons
+from .utils import get_conda_prefix
 
 SCons.Script.EnsureSConsVersion(2, 1, 0)
 
@@ -201,12 +202,7 @@ def _initEnvironment():
         env['LIBDIRSUFFIX'] = '/'
 
     if SCons.Script.GetOption("conda_build"):
-        if os.environ.get('CONDA_BUILD', "0") == "1":
-            # when running conda-build, the right prefix to use is PREFIX
-            _conda_prefix = os.environ['PREFIX']
-        else:
-            # outside of conda-build, it is CONDA_PREFIX
-            _conda_prefix = os.environ['CONDA_PREFIX']
+        _conda_prefix = get_conda_prefix()
         LDFLAGS = shlex.split(os.environ['LDFLAGS'])  # respects quoting!
         LDFLAGS = [v for v in LDFLAGS if v[0:2] != '-L%s/lib' % _conda_prefix]
         # this one breaks some linking in the eups build

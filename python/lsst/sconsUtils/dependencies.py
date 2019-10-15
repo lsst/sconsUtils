@@ -13,6 +13,7 @@ from SCons.Script.SConscript import SConsEnvironment
 
 from . import installation
 from . import state
+from .utils import get_conda_prefix
 
 
 def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath=None, noCfgFile=False):
@@ -79,12 +80,8 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     state.env['CPPPATH'] = []
 
     if SCons.Script.GetOption("conda_build"):
-        if os.environ.get('CONDA_BUILD', "0") == "1":
-            # when running conda-build, the right prefix to use is PREFIX
-            state.env['LIBPATH'] = ["%s/lib" % os.environ['PREFIX']]
-        else:
-            # outside of conda-build, it is CONDA_PREFIX
-            state.env['LIBPATH'] = ["%s/lib" % os.environ['CONDA_PREFIX']]
+        _conda_prefix = get_conda_prefix()
+        state.env['LIBPATH'] = ["%s/lib" % _conda_prefix]
     else:
         state.env['LIBPATH'] = []
 
@@ -92,6 +89,10 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     # but the headers found there aren't treated as dependencies.  This can
     # make scons a lot faster.
     state.env['XCPPPATH'] = []
+
+    if SCons.Script.GetOption("conda_build"):
+        _conda_prefix = get_conda_prefix()
+        state.env.Append(XCPPPATH=["%s/include"] % _conda_prefix)
 
     # XCPPPPREFIX is a replacement for SCons' built-in INCPREFIX. It is used
     # when compiling headers in XCPPPATH directories. Here, we set it to
