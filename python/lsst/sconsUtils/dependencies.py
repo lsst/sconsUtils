@@ -3,6 +3,7 @@
 
 __all__ = ("Configuration", "ExternalConfiguration", "PackageTree", "configure")
 
+import os
 import os.path
 import collections
 import imp
@@ -76,7 +77,16 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     state.env.libs = {"main": [], "python": [], "test": []}
     state.env.doxygen = {"tags": [], "includes": []}
     state.env['CPPPATH'] = []
-    state.env['LIBPATH'] = []
+
+    if SCons.Script.GetOption("conda_build"):
+        if os.environ.get('CONDA_BUILD', "0") == "1":
+            # when running conda-build, the right prefix to use is PREFIX
+            state.env['LIBPATH'] = ["%s/lib" % os.environ['PREFIX']]
+        else:
+            # outside of conda-build, it is CONDA_PREFIX
+            state.env['LIBPATH'] = ["%s/lib" % os.environ['CONDA_PREFIX']]
+    else:
+        state.env['LIBPATH'] = []
 
     # XCPPPATH is a new variable defined by sconsUtils - it's like CPPPATH,
     # but the headers found there aren't treated as dependencies.  This can
