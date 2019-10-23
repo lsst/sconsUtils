@@ -1,5 +1,4 @@
 setupRequired(scons)
-setupRequired(pytest)
 setupRequired(pytest_flake8)
 setupRequired(pep8_naming)
 setupRequired(pytest_xdist)
