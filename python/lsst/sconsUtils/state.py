@@ -204,7 +204,7 @@ def _initEnvironment():
     if SCons.Script.GetOption("conda_build"):
         _conda_prefix = get_conda_prefix()
         LDFLAGS = shlex.split(os.environ['LDFLAGS'])  # respects quoting!
-        LDFLAGS = [v for v in LDFLAGS if v[0:2] != '-L%s/lib' % _conda_prefix]
+        LDFLAGS = [v for v in LDFLAGS if v[0:2] != '-L']
         # this one breaks some linking in the eups build
         LDFLAGS = [v for v in LDFLAGS if v != '-Wl,-dead_strip_dylibs']
         env.Append(LIBPATH=["%s/lib" % _conda_prefix])
@@ -212,10 +212,10 @@ def _initEnvironment():
         env.Append(SHLINKFLAGS=LDFLAGS)
 
         CFLAGS = shlex.split(os.environ['CFLAGS'])  # respects quoting!
-        CFLAGS = [v for v in CFLAGS if v[0:2] != '-I%s/include' % _conda_prefix]
+        CFLAGS = [v for v in CFLAGS if v[0:2] != '-I']
         env.Append(CCFLAGS=CFLAGS)
         CXXFLAGS = shlex.split(os.environ['CXXFLAGS'])  # respects quoting!
-        CXXFLAGS = [v for v in CXXFLAGS if v[0:2] != '-I%s/include' % _conda_prefix]
+        CXXFLAGS = [v for v in CXXFLAGS if v[0:2] != '-I']
         CXXFLAGS = [v for v in CXXFLAGS if v[0:5] != '-std=']  # we let LSST set this
         CXXFLAGS = [v for v in CXXFLAGS if v not in CFLAGS]  # conda puts in duplicates
         env.Append(CXXFLAGS=CXXFLAGS)
