@@ -251,4 +251,4 @@ def get_conda_prefix():
     else:
         # outside of conda-build, it is CONDA_PREFIX
         _conda_prefix = os.environ['CONDA_PREFIX']
-    return _conda_prefix.copy()
+    return _conda_prefix
