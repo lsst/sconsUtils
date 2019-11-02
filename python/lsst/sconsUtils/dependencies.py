@@ -92,7 +92,7 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
 
     if SCons.Script.GetOption("conda_build"):
         _conda_prefix = get_conda_prefix()
-        state.env.Append(XCPPPATH=["%s/include"] % _conda_prefix)
+        state.env.Append(XCPPPATH=["%s/include" % _conda_prefix])
 
     # XCPPPPREFIX is a replacement for SCons' built-in INCPREFIX. It is used
     # when compiling headers in XCPPPATH directories. Here, we set it to
