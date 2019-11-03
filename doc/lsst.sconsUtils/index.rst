@@ -45,3 +45,11 @@ Python API reference
 .. automodapi:: lsst.sconsUtils.utils
    :no-main-docstr:
    :no-inheritance-diagram:
+
+Using sconsUtils with conda compilers
+=====================================
+
+If you would like to use sconsUtils with conda compilers, then put
+``SCONSUTILS_USE_CONDA_COMPILERS`` in your environment with a non-None value.
+This will instruct sconsUtils to use the compiler flags and compilers from
+the encolsing conda environment.

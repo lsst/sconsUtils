@@ -79,7 +79,7 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     state.env.doxygen = {"tags": [], "includes": []}
     state.env['CPPPATH'] = []
 
-    if 'SCONSUTILS_USE_CONDA_BUILD' in os.environ:
+    if 'SCONSUTILS_USE_CONDA_COMPILERS' in os.environ:
         _conda_prefix = get_conda_prefix()
         state.env['LIBPATH'] = ["%s/lib" % _conda_prefix]
     else:
@@ -90,7 +90,7 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     # make scons a lot faster.
     state.env['XCPPPATH'] = []
 
-    if 'SCONSUTILS_USE_CONDA_BUILD' in os.environ:
+    if 'SCONSUTILS_USE_CONDA_COMPILERS' in os.environ:
         _conda_prefix = get_conda_prefix()
         state.env.Append(XCPPPATH=["%s/include" % _conda_prefix])
 
