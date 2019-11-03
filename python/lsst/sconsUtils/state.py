@@ -68,9 +68,6 @@ def _initOptions():
                            help="Print full exception tracebacks when errors occur.")
     SCons.Script.AddOption('--no-eups', dest='no_eups', action='store_true', default=False,
                            help="Do not use EUPS for configuration")
-    SCons.Script.AddOption('--conda-build', dest='conda_build', action='store_true', default=False,
-                           help=("Configure scons to find an use the conda compilers in your "
-                                 "local conda environment."))
 
 
 def _initLog():
@@ -201,7 +198,7 @@ def _initEnvironment():
         #
         env['LIBDIRSUFFIX'] = '/'
 
-    if SCons.Script.GetOption("conda_build"):
+    if 'SCONSUTILS_USE_CONDA_BUILD' in os.environ:
         _conda_prefix = get_conda_prefix()
         LDFLAGS = shlex.split(os.environ['LDFLAGS'])  # respects quoting!
         LDFLAGS = [v for v in LDFLAGS if v[0:2] != '-L']
@@ -354,7 +351,7 @@ def _configureCommon():
     if env.GetOption("clean") or env.GetOption("no_exec") or env.GetOption("help"):
         env.whichCc = "unknown"         # who cares? We're cleaning/not execing, not building
     else:
-        if SCons.Script.GetOption("conda_build"):
+        if 'SCONSUTILS_USE_CONDA_BUILD' in os.environ:
             # conda-build expects you to use the compilers as-is
             env['CC'] = os.environ['CC']
             env['CXX'] = os.environ['CXX']
