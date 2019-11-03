@@ -46,10 +46,10 @@ Python API reference
    :no-main-docstr:
    :no-inheritance-diagram:
 
-Using sconsUtils with conda compilers
-=====================================
+Using ``sconsUtils`` with the ``conda`` Compilers
+=================================================
 
-If you would like to use sconsUtils with conda compilers, then put
-``SCONSUTILS_USE_CONDA_COMPILERS`` in your environment with a non-None value.
-This will instruct sconsUtils to use the compiler flags and compilers from
-the encolsing conda environment.
+If you would like to use ``sconsUtils`` with the ``conda`` compilers, then put
+``SCONSUTILS_USE_CONDA_COMPILERS`` in your environment with a non-``None`` value.
+This environment variable will instruct ``sconsUtils`` to use the compiler
+flags and compilers from the enclosing ``conda`` environment.
