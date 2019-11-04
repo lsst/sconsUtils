@@ -21,6 +21,7 @@ import SCons.Script
 import SCons.Conftest
 from . import eupsForScons
 from .utils import get_conda_prefix, use_conda_compilers
+from .compile_commands import compile_commands
 
 SCons.Script.EnsureSConsVersion(2, 1, 0)
 
@@ -299,6 +300,8 @@ def _initEnvironment():
     # We need a binary name, not just "Posix"
     #
     env['eupsFlavor'] = eupsForScons.flavor()
+
+    compile_commands(env, ".")
 
 
 _configured = False
