@@ -2,7 +2,7 @@
 
 __all__ = ("Log", "_has_OSX_SIP", "libraryPathPassThrough", "whichPython",
            "needShebangRewrite", "libraryLoaderEnvironment", "runExternal",
-           "memberOf")
+           "memberOf", "get_conda_prefix")
 
 import os
 import sys
@@ -241,3 +241,19 @@ def memberOf(cls, name=None):
             setattr(scope, kw["name"], member)
         return member
     return nested
+
+
+def get_conda_prefix():
+    """Returns a copy of the current conda prefix."""
+    if os.environ.get('CONDA_BUILD', "0") == "1":
+        # when running conda-build, the right prefix to use is PREFIX
+        # however, this appears to not be around in some builds, so I
+        # am going to default back to CONDA_PREFIX
+        if 'PREFIX' in os.environ:
+            _conda_prefix = os.environ['PREFIX']
+        else:
+            _conda_prefix = os.environ['CONDA_PREFIX']
+    else:
+        # outside of conda-build, it is always CONDA_PREFIX
+        _conda_prefix = os.environ['CONDA_PREFIX']
+    return _conda_prefix

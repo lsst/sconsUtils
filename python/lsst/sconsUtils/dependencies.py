@@ -3,6 +3,7 @@
 
 __all__ = ("Configuration", "ExternalConfiguration", "PackageTree", "configure")
 
+import os
 import os.path
 import collections
 import imp
@@ -12,6 +13,7 @@ from SCons.Script.SConscript import SConsEnvironment
 
 from . import installation
 from . import state
+from .utils import get_conda_prefix
 
 
 def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath=None, noCfgFile=False):
@@ -76,12 +78,21 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     state.env.libs = {"main": [], "python": [], "test": []}
     state.env.doxygen = {"tags": [], "includes": []}
     state.env['CPPPATH'] = []
-    state.env['LIBPATH'] = []
+
+    if 'SCONSUTILS_USE_CONDA_COMPILERS' in os.environ:
+        _conda_prefix = get_conda_prefix()
+        state.env['LIBPATH'] = ["%s/lib" % _conda_prefix]
+    else:
+        state.env['LIBPATH'] = []
 
     # XCPPPATH is a new variable defined by sconsUtils - it's like CPPPATH,
     # but the headers found there aren't treated as dependencies.  This can
     # make scons a lot faster.
     state.env['XCPPPATH'] = []
+
+    if 'SCONSUTILS_USE_CONDA_COMPILERS' in os.environ:
+        _conda_prefix = get_conda_prefix()
+        state.env.Append(XCPPPATH=["%s/include" % _conda_prefix])
 
     # XCPPPPREFIX is a replacement for SCons' built-in INCPREFIX. It is used
     # when compiling headers in XCPPPATH directories. Here, we set it to
