@@ -340,6 +340,10 @@ class Control:
         interpreter += " --junit-prefix={0}".format(self.junitPrefix())
         interpreter += self._getPytestCoverageCommand()
 
+        # Ignore doxygen build directories since they can confuse pytest
+        # test collection
+        interpreter += " --ignore=doc/html --ignore=doc/xml"
+
         target = os.path.join(self._tmpDir, "pytest-{}.xml".format(self._env['eupsProduct']))
 
         # Work out how many jobs scons has been configured to use
