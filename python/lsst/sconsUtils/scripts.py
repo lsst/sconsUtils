@@ -190,6 +190,9 @@ class BasicSConstruct:
             for path in os.listdir("."):
                 if os.path.isdir(path) and not path.startswith("."):
                     subDirList.append(path)
+        if "bin.src" in subDirList and "shebang" in state.targets and state.targets["shebang"]:
+            # shebang makes a directory that should be installed
+            subDirList += ["bin"]
         install = state.env.InstallLSST(state.env["prefix"],
                                         [subDir for subDir in subDirList],
                                         ignoreRegex=ignoreRegex)
