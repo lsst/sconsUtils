@@ -343,6 +343,7 @@ class Control:
         # Ignore doxygen build directories since they can confuse pytest
         # test collection
         interpreter += " --ignore=doc/html --ignore=doc/xml"
+        interpreter += " --ignore-glob=doxygen_objdb*"
 
         target = os.path.join(self._tmpDir, "pytest-{}.xml".format(self._env['eupsProduct']))
 
