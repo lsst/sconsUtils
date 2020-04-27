@@ -7,6 +7,7 @@ import os
 import os.path
 import collections
 import imp
+from sys import platform
 import SCons.Script
 from . import eupsForScons
 from SCons.Script.SConscript import SConsEnvironment
@@ -83,7 +84,12 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     # _conda_prefix is usually around, even if not using conda compilers
     if use_conda_compilers():
         # if using the conda-force conda compilers, they handle rpath for us
-        state.env['LIBPATH'] = ["%s/lib" % _conda_prefix]
+        _conda_lib = f"{_conda_prefix}/lib"
+        state.env['LIBPATH'] = [_conda_lib]
+        if platform == "darwin":
+            state.env["_RPATH"] = f"-rpath {_conda_lib}"
+        else:
+            state.env.AppendUnique(RPATH=[_conda_lib])
     else:
         state.env['LIBPATH'] = []
 
