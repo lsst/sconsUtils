@@ -20,7 +20,7 @@ import shlex
 import SCons.Script
 import SCons.Conftest
 from . import eupsForScons
-from .utils import get_conda_prefix
+from .utils import get_conda_prefix, use_conda_compilers
 
 SCons.Script.EnsureSConsVersion(2, 1, 0)
 
@@ -129,6 +129,7 @@ def _initEnvironment():
       TMP
       TMPDIR
       XPA_PORT
+      CONDA_BUILD_SYSROOT
     """.split()
 
     for key in preserveVars:
@@ -142,6 +143,7 @@ def _initEnvironment():
         if not m:
             continue
         cfgPath.append(os.path.join(os.environ[k], "ups"))
+        cfgPath.append(os.path.join(os.environ[k], "configs"))
         if m.group("extra"):
             cfgPath.append(os.environ[k])
         else:
@@ -351,7 +353,7 @@ def _configureCommon():
     if env.GetOption("clean") or env.GetOption("no_exec") or env.GetOption("help"):
         env.whichCc = "unknown"         # who cares? We're cleaning/not execing, not building
     else:
-        if 'SCONSUTILS_USE_CONDA_COMPILERS' in os.environ:
+        if use_conda_compilers():
             # conda-build expects you to use the compilers as-is
             env['CC'] = os.environ['CC']
             env['CXX'] = os.environ['CXX']

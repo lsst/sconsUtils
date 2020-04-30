@@ -1,7 +1,2 @@
-setupRequired(scons)
-setupRequired(pytest_flake8)
-setupRequired(pep8_naming)
-setupRequired(pytest_session2file)
-setupOptional(doxygen)
 envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
 envPrepend(PATH, ${PRODUCT_DIR}/bin)

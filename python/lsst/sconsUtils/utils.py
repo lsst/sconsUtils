@@ -9,6 +9,7 @@ import sys
 import warnings
 import subprocess
 import platform
+from typing import Optional
 import SCons.Script
 
 
@@ -243,17 +244,22 @@ def memberOf(cls, name=None):
     return nested
 
 
-def get_conda_prefix():
-    """Returns a copy of the current conda prefix."""
+def get_conda_prefix() -> Optional[str]:
+    """Returns a copy of the current conda prefix, if available."""
+    _conda_prefix = os.environ.get('CONDA_PREFIX')
     if os.environ.get('CONDA_BUILD', "0") == "1":
         # when running conda-build, the right prefix to use is PREFIX
-        # however, this appears to not be around in some builds, so I
-        # am going to default back to CONDA_PREFIX
+        # however, this appears to be absent in some builds - but we
+        # already set the fallback
         if 'PREFIX' in os.environ:
             _conda_prefix = os.environ['PREFIX']
-        else:
-            _conda_prefix = os.environ['CONDA_PREFIX']
-    else:
-        # outside of conda-build, it is always CONDA_PREFIX
-        _conda_prefix = os.environ['CONDA_PREFIX']
     return _conda_prefix
+
+
+def use_conda_compilers():
+    """Returns True if we should use conda compilers"""
+    if "SCONSUTILS_USE_CONDA_COMPILERS" in os.environ:
+        return True
+    if "CONDA_BUILD_SYSROOT" in os.environ:
+        return True
+    return False
