@@ -242,8 +242,11 @@ class Control:
                 f = os.path.splitext(f)[0]
             else:
                 interpreter = "pytest -Wd --junit-xml=${TARGET}.xml"
+                # Pytest 5.x warns unless we are explicit
+                interpreter += ' --override-ini="junit_family=xunit2"'
                 interpreter += " --junit-prefix={0}".format(self.junitPrefix())
                 interpreter += self._getPytestCoverageCommand()
+                print(interpreter)
 
             if self.ignore(f):
                 continue
