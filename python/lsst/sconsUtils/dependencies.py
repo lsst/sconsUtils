@@ -222,13 +222,11 @@ class Configuration:
                  includeFileDirs=["include"], libFileDirs=["lib"],
                  hasDoxygenInclude=False, hasDoxygenTag=True, eupsProduct=None):
         self.name, self.root = self.parseFilename(cfgFile)
-        if eupsProduct is None:
-            eupsProduct = self.name
         self.eupsProduct = eupsProduct
-        version, productDir = self.getEupsData(self.eupsProduct)
+        version, productDir = self.getEupsData(self.eupsProduct if self.eupsProduct else self.name)
         if version is not None:
             self.version = version
-        if productDir is None:
+        if self.eupsProduct and productDir is None:
             state.log.warn("Could not find EUPS product dir for '%s'; using %s."
                            % (self.eupsProduct, self.root))
         else:
