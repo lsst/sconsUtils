@@ -268,15 +268,12 @@ class Control:
 
             (should_pass, passedMsg, should_fail, failedMsg) = self.messages(f)
 
-            # The TRAVIS environment variable is set to allow us to disable
-            # the matplotlib font cache. See ticket DM-3856.
-            # TODO: Work out better way of solving matplotlib issue in build.
             expandedArgs = " ".join(args)
             result = self._env.Command(target, f, """
             @rm -f ${TARGET}.failed;
             @printf "%%s" 'running ${SOURCES}... ';
             @echo $SOURCES %s > $TARGET; echo >> $TARGET;
-            @if %s TRAVIS=1 %s $SOURCES %s >> $TARGET 2>&1; then \
+            @if %s %s $SOURCES %s >> $TARGET 2>&1; then \
                if ! %s; then mv $TARGET ${TARGET}.failed; fi; \
                echo "%s"; \
             else \
@@ -392,7 +389,7 @@ class Control:
             cmd += "@rm -f ${{TARGET}} ${{TARGET}}.failed;"
         cmd += """
         @printf "%s\\n" 'running global pytest... ';
-        @({2} TRAVIS=1 {0} {1}); \
+        @({2} {0} {1}); \
         export rc="$?"; \
         if [ "$$rc" -eq 0 ]; then \
             echo "Global pytest run completed successfully"; \
