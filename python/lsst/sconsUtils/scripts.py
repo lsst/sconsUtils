@@ -643,6 +643,15 @@ class BasicSConscript:
             pyList = [control.runPythonTests(pyList)]
         else:
             pyList = []
+
+        # Run all pySingles sequentially before other tests.  This ensures
+        # that there are no race conditions collecting coverage databases.
+        if pySingles:
+            for i in range(len(pySingles) - 1):
+                state.env.Depends(pySingles[i + 1], pySingles[i])
+            for pyTest in pyList:
+                state.env.Depends(pyTest, pySingles[-1])
+
         pyList.extend(pySingles)
         for pyTest in pyList:
             state.env.Depends(pyTest, ccList)
