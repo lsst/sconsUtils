@@ -364,7 +364,7 @@ class Control:
             # original method and hope things work okay. This will be rare but
             # without this a space in the path is impossible because of how
             # xdist currently parses the tx option
-            interpreter = interpreter + " --max-slave-restart=0"
+            interpreter = interpreter + " --max-worker-restart=0"
             if " " not in executable:
                 interpreter = (interpreter +
                                " -d --tx={}*popen//python={}".format(njobs, executable))
