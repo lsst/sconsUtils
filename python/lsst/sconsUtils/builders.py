@@ -588,36 +588,36 @@ def VersionModule(self, filename, versionString=None):
                 info = tuple(int(v) for v in parts[0].split("."))
                 what = "__version_info__"
                 names.append(what)
-                outFile.write("%s = %r\n" % (what, info))
+                outFile.write(f"{what} = {info!r}\n")
             except ValueError:
                 pass
 
             if len(parts) > 1:
                 try:
                     what = "__rebuild_version__"
-                    outFile.write("%s = %s\n" % (what, int(parts[1])))
+                    outFile.write(f"{what} = {int(parts[1])}\n")
                     names.append(what)
                 except ValueError:
                     pass
 
             what = "__dependency_versions__"
             names.append(what)
-            outFile.write("%s = {" % (what))
+            outFile.write(f"{what} = {{")
             if env.dependencies.packages:
                 outFile.write("\n")
                 for name, mod in env.dependencies.packages.items():
                     if mod is None:
-                        outFile.write("    \"%s\": None,\n" % name)
+                        outFile.write(f'    "{name}": None,\n')
                     elif hasattr(mod.config, "version"):
-                        outFile.write("    \"%s\": \"%s\",\n" % (name, mod.config.version))
+                        outFile.write(f'    "{name}": "{mod.config.version}",\n')
                     else:
-                        outFile.write("    \"%s\": \"unknown\",\n" % name)
+                        outFile.write(f'    "{name}": "unknown",\n')
             outFile.write("}\n")
 
             # Write out an entry per line as there can be many names
             outFile.write("__all__ = (\n")
             for n in names:
-                outFile.write("    \"{}\",\n".format(n))
+                outFile.write(f'    "{n}",\n')
             outFile.write(")\n")
 
         if calcMd5(target[0].abspath) != oldMd5:  # only print if something's changed
