@@ -184,12 +184,12 @@ class BasicSConstruct:
             A SCons Environment.
         """
         if ignoreRegex is None:
-            ignoreRegex = r"(~$|\.pyc$|^\.svn$|\.o|\.os$)"
+            ignoreRegex = r"(~$|\.pyc$|^\.svn$|\.o|\.os|\.html|\.xml$)"
         if subDirList is None:
             subDirList = []
             for path in os.listdir("."):
                 if os.path.isdir(path) and not path.startswith("."):
-                    if path not in ("bin.src", "doc", "examples", "tests"):
+                    if path not in ("bin.src", "examples", "tests"):
                         subDirList.append(path)
         if (os.path.exists("bin.src") and "shebang" in state.targets and
                 state.targets["shebang"]):
