@@ -516,6 +516,8 @@ def _configureCommon():
     if env.whichCc == "gcc":
         env.Append(CCFLAGS=['-fno-lto'])
         env.Append(LINKFLAGS=['-fno-lto'])
+        # Enable debug symbol compression
+        env.Append(LINKFLAGS=['-gz'])
 
 
 def _saveState():
