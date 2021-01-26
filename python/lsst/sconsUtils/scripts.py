@@ -602,10 +602,10 @@ class BasicSConscript:
         if ignoreList is None:
             ignoreList = []
 
-        def s(l):
-            if l is None:
+        def s(ll):
+            if ll is None:
                 return ['None']
-            return [str(i) for i in l]
+            return [str(i) for i in ll]
 
         state.log.info("SWIG modules for tests: %s" % s(swigFileList))
         state.log.info("Python tests: %s" % s(pyList))
