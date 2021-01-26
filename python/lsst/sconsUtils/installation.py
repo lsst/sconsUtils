@@ -201,10 +201,10 @@ def Declare(self, products=None):
         state.log.warn("'scons undeclare' is deprecated; please use 'scons declare -c' instead")
 
     acts = []
-    if ("declare" in SCons.Script.COMMAND_LINE_TARGETS or
-            "undeclare" in SCons.Script.COMMAND_LINE_TARGETS or
-            ("install" in SCons.Script.COMMAND_LINE_TARGETS and self.GetOption("clean")) or
-            "current" in SCons.Script.COMMAND_LINE_TARGETS):
+    if ("declare" in SCons.Script.COMMAND_LINE_TARGETS
+            or "undeclare" in SCons.Script.COMMAND_LINE_TARGETS
+            or ("install" in SCons.Script.COMMAND_LINE_TARGETS and self.GetOption("clean"))
+            or "current" in SCons.Script.COMMAND_LINE_TARGETS):
         current = []
         declare = []
         undeclare = []
@@ -233,8 +233,8 @@ def Declare(self, products=None):
                     if version:
                         command = "eups undeclare --flavor %s %s %s" % \
                                   (self['eupsFlavor'], product, version)
-                        if ("current" in SCons.Script.COMMAND_LINE_TARGETS and
-                                "declare" not in SCons.Script.COMMAND_LINE_TARGETS):
+                        if ("current" in SCons.Script.COMMAND_LINE_TARGETS
+                                and "declare" not in SCons.Script.COMMAND_LINE_TARGETS):
                             command += " --current"
 
                         if self.GetOption("clean"):

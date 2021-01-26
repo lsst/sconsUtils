@@ -589,16 +589,16 @@ class BasicSConscript:
             src.append(node)
         if pyList is None:
             pyList = [node for node in Glob("*.py")
-                      if _getFileBase(node) not in swigNameList and
-                      os.path.basename(str(node)) not in noBuildList]
+                      if _getFileBase(node) not in swigNameList
+                      and os.path.basename(str(node)) not in noBuildList]
             # if we got no matches, reset to None so we do not enabled
             # auto test detection in pytest
             if not pyList:
                 pyList = None
         if ccList is None:
             ccList = [node for node in Glob("*.cc")
-                      if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc and
-                      os.path.basename(str(node)) not in noBuildList]
+                      if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc
+                      and os.path.basename(str(node)) not in noBuildList]
         if ignoreList is None:
             ignoreList = []
 

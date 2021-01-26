@@ -366,8 +366,8 @@ class Control:
             # xdist currently parses the tx option
             interpreter = interpreter + " --max-worker-restart=0"
             if " " not in executable:
-                interpreter = (interpreter +
-                               " -d --tx={}*popen//python={}".format(njobs, executable))
+                interpreter = (interpreter
+                               + " -d --tx={}*popen//python={}".format(njobs, executable))
             else:
                 interpreter = interpreter + "  -n {}".format(njobs)
 
