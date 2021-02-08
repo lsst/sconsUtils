@@ -415,22 +415,22 @@ def _configureCommon():
         env.Append(LINKFLAGS='--coverage')
 
     #
-    # Enable C++14 support (and C99 support for gcc)
+    # Enable C++17 support (and C99 support for gcc)
     #
     if not (env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec")):
         if not env.GetOption("no_progress"):
-            log.info("Checking for C++14 support")
+            log.info("Checking for C++17 support")
         conf = env.Configure()
-        for cpp14Arg in ("-std=%s" % (val,) for val in ("c++14",)):
+        for cpp17Arg in ("-std=%s" % (val,) for val in ("c++17",)):
             conf.env = env.Clone()
-            conf.env.Append(CXXFLAGS=cpp14Arg)
+            conf.env.Append(CXXFLAGS=cpp17Arg)
             if conf.CheckCXX():
-                env.Append(CXXFLAGS=cpp14Arg)
+                env.Append(CXXFLAGS=cpp17Arg)
                 if not env.GetOption("no_progress"):
-                    log.info("C++14 supported with %r" % (cpp14Arg,))
+                    log.info("C++17 supported with %r" % (cpp17Arg,))
                 break
         else:
-            log.fail("C++14 extensions could not be enabled for compiler %r" % env.whichCc)
+            log.fail("C++17 extensions could not be enabled for compiler %r" % env.whichCc)
         conf.Finish()
 
     #
