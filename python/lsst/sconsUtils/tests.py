@@ -348,6 +348,12 @@ class Control:
         # Ignore the eups directory
         interpreter += " --ignore=ups"
 
+        # We currently have a race condition in test collection when
+        # examples has C++ code. Removing it from the scan will get us through
+        # until we can fix the problem properly. Rely on GitHub PRs to
+        # do the flake8 check.
+        interpreter += " --ignore=examples"
+
         # Also include temporary files made by compilers.
         # These can come from examples directories that include C++.
         interpreter += " --ignore-glob='*.tmp'"
