@@ -658,7 +658,6 @@ class BasicSConscript:
             state.env.Depends(pyTest, swigMods)
             state.env.Depends(pyTest, state.targets["python"])
             state.env.Depends(pyTest, state.targets["shebang"])
-            state.env.Depends(pyTest, state.targets["examples"])
         result = ccList + pyList
         state.targets["tests"].extend(result)
         return result
