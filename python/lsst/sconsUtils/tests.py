@@ -341,6 +341,13 @@ class Control:
         # test collection
         interpreter += " --ignore=doc/html --ignore=doc/xml"
 
+        # Ignore the C++ directories since they will never have python
+        # code and doing this will speed up test collection
+        interpreter += " --ignore=src --ignore=include --ignore=lib"
+
+        # Ignore the eups directory
+        interpreter += " --ignore=ups"
+
         # Also include temporary files made by compilers.
         # These can come from examples directories that include C++.
         interpreter += " --ignore-glob='*.tmp'"
