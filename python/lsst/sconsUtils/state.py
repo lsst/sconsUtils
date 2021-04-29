@@ -192,6 +192,11 @@ def _initEnvironment():
         # We want to be explicit about the OS X version we're targeting
         #
         env['ENV']['MACOSX_DEPLOYMENT_TARGET'] = env['macosx_deployment_target']
+        # This flag is required for std::variant and std::filesystem
+        # on deployment platforms < 10.13 and 10.15
+        for flag in ("-D_LIBCPP_DISABLE_AVAILABILITY=1", ):
+            env["CFLAGS"].append(flag)
+            env["CXXFLAGS"].append(flag)
         log.info("Setting OS X binary compatibility level: %s" % env['ENV']['MACOSX_DEPLOYMENT_TARGET'])
         #
         # For XCode 7.3 we need to explicitly add a trailing slash to library
