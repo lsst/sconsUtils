@@ -14,6 +14,7 @@ by other code (particularly `lsst.sconsUtils.dependencies.configure`).
 """
 
 import os
+import platform
 import re
 import shlex
 
@@ -89,6 +90,10 @@ def _initVariables():
         files.append("buildOpts.py")
     global opts
     opts = SCons.Script.Variables(files)
+    if(platform.mac_ver()[2] == 'arm64'):
+        macos_deployment_target='11.0'
+    else:
+        macos_deployment_target='10.9'
     opts.AddVariables(
         ('archflags', 'Extra architecture specification to add to CC/LINK flags (e.g. -m32)', ''),
         ('cc', 'Choose the compiler to use', ''),
@@ -106,7 +111,7 @@ def _initVariables():
         ('baseversion', 'Specify the current base version', None),
         ('optFiles', "Specify a list of files that SHOULD be optimized", None),
         ('noOptFiles', "Specify a list of files that should NOT be optimized", None),
-        ('macosx_deployment_target', 'Deployment target for Mac OS X', '10.9'),
+        ('macosx_deployment_target', 'Deployment target for Mac OS X', macos_deployment_target),
     )
 
 
