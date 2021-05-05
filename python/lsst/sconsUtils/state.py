@@ -91,9 +91,9 @@ def _initVariables():
     global opts
     opts = SCons.Script.Variables(files)
     if(platform.mac_ver()[2] == 'arm64'):
-        macos_deployment_target='11.0'
+        macos_deployment_target = '11.0'
     else:
-        macos_deployment_target='10.9'
+        macos_deployment_target = '10.9'
     opts.AddVariables(
         ('archflags', 'Extra architecture specification to add to CC/LINK flags (e.g. -m32)', ''),
         ('cc', 'Choose the compiler to use', ''),
