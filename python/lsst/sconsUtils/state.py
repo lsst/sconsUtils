@@ -130,6 +130,7 @@ def _initEnvironment():
       TMPDIR
       XPA_PORT
       CONDA_BUILD_SYSROOT
+      SDKROOT
     """.split()
 
     for key in preserveVars:
@@ -200,7 +201,7 @@ def _initEnvironment():
         #
         env['LIBDIRSUFFIX'] = '/'
 
-    if 'SCONSUTILS_USE_CONDA_COMPILERS' in os.environ:
+    if use_conda_compilers():
         _conda_prefix = get_conda_prefix()
         LDFLAGS = shlex.split(os.environ['LDFLAGS'])  # respects quoting!
         LDFLAGS = [v for v in LDFLAGS if v[0:2] != '-L']

@@ -258,8 +258,10 @@ def get_conda_prefix() -> Optional[str]:
 
 def use_conda_compilers():
     """Returns True if we should use conda compilers"""
-    if "SCONSUTILS_USE_CONDA_COMPILERS" in os.environ:
+    if "SCONSUTILS_AVOID_CONDA_COMPILERS" in os.environ:
+        return False
+    if "CONDA_BUILD_SYSROOT" in os.environ or "CONDA_PREFIX" in os.environ:
         return True
-    if "CONDA_BUILD_SYSROOT" in os.environ:
+    if os.environ.get('CONDA_BUILD', "0") == "1":
         return True
     return False
