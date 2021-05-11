@@ -261,7 +261,7 @@ def use_conda_compilers():
     if "SCONSUTILS_AVOID_CONDA_COMPILERS" in os.environ:
         return False
     if "CONDA_BUILD_SYSROOT" in os.environ or "CONDA_PREFIX" in os.environ:
-        True
+        return True
     if os.environ.get('CONDA_BUILD', "0") == "1":
         return True
     return False
