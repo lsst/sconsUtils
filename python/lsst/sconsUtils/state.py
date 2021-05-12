@@ -203,22 +203,26 @@ def _initEnvironment():
 
     if use_conda_compilers():
         _conda_prefix = get_conda_prefix()
-        LDFLAGS = shlex.split(os.environ['LDFLAGS'])  # respects quoting!
-        LDFLAGS = [v for v in LDFLAGS if v[0:2] != '-L']
-        # this one breaks some linking in the eups build
-        LDFLAGS = [v for v in LDFLAGS if v != '-Wl,-dead_strip_dylibs']
-        env.Append(LIBPATH=["%s/lib" % _conda_prefix])
-        env.Append(LINKFLAGS=LDFLAGS)
-        env.Append(SHLINKFLAGS=LDFLAGS)
+        if "LDFLAGS" in os.environ:
+            LDFLAGS = shlex.split(os.environ['LDFLAGS'])  # respects quoting!
+            LDFLAGS = [v for v in LDFLAGS if v[0:2] != '-L']
+            # this one breaks some linking in the eups build
+            LDFLAGS = [v for v in LDFLAGS if v != '-Wl,-dead_strip_dylibs']
+            env.Append(LIBPATH=["%s/lib" % _conda_prefix])
+            env.Append(LINKFLAGS=LDFLAGS)
+            env.Append(SHLINKFLAGS=LDFLAGS)
 
-        CFLAGS = shlex.split(os.environ['CFLAGS'])  # respects quoting!
-        CFLAGS = [v for v in CFLAGS if v[0:2] != '-I']
-        env.Append(CCFLAGS=CFLAGS)
-        CXXFLAGS = shlex.split(os.environ['CXXFLAGS'])  # respects quoting!
-        CXXFLAGS = [v for v in CXXFLAGS if v[0:2] != '-I']
-        CXXFLAGS = [v for v in CXXFLAGS if v[0:5] != '-std=']  # we let LSST set this
-        CXXFLAGS = [v for v in CXXFLAGS if v not in CFLAGS]  # conda puts in duplicates
-        env.Append(CXXFLAGS=CXXFLAGS)
+        if "CFLAGS" in os.environ:
+            CFLAGS = shlex.split(os.environ['CFLAGS'])  # respects quoting!
+            CFLAGS = [v for v in CFLAGS if v[0:2] != '-I']
+            env.Append(CCFLAGS=CFLAGS)
+
+        if "CXXFLAGS" in os.environ:
+            CXXFLAGS = shlex.split(os.environ['CXXFLAGS'])  # respects quoting!
+            CXXFLAGS = [v for v in CXXFLAGS if v[0:2] != '-I']
+            CXXFLAGS = [v for v in CXXFLAGS if v[0:5] != '-std=']  # we let LSST set this
+            CXXFLAGS = [v for v in CXXFLAGS if v not in CFLAGS]  # conda puts in duplicates
+            env.Append(CXXFLAGS=CXXFLAGS)
 
     #
     # Remove valid options from the arguments
