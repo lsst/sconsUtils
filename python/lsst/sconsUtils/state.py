@@ -367,7 +367,7 @@ def _configureCommon():
             # conda-build expects you to use the compilers as-is
             env['CC'] = os.environ['CC']
             env['CXX'] = os.environ['CXX']
-
+            env['SANITIZER'] = os.environ['SANITIZER']
             conf = env.Configure(custom_tests={'ClassifyCc': ClassifyCc})
             env.whichCc, env.ccVersion = conf.ClassifyCc()
             if not env.GetOption("no_progress"):
@@ -412,6 +412,12 @@ def _configureCommon():
     #
     # Compiler flags, including CCFLAGS for C and C++ and CXXFLAGS for C++ only
     #
+
+    if 'SANITIZER' in env:
+        if env.whichCc == 'clang':
+            env.Append(CCFLAGS='-fsanitize='+env['SANITIZER'])
+        else:
+            log.warn("clang needs to used with sanitizer enabled")
     ARCHFLAGS = os.environ.get("ARCHFLAGS", env.get('archflags'))
     if ARCHFLAGS:
         env.Append(CCFLAGS=ARCHFLAGS.split())
