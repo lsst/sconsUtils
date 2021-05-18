@@ -416,6 +416,8 @@ def _configureCommon():
     if 'SANITIZER' in env:
         if env.whichCc == 'clang':
             env.Append(CCFLAGS='-fsanitize='+env['SANITIZER'])
+            env.Append(LINKFLAGS='-fsanitize='+env['SANITIZER'])
+            env.Append(SHLINKFLAGS='-fsanitize='+env['SANITIZER'])
         else:
             log.warn("clang needs to used with sanitizer enabled")
     ARCHFLAGS = os.environ.get("ARCHFLAGS", env.get('archflags'))
