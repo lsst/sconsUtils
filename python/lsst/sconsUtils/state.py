@@ -548,19 +548,19 @@ def _configureCommon():
         env.Append(LINKFLAGS="--coverage")
 
     #
-    # Enable C++17 support
+    # Enable C++20 support
     #
     if not (env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec")):
         if not env.GetOption("no_progress"):
-            log.info("Checking for C++17 support")
+            log.info("Checking for C++20 support")
         conf = env.Configure()
-        for cpp17Arg in (f"-std={val}" for val in ("c++17",)):
+        for cpp20Arg in (f"-std={val}" for val in ("c++20",)):
             conf.env = env.Clone()
-            conf.env.Append(CXXFLAGS=cpp17Arg)
+            conf.env.Append(CXXFLAGS=cpp20Arg)
             if conf.CheckCXX():
-                env.Append(CXXFLAGS=cpp17Arg)
+                env.Append(CXXFLAGS=cpp20Arg)
                 if not env.GetOption("no_progress"):
-                    log.info(f"C++17 supported with {cpp17Arg!r}")
+                    log.info(f"C++20 supported with {cpp20Arg!r}")
                 break
         else:
             log.fail(f"C++17 extensions could not be enabled for compiler {env.whichCc!r}")
