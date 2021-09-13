@@ -133,9 +133,24 @@ def _initEnvironment():
       SDKROOT
     """.split()
 
+    codeCheckerVars = """
+      LD_PRELOAD
+      CC_LOGGER_FILE
+      CC_LOGGER_GCC_LIKE
+      CC_LIB_DIR
+      CC_DATA_FILES_DIR
+      CC_LOGGER_BIN
+    """.split()
+
     for key in preserveVars:
         if key in os.environ:
             ourEnv[key] = os.environ[key]
+
+    # check if running in CodeChecker environment
+    if "CC_LOGGER_BIN" in os.environ:
+        for key in codeCheckerVars:
+            if key in os.environ:
+                ourEnv[key] = os.environ[key]
 
     # Find and propagate EUPS environment variables.
     cfgPath = []
