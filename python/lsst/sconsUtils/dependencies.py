@@ -229,7 +229,7 @@ class Configuration:
         if version is not None:
             self.version = version
         if productDir is None:
-            state.log.warn("Could not find EUPS product dir for '%s'; using %s."
+            state.log.info("Could not find EUPS product dir for '%s'; using %s."
                            % (self.eupsProduct, self.root))
         else:
             self.root = os.path.realpath(productDir)
