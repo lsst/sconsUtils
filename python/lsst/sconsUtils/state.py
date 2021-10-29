@@ -438,7 +438,8 @@ def _configureCommon():
     elif env['profile'] == 'gcov':
         env.Append(CCFLAGS='--coverage')
         env.Append(LINKFLAGS='--coverage')
-
+    env.Append(CXXFLAGS='-mavx2')
+    env.Append(CCFLAGS='-mavx2')
     #
     # Enable C++17 support
     #
