@@ -106,7 +106,7 @@ def _initVariables():
         ('baseversion', 'Specify the current base version', None),
         ('optFiles', "Specify a list of files that SHOULD be optimized", None),
         ('noOptFiles', "Specify a list of files that should NOT be optimized", None),
-        ('macosx_deployment_target', 'Deployment target for Mac OS X', '12.0'),
+        ('macosx_deployment_target', 'Deployment target for Mac OS X', '11.0'),
     )
 
 
