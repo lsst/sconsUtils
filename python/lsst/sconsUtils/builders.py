@@ -22,7 +22,8 @@ def SharedLibraryIncomplete(self, target, source, **keywords):
     """
     myenv = self.Clone()
     if myenv['PLATFORM'] == 'darwin':
-        myenv['SHLINKFLAGS'] += ["-undefined", "suppress", "-flat_namespace", "-headerpad_max_install_names"]
+        myenv['SHLINKFLAGS'] += ["-undefined", "dynamic_lookup",
+                                 "-headerpad_max_install_names"]
     return myenv.SharedLibrary(target, source, **keywords)
 
 
@@ -34,8 +35,8 @@ def Pybind11LoadableModule(self, target, source, **keywords):
     myenv = self.Clone()
     myenv.Append(CCFLAGS=["-fvisibility=hidden"])
     if myenv['PLATFORM'] == 'darwin':
-        myenv.Append(LDMODULEFLAGS=["-undefined", "suppress",
-                                    "-flat_namespace", "-headerpad_max_install_names"])
+        myenv.Append(LDMODULEFLAGS=["-undefined", "dynamic_lookup",
+                                    "-headerpad_max_install_names"])
     return myenv.LoadableModule(target, source, **keywords)
 
 
