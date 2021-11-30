@@ -368,10 +368,10 @@ class Control:
         if njobs > 1:
             # We unambiguously specify the Python interpreter to be used to
             # execute tests. This ensures that all pytest-xdist worker
-            # processes refer to the same Python as the xdist master, and
+            # processes refer to the same Python as the xdist controller, and
             # hence avoids pollution of ``sys.path`` that can happen when we
             # call the same interpreter by different paths (for example, if
-            # the master process calls ``miniconda/bin/python``, and the
+            # the controller process calls ``miniconda/bin/python``, and the
             # workers call ``current/bin/python``, the workers will end up
             # with site-packages directories corresponding to both locations
             # on ``sys.path``, even if the one is a symlink to the other).
