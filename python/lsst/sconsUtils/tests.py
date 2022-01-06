@@ -241,7 +241,7 @@ class Control:
             if f.endswith(".cc"):  # look for executable
                 f = os.path.splitext(f)[0]
             else:
-                interpreter = "pytest -Wd --junit-xml=${TARGET}.xml"
+                interpreter = "pytest -Wd --durations=5 --junit-xml=${TARGET}.xml"
                 interpreter += " --junit-prefix={0}".format(self.junitPrefix())
                 interpreter += self._getPytestCoverageCommand()
 
@@ -333,7 +333,7 @@ class Control:
         # run failed tests.
         lfnfOpt = "none" if 'install' in SCons.Script.COMMAND_LINE_TARGETS else "all"
         interpreter = f"pytest -Wd --lf --lfnf={lfnfOpt}"
-        interpreter += " --junit-xml=${TARGET} --session2file=${TARGET}.out"
+        interpreter += " --durations=5 --junit-xml=${TARGET} --session2file=${TARGET}.out"
         interpreter += " --junit-prefix={0}".format(self.junitPrefix())
         interpreter += self._getPytestCoverageCommand()
 
