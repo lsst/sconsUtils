@@ -67,7 +67,7 @@ class Control:
     _EXPECT_FAILURE = "EXPECT_FAILURE"
 
     def __init__(self, env, ignoreList=None, expectedFailures=None, args=None,
-                 tmpDir=".tests", verbose=False):
+                 tmpDir=".tests", verbose=False, coverage=True):
 
         # Need to define our own Astropy cache directories.
         # Unfortunately we can not simply set XDG_CACHE_HOME
@@ -143,6 +143,8 @@ class Control:
         if not self.runExamples:
             print("Not running examples; \"chmod 755 %s\" to run them again" % self._tmpDir,
                   file=sys.stderr)
+
+        self.coverage = coverage
 
     def args(self, test):
         """Arguments to use for this test.
@@ -461,6 +463,9 @@ class Control:
             String defining the coverage-specific arguments to give to the
             pytest command.
         """
+
+        if not self.coverage:
+            return " --no-cov"
 
         options = ""
 

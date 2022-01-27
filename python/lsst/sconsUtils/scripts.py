@@ -519,7 +519,7 @@ class BasicSConscript:
     @staticmethod
     def tests(pyList=None, ccList=None, swigNameList=None, swigSrc=None,
               ignoreList=None, noBuildList=None, pySingles=None,
-              args=None):
+              args=None, coverage=True):
         """Convenience function to replace standard tests/SConscript
         boilerplate.
 
@@ -612,7 +612,7 @@ class BasicSConscript:
         state.log.info("C++ tests: %s" % s(ccList))
         state.log.info("Files that will not be built: %s" % noBuildList)
         state.log.info("Ignored tests: %s" % ignoreList)
-        control = tests.Control(state.env, ignoreList=ignoreList, args=args, verbose=True)
+        control = tests.Control(state.env, ignoreList=ignoreList, args=args, verbose=True, coverage=coverage)
         for ccTest in ccList:
             state.env.Program(ccTest, LIBS=state.env.getLibs("main test"))
         swigMods = []
