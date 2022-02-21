@@ -120,7 +120,7 @@ class BasicSConstruct:
         state.env.BuildETags()
         if cleanExt is None:
             cleanExt = r"*~ core core.[1-9]* *.so *.os *.o *.pyc *.pkgc"
-        state.env.CleanTree(cleanExt, ".cache __pycache__ .pytest_cache")
+        state.env.CleanTree(cleanExt, "__pycache__ .pytest_cache")
         if versionModuleName is not None:
             try:
                 versionModuleName = versionModuleName % "/".join(packageName.split("_"))
