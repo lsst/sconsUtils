@@ -24,7 +24,7 @@ class Log:
 
     def __init__(self):
         self.traceback = False
-        self.verbose = True
+        self.verbose = False
 
     def info(self, message):
         if self.verbose:
