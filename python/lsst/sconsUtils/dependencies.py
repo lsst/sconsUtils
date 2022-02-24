@@ -6,7 +6,7 @@ __all__ = ("Configuration", "ExternalConfiguration", "PackageTree", "configure")
 import os
 import os.path
 import collections
-import imp
+import importlib
 from sys import platform
 import SCons.Script
 from . import eupsForScons
@@ -622,7 +622,16 @@ class PackageTree:
             filename = os.path.join(path, name + ".cfg")
             if os.path.exists(filename):
                 try:
-                    module = imp.load_source(name + "_cfg", filename)
+                    # https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly
+                    # Need to specify SourceFileLoader since the files do not
+                    # have a .py extension.
+                    module_name = f"{name}_cfg"
+                    loader = importlib.machinery.SourceFileLoader(module_name, filename)
+                    spec = importlib.util.spec_from_file_location(module_name, filename,
+                                                                  submodule_search_locations=None,
+                                                                  loader=loader)
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
                 except Exception as e:
                     state.log.warn("Error loading configuration %s (%s)" % (filename, e))
                     continue
