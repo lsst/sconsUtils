@@ -131,6 +131,7 @@ def _initEnvironment():
       XPA_PORT
       CONDA_BUILD_SYSROOT
       SDKROOT
+      GCC_COLORS
     """.split()
 
     codeCheckerVars = """
