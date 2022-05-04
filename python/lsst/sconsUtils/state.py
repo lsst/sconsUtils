@@ -76,6 +76,21 @@ def _initLog():
     log = utils.Log()
 
 
+def _get_macosx_deployment_target_default():
+    """Determine the default deployment target on macOS.
+
+    Returns
+    -------
+    target : `str`
+        The default target for this platform. Can be returned even
+        if not running on macOS.
+    """
+    uname = os.uname()
+    if uname.sysname == 'Darwin' and uname.machine == 'arm64':
+        return "11.0"
+    return "10.9"
+
+
 def _initVariables():
     files = []
     if "optfile" in SCons.Script.ARGUMENTS:
@@ -106,7 +121,8 @@ def _initVariables():
         ('baseversion', 'Specify the current base version', None),
         ('optFiles', "Specify a list of files that SHOULD be optimized", None),
         ('noOptFiles', "Specify a list of files that should NOT be optimized", None),
-        ('macosx_deployment_target', 'Deployment target for Mac OS X', '10.9'),
+        ('macosx_deployment_target', 'Deployment target for Mac OS X',
+         _get_macosx_deployment_target_default()),
     )
 
 
