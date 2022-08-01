@@ -332,16 +332,17 @@ class DoxygenBuilder:
             tagNode = SCons.Script.File(self.makeTag)
             self.makeTag = tagNode.abspath
             self.targets.append(tagNode)
-        config = env.Command(target=outConfigNode, source=inConfigNode if os.path.exists(config) else None,
-                             action=self.buildConfig)
-        env.AlwaysBuild(config)
-        doc = env.Command(target=self.targets, source=self.sources,
-                          action="doxygen %s" % pipes.quote(outConfigNode.abspath))
+        makeConfig = env.Command(target=outConfigNode,
+                                 source=inConfigNode if os.path.exists(config) else None,
+                                 action=self.buildConfig)
+        env.AlwaysBuild(makeConfig)
+        makeDoc = env.Command(target=self.targets, source=self.sources,
+                              action="doxygen %s" % pipes.quote(outConfigNode.abspath))
         for path in self.outputPaths:
-            env.Clean(doc, path)
-        env.Depends(doc, config)
-        self.results.extend(config)
-        self.results.extend(doc)
+            env.Clean(makeDoc, path)
+        env.Depends(makeDoc, makeConfig)
+        self.results.extend(makeConfig)
+        self.results.extend(makeDoc)
         return self.results
 
     def findSources(self):
