@@ -339,9 +339,8 @@ class DoxygenBuilder:
                           action="doxygen %s" % pipes.quote(outConfigNode.abspath))
         for path in self.outputPaths:
             env.Clean(doc, path)
-        if os.path.exists(config):
-            env.Depends(doc, config)
-            self.results.extend(config)
+        env.Depends(doc, config)
+        self.results.extend(config)
         self.results.extend(doc)
         return self.results
 
