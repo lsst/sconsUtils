@@ -94,7 +94,7 @@ class Control:
                                "astropy due to lack of astropy directory within it")
 
         # Forward some environment to the tests
-        for envvar in ["PYTHONPATH", xdgCacheVar]:
+        for envvar in ["PYTHONPATH", "HTTP_PROXY", "HTTPS_PROXY", xdgCacheVar]:
             if envvar in os.environ:
                 env.AppendENVPath(envvar, os.environ[envvar])
 
