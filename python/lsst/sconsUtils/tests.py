@@ -243,6 +243,7 @@ class Control:
             else:
                 interpreter = "pytest -Wd --durations=5 --junit-xml=${TARGET}.xml"
                 interpreter += " --junit-prefix={0}".format(self.junitPrefix())
+                interpreter += " --log-level=DEBUG"
                 interpreter += self._getPytestCoverageCommand()
 
             if self.ignore(f):
@@ -335,6 +336,7 @@ class Control:
         interpreter = f"pytest -Wd --lf --lfnf={lfnfOpt}"
         interpreter += " --durations=5 --junit-xml=${TARGET} --session2file=${TARGET}.out"
         interpreter += " --junit-prefix={0}".format(self.junitPrefix())
+        interpreter += " --log-level=DEBUG"
         interpreter += self._getPytestCoverageCommand()
 
         # Ignore doxygen build directories since they can confuse pytest
