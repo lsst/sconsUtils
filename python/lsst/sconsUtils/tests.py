@@ -98,6 +98,11 @@ class Control:
             if envvar in os.environ:
                 env.AppendENVPath(envvar, os.environ[envvar])
 
+        # We can't use the AppendENVPath call above as that mangles anything
+        # with ':' separators.
+        if "PYTHONWARNINGS" in os.environ:
+            env["ENV"]["PYTHONWARNINGS"] = os.environ["PYTHONWARNINGS"]
+
         self._env = env
 
         self._tmpDir = tmpDir
