@@ -525,7 +525,7 @@ def _configureCommon():
         env.Append(CCFLAGS=['-Wall'])
         env.Append(CCFLAGS=["-Wno-unknown-pragmas"])  # we don't want complaints about icc/clang pragmas
         env.Append(CCFLAGS=["-Wno-unused-local-typedefs"])  # boost generates a lot of these
-        env.Append(CCFLAGS=["-Werror=catch-value="])
+        env.Append(CCFLAGS=["-Werror=catch-value"])
     elif env.whichCc == "icc":
         env.Append(CCFLAGS=['-Wall'])
         filterWarnings = {
