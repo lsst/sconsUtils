@@ -224,8 +224,8 @@ def _initEnvironment():
         # We want to be explicit about the OS X version we're targeting
         #
         env['ENV']['MACOSX_DEPLOYMENT_TARGET'] = env['macosx_deployment_target']
-        # This flag is required for std::variant and std::filesystem
-        # on deployment platforms < 10.13 and 10.15
+        # The AVAILABILITY flag is required for std::variant and
+        # std::filesystem on deployment platforms < 10.13 and 10.15.
         for flag in ("-D_LIBCPP_DISABLE_AVAILABILITY=1", ):
             env["CFLAGS"].append(flag)
             env["CXXFLAGS"].append(flag)
@@ -236,6 +236,13 @@ def _initEnvironment():
         # once XCode is fixed. See Apple radar rdr://25313838
         #
         env['LIBDIRSUFFIX'] = '/'
+
+    # The _HAS_AUTO_PTR_ETC flag tells boost to only use C++17 code, and
+    # removes references to deprecated functionality such as
+    # std::unary_function and std::binary_function.
+    for flag in ("-D_HAS_AUTO_PTR_ETC=0", ):
+        env["CFLAGS"].append(flag)
+        env["CXXFLAGS"].append(flag)
 
     if use_conda_compilers():
         _conda_prefix = get_conda_prefix()
