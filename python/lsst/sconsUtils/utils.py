@@ -1,5 +1,7 @@
 """Internal utilities for sconsUtils."""
 
+from __future__ import annotations
+
 __all__ = (
     "Log",
     "_has_OSX_SIP",
