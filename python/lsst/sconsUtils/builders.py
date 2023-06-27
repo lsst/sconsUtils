@@ -588,13 +588,9 @@ def VersionModule(self, filename, versionString=None):
                 info = tuple(int(v) for v in parts[0].split("."))
                 what = "__version_info__"
                 names.append(what)
-                version_info = f"{what} : Tuple[int, ...] = {info!r}\n"
+                version_info = f"{what} : tuple[int, ...] = {info!r}\n"
             except ValueError:
                 pass
-
-            tuple_txt = ", Tuple" if version_info is not None else ""
-            outFile.write(f"from typing import Dict, Optional{tuple_txt}\n")
-            outFile.write("\n\n")
 
             what = "__version__"
             outFile.write(f'{what}: str = "{version}"\n')
@@ -621,7 +617,7 @@ def VersionModule(self, filename, versionString=None):
 
             what = "__dependency_versions__"
             names.append(what)
-            outFile.write(f"{what}: Dict[str, Optional[str]] = {{")
+            outFile.write(f"{what}: dict[str, str | None] = {{")
             if env.dependencies.packages:
                 outFile.write("\n")
                 for name, mod in env.dependencies.packages.items():
