@@ -359,7 +359,7 @@ class BasicSConscript:
             # Currently just use this python
             usepython = utils.whichPython()
             for targ, src in zip(target, source):
-                with open(str(src), "r") as srcfd:
+                with open(str(src)) as srcfd:
                     with open(str(targ), "w") as outfd:
                         first_line = srcfd.readline()
                         # Always match the first line so we can warn people

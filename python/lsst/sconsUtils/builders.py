@@ -444,7 +444,7 @@ class DoxygenBuilder:
         # Append the local overrides (usually doxygen.conf.in)
         #
         if len(source) > 0:
-            with open(source[0].abspath, "r") as inConfigFile:
+            with open(source[0].abspath) as inConfigFile:
                 outConfigFile.write(inConfigFile.read())
 
         outConfigFile.close()
