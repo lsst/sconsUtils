@@ -3,27 +3,25 @@
 
 __all__ = ("filesToTag", "DoxygenBuilder")
 
-import os
-import re
 import fnmatch
+import os
 import pipes
+import re
 
 import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
 
-from .utils import memberOf
-from .installation import determineVersion, getFingerprint
 from . import state
+from .installation import determineVersion, getFingerprint
+from .utils import memberOf
 
 
 @memberOf(SConsEnvironment)
 def SharedLibraryIncomplete(self, target, source, **keywords):
-    """Like SharedLibrary, but don't insist that all symbols are resolved.
-    """
+    """Like SharedLibrary, but don't insist that all symbols are resolved."""
     myenv = self.Clone()
-    if myenv['PLATFORM'] == 'darwin':
-        myenv['SHLINKFLAGS'] += ["-undefined", "dynamic_lookup",
-                                 "-headerpad_max_install_names"]
+    if myenv["PLATFORM"] == "darwin":
+        myenv["SHLINKFLAGS"] += ["-undefined", "dynamic_lookup", "-headerpad_max_install_names"]
     return myenv.SharedLibrary(target, source, **keywords)
 
 
@@ -34,9 +32,8 @@ def Pybind11LoadableModule(self, target, source, **keywords):
     """
     myenv = self.Clone()
     myenv.Append(CCFLAGS=["-fvisibility=hidden"])
-    if myenv['PLATFORM'] == 'darwin':
-        myenv.Append(LDMODULEFLAGS=["-undefined", "dynamic_lookup",
-                                    "-headerpad_max_install_names"])
+    if myenv["PLATFORM"] == "darwin":
+        myenv.Append(LDMODULEFLAGS=["-undefined", "dynamic_lookup", "-headerpad_max_install_names"])
     return myenv.LoadableModule(target, source, **keywords)
 
 
@@ -289,13 +286,14 @@ def ProductDir(env, product):
         The product directory. `None` if the product is not known.
     """
     from . import eupsForScons
+
     global _productDirs
     try:
         _productDirs
     except Exception:
         try:
             _productDirs = eupsForScons.productDir(eupsenv=eupsForScons.getEups())
-        except TypeError:               # old version of eups (pre r18588)
+        except TypeError:  # old version of eups (pre r18588)
             _productDirs = None
     if _productDirs:
         pdir = _productDirs.get(product)
@@ -332,11 +330,15 @@ class DoxygenBuilder:
             tagNode = SCons.Script.File(self.makeTag)
             self.makeTag = tagNode.abspath
             self.targets.append(tagNode)
-        config = env.Command(target=outConfigNode, source=inConfigNode if os.path.exists(config) else None,
-                             action=self.buildConfig)
+        config = env.Command(
+            target=outConfigNode,
+            source=inConfigNode if os.path.exists(config) else None,
+            action=self.buildConfig,
+        )
         env.AlwaysBuild(config)
-        doc = env.Command(target=self.targets, source=self.sources,
-                          action="doxygen %s" % pipes.quote(outConfigNode.abspath))
+        doc = env.Command(
+            target=self.targets, source=self.sources, action="doxygen %s" % pipes.quote(outConfigNode.abspath)
+        )
         for path in self.outputPaths:
             env.Clean(doc, path)
         env.Depends(doc, config)
@@ -408,9 +410,9 @@ class DoxygenBuilder:
             incFiles.append('"%s"' % incFile)
             self.sources.append(SCons.Script.File(incPath))
         if docPaths:
-            outConfigFile.write('@INCLUDE_PATH = %s\n' % _quote_paths(docPaths))
+            outConfigFile.write("@INCLUDE_PATH = %s\n" % _quote_paths(docPaths))
         for incFile in incFiles:
-            outConfigFile.write('@INCLUDE = %s\n' % _quote_path(incFile))
+            outConfigFile.write("@INCLUDE = %s\n" % _quote_path(incFile))
 
         for tagPath in self.useTags:
             docDir, tagFile = os.path.split(tagPath)
@@ -519,8 +521,9 @@ def Doxygen(self, config, **kwargs):
     The workaround is just to build the docs after building the source.
     """
 
-    inputs = [d for d in ["#doc", "#include", "#python", "#src"]
-              if os.path.exists(SCons.Script.Entry(d).abspath)]
+    inputs = [
+        d for d in ["#doc", "#include", "#python", "#src"] if os.path.exists(SCons.Script.Entry(d).abspath)
+    ]
     defaults = {
         "inputs": inputs,
         "recursive": True,
@@ -532,7 +535,7 @@ def Doxygen(self, config, **kwargs):
         "makeTag": None,
         "projectName": None,
         "projectNumber": None,
-        "excludeSwig": True
+        "excludeSwig": True,
     }
     for k in defaults:
         if kwargs.get(k) is None:
@@ -544,7 +547,11 @@ def Doxygen(self, config, **kwargs):
 @memberOf(SConsEnvironment)
 def VersionModule(self, filename, versionString=None):
     if versionString is None:
-        for n in ("git", "hg", "svn",):
+        for n in (
+            "git",
+            "hg",
+            "svn",
+        ):
             if os.path.isdir(".%s" % n):
                 versionString = n
 
@@ -554,6 +561,7 @@ def VersionModule(self, filename, versionString=None):
     def calcMd5(filename):
         try:
             import hashlib
+
             md5 = hashlib.md5(open(filename, "rb").read()).hexdigest()
         except IOError:
             md5 = None
@@ -632,7 +640,7 @@ def VersionModule(self, filename, versionString=None):
             outFile.write(")\n")
 
         if calcMd5(target[0].abspath) != oldMd5:  # only print if something's changed
-            state.log.info("makeVersionModule([\"%s\"], [])" % str(target[0]))
+            state.log.info('makeVersionModule(["%s"], [])' % str(target[0]))
 
     result = self.Command(filename, [], self.Action(makeVersionModule, strfunction=lambda *args: None))
 

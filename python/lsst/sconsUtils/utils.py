@@ -1,15 +1,24 @@
 """Internal utilities for sconsUtils."""
 
-__all__ = ("Log", "_has_OSX_SIP", "libraryPathPassThrough", "whichPython",
-           "needShebangRewrite", "libraryLoaderEnvironment", "runExternal",
-           "memberOf", "get_conda_prefix")
+__all__ = (
+    "Log",
+    "_has_OSX_SIP",
+    "libraryPathPassThrough",
+    "whichPython",
+    "needShebangRewrite",
+    "libraryLoaderEnvironment",
+    "runExternal",
+    "memberOf",
+    "get_conda_prefix",
+)
 
 import os
+import platform
+import subprocess
 import sys
 import warnings
-import subprocess
-import platform
 from typing import Optional
+
 import SCons.Script
 
 
@@ -60,9 +69,9 @@ def _has_OSX_SIP():
     hasSIP = False
     os_platform = SCons.Platform.platform_default()
     # SIP is enabled on OS X >=10.11 equivalent to darwin >= 15
-    if os_platform == 'darwin':
+    if os_platform == "darwin":
         release_str = platform.release()
-        release_major = int(release_str.split('.')[0])
+        release_major = int(release_str.split(".")[0])
         if release_major >= 15:
             hasSIP = True
     return hasSIP
@@ -100,8 +109,9 @@ def whichPython():
     """
     global _pythonPath
     if _pythonPath is None:
-        _pythonPath = runExternal(["python", "-c", "import sys; print(sys.executable)"],
-                                  fatal=True, msg="Error getting python path")
+        _pythonPath = runExternal(
+            ["python", "-c", "import sys; print(sys.executable)"], fatal=True, msg="Error getting python path"
+        )
     return _pythonPath
 
 
@@ -140,12 +150,10 @@ def libraryLoaderEnvironment():
             if varname in os.environ:
                 libpathstr += '{}="{}" '.format(varname, os.environ[varname])
 
-        if aux_pass_through_var in os.environ and \
-           lib_pass_through_var not in os.environ:
+        if aux_pass_through_var in os.environ and lib_pass_through_var not in os.environ:
             libpathstr += '{}="{}" '.format(lib_pass_through_var, os.environ[aux_pass_through_var])
 
-        if lib_pass_through_var in os.environ and \
-           aux_pass_through_var not in os.environ:
+        if lib_pass_through_var in os.environ and aux_pass_through_var not in os.environ:
             libpathstr += '{}="{}" '.format(aux_pass_through_var, os.environ[lib_pass_through_var])
 
     return libpathstr
@@ -187,13 +195,13 @@ def runExternal(cmd, fatal=False, msg=None):
         shell = False
 
     try:
-        retval = subprocess.run(cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                check=True)
+        retval = subprocess.run(cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError as e:
         if fatal:
             raise RuntimeError(f"{msg}: {e.stderr.decode()}") from e
         else:
             from . import state  # can't import at module scope due to circular dependency
+
             state.log.warn(f"{msg}: {e.stderr}")
     return retval.stdout.decode().strip()
 
@@ -241,18 +249,19 @@ def memberOf(cls, name=None):
         for scope in classes:
             setattr(scope, kw["name"], member)
         return member
+
     return nested
 
 
 def get_conda_prefix() -> Optional[str]:
     """Returns a copy of the current conda prefix, if available."""
-    _conda_prefix = os.environ.get('CONDA_PREFIX')
-    if os.environ.get('CONDA_BUILD', "0") == "1":
+    _conda_prefix = os.environ.get("CONDA_PREFIX")
+    if os.environ.get("CONDA_BUILD", "0") == "1":
         # when running conda-build, the right prefix to use is PREFIX
         # however, this appears to be absent in some builds - but we
         # already set the fallback
-        if 'PREFIX' in os.environ:
-            _conda_prefix = os.environ['PREFIX']
+        if "PREFIX" in os.environ:
+            _conda_prefix = os.environ["PREFIX"]
     return _conda_prefix
 
 
@@ -262,6 +271,6 @@ def use_conda_compilers():
         return False
     if "CONDA_BUILD_SYSROOT" in os.environ or "CONDA_PREFIX" in os.environ:
         return True
-    if os.environ.get('CONDA_BUILD', "0") == "1":
+    if os.environ.get("CONDA_BUILD", "0") == "1":
         return True
     return False

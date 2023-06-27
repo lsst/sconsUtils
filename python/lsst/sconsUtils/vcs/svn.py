@@ -11,8 +11,9 @@ import sys
 def isSvnFile(file):
     """Is file under svn control?"""
 
-    return re.search(r"is not a working copy",
-                     "".join(os.popen("svn info %s 2>&1" % file).readlines())) is None
+    return (
+        re.search(r"is not a working copy", "".join(os.popen("svn info %s 2>&1" % file).readlines())) is None
+    )
 
 
 def getInfo(file="."):
@@ -83,7 +84,7 @@ def revision(file=None, lastChanged=False):
 
         return matches["oldest"], matches["youngest"], tuple(matches["flags"])
 
-    raise RuntimeError("svnversion returned unexpected result \"%s\"" % res[:-1])
+    raise RuntimeError('svnversion returned unexpected result "%s"' % res[:-1])
 
 
 def guessVersionName(HeadURL):
@@ -96,14 +97,14 @@ def guessVersionName(HeadURL):
     elif re.search(r"/tags/(.+)$", HeadURL):
         versionName = "%s" % re.search(r"/tags/(.*)$", HeadURL).group(1)
 
-        return versionName              # no need for a "+svnXXXX"
+        return versionName  # no need for a "+svnXXXX"
     elif re.search(r"/tickets/(\d+)$", HeadURL):
         versionName = "ticket_%s+" % re.search(r"/tickets/(\d+)$", HeadURL).group(1)
     else:
         print("Unable to guess versionName name from %s" % HeadURL, file=sys.stderr)
         versionName = "unknown+"
 
-    try:                    # Try to lookup the svn versionName
+    try:  # Try to lookup the svn versionName
         (oldest, youngest, flags) = revision()
 
         okVersion = True
@@ -114,8 +115,11 @@ def guessVersionName(HeadURL):
             msg = "You are installing, but have switched SVN URLs"
             okVersion = False
         if oldest != youngest:
-            msg = "You have a range of revisions in your tree (%s:%s); adopting %s" % \
-                  (oldest, youngest, youngest)
+            msg = "You have a range of revisions in your tree (%s:%s); adopting %s" % (
+                oldest,
+                youngest,
+                youngest,
+            )
             okVersion = False
 
         if not okVersion:
@@ -147,7 +151,7 @@ def parseVersionName(versionName):
         if type == "branches":
             type = "branch"
         ticket = mat.group(2)
-        pm = mat.group(3)               # + or -
+        pm = mat.group(3)  # + or -
         revision = mat.group(4)
         if revision:
             revision = re.sub("^svn", "", revision)

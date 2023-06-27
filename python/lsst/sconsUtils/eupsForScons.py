@@ -5,6 +5,7 @@ try:
     # versions are defined. Only a subset of EUPS functions are required
     # but all are imported to prevent warnings from redefinitions below.
     from eups import *  # noqa F403 F401
+
     eupsLoaded = True
 except ImportError:
     eupsLoaded = False
@@ -23,10 +24,10 @@ if not haveEups():
 
         log.warn("Unable to import eups; guessing flavor")
 
-        if env['PLATFORM'] == "posix":
+        if env["PLATFORM"] == "posix":
             return os.uname()[0].title()
         else:
-            return env['PLATFORM'].title()
+            return env["PLATFORM"].title()
 
     def productDir(name):
         return os.environ.get("%s_DIR" % name.upper())
@@ -37,12 +38,14 @@ if not haveEups():
     class _Eups:
         def __call__(self):
             return self
+
     Eups = _Eups()
 
     Eups.findSetupVersion = findSetupVersion
 
     class _Utils:
         pass
+
     utils = _Utils()
 
     def setupEnvNameFor(productName):

@@ -6,9 +6,10 @@ CUDA Tool for SCons
 """
 
 import os
-import SCons.Tool
-import SCons.Scanner.C
+
 import SCons.Defaults
+import SCons.Scanner.C
+import SCons.Tool
 
 CUDAScanner = SCons.Scanner.C.CScanner()
 
@@ -19,7 +20,7 @@ CUDAScanner = SCons.Scanner.C.CScanner()
 def CUDANVCCStaticObjectEmitter(target, source, env):
     tgt, src = SCons.Defaults.StaticObjectEmitter(target, source, env)
     for file in src:
-        lifile = os.path.splitext(src[0].rstr())[0] + '.linkinfo'  # noqa F841
+        lifile = os.path.splitext(src[0].rstr())[0] + ".linkinfo"  # noqa F841
         # tgt.append(lifile)
     return tgt, src
 
@@ -27,35 +28,38 @@ def CUDANVCCStaticObjectEmitter(target, source, env):
 def CUDANVCCSharedObjectEmitter(target, source, env):
     tgt, src = SCons.Defaults.SharedObjectEmitter(target, source, env)
     for file in src:
-        lifile = os.path.splitext(src[0].rstr())[0] + '.linkinfo'  # noqa F841
+        lifile = os.path.splitext(src[0].rstr())[0] + ".linkinfo"  # noqa F841
         # tgt.append(lifile)
     return tgt, src
 
 
 def generate(env):
     staticObjBuilder, sharedObjBuilder = SCons.Tool.createObjBuilders(env)
-    staticObjBuilder.add_action('.cu', '$STATICNVCCCMD')
-    staticObjBuilder.add_emitter('.cu', CUDANVCCStaticObjectEmitter)
-    sharedObjBuilder.add_action('.cu', '$SHAREDNVCCCMD')
-    sharedObjBuilder.add_emitter('.cu', CUDANVCCSharedObjectEmitter)
-    SCons.Tool.SourceFileScanner.add_scanner('.cu', CUDAScanner)
+    staticObjBuilder.add_action(".cu", "$STATICNVCCCMD")
+    staticObjBuilder.add_emitter(".cu", CUDANVCCStaticObjectEmitter)
+    sharedObjBuilder.add_action(".cu", "$SHAREDNVCCCMD")
+    sharedObjBuilder.add_emitter(".cu", CUDANVCCSharedObjectEmitter)
+    SCons.Tool.SourceFileScanner.add_scanner(".cu", CUDAScanner)
 
     # default compiler
-    env['NVCC'] = 'nvcc'
+    env["NVCC"] = "nvcc"
 
     # default flags for the NVCC compiler
-    env['NVCCFLAGS'] = ''
-    env['STATICNVCCFLAGS'] = ''
-    env['SHAREDNVCCFLAGS'] = ''
-    env['ENABLESHAREDNVCCFLAG'] = '-shared'
-    env['NVCCCMDLINE'] = ''
+    env["NVCCFLAGS"] = ""
+    env["STATICNVCCFLAGS"] = ""
+    env["SHAREDNVCCFLAGS"] = ""
+    env["ENABLESHAREDNVCCFLAG"] = "-shared"
+    env["NVCCCMDLINE"] = ""
 
     # default NVCC commands
-    env['STATICNVCCCMD'] = \
-        '$NVCC -o $TARGET -c $NVCCFLAGS $_CPPINCFLAGS $STATICNVCCFLAGS $NVCCCMDLINE $SOURCES'
-    env['SHAREDNVCCCMD'] = '$NVCC -o $TARGET -c $NVCCFLAGS $_CPPINCFLAGS $SHAREDNVCCFLAGS' \
-        ' $ENABLESHAREDNVCCFLAG $NVCCCMDLINE $SOURCES'
+    env[
+        "STATICNVCCCMD"
+    ] = "$NVCC -o $TARGET -c $NVCCFLAGS $_CPPINCFLAGS $STATICNVCCFLAGS $NVCCCMDLINE $SOURCES"
+    env["SHAREDNVCCCMD"] = (
+        "$NVCC -o $TARGET -c $NVCCFLAGS $_CPPINCFLAGS $SHAREDNVCCFLAGS"
+        " $ENABLESHAREDNVCCFLAG $NVCCCMDLINE $SOURCES"
+    )
 
 
 def exists(env):
-    return env.Detect('nvcc')
+    return env.Detect("nvcc")

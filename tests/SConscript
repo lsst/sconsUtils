@@ -2,18 +2,23 @@
 import os
 import shutil
 import subprocess
-from lsst.sconsUtils import env, scripts, targets
+
 import SCons.Script
+from lsst.sconsUtils import env, scripts, targets
 
-scripts.BasicSConscript.tests(pyList=[], pySingles=['testSingle.py'])
+scripts.BasicSConscript.tests(pyList=[], pySingles=["testSingle.py"])
 
-if env.GetOption('clean'):
-    dirName = os.path.join(SCons.Script.Dir('#').abspath, 'tests', 'testFailedTests')
+if env.GetOption("clean"):
+    dirName = os.path.join(SCons.Script.Dir("#").abspath, "tests", "testFailedTests")
 
-    subprocess.call("""
+    subprocess.call(
+        """
             cd %s
             scons -Qc > /dev/null 2>&1
-        """ % dirName, shell=True)
+        """
+        % dirName,
+        shell=True,
+    )
 
     try:
         shutil.rmtree(os.path.join(dirName, "python"))

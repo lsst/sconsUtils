@@ -7,8 +7,8 @@ the supported svn/python packages
 """
 import os
 import re
-from .. import state
-from .. import utils
+
+from .. import state, utils
 
 
 def guessVersionName():
@@ -38,7 +38,7 @@ def guessVersionName():
 
     # Prefer tag name to branch name; branch names get printed in parens
     index = 1
-    while ident[index].startswith('(') and ident[index].endswith(')') and len(ident) > index + 1:
+    while ident[index].startswith("(") and ident[index].endswith(")") and len(ident) > index + 1:
         index += 1
 
     # Prefer hash to "tip"
