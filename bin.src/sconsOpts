@@ -3,22 +3,25 @@
 # Print the options last passed to scons
 #
 from __future__ import print_function
+
+import argparse
 import os
 import sys
-import argparse
+
 try:
     import configparser
 except ImportError:
     import ConfigParser as configparser
 
 parser = argparse.ArgumentParser(description="Tell us how scons was invoked")
-parser.add_argument('configFile', type=str, nargs="?", default=None,
-                    help='The file with the information we need')
-parser.add_argument('--cc', type=str, default="gcc",
-                    help="Use this compiler if build.cfg is unavailable")
-parser.add_argument('--opt', type=int, default=0,
-                    help="Use this optimisation level if build.cfg is unavailable")
-parser.add_argument('--quiet', '-q', action="store_true", help="Don't generate any output")
+parser.add_argument(
+    "configFile", type=str, nargs="?", default=None, help="The file with the information we need"
+)
+parser.add_argument("--cc", type=str, default="gcc", help="Use this compiler if build.cfg is unavailable")
+parser.add_argument(
+    "--opt", type=int, default=0, help="Use this optimisation level if build.cfg is unavailable"
+)
+parser.add_argument("--quiet", "-q", action="store_true", help="Don't generate any output")
 
 args = parser.parse_args()
 dirName = "."
@@ -36,8 +39,8 @@ if os.path.exists(args.configFile):
     try:
         config.read(args.configFile)
 
-        cc = config.get("Build", 'cc')
-        opt = config.get("Build", 'opt')
+        cc = config.get("Build", "cc")
+        opt = config.get("Build", "opt")
     except Exception as e:
         if not args.quiet:
             print("File %s: error %s" % (args.configFile, e), file=sys.stderr)
