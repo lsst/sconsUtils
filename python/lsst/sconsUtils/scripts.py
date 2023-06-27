@@ -485,7 +485,7 @@ class BasicSConscript:
         )
         srcList = extraSrc
         if srcList is None:
-            srcList = dict([(name, []) for name in nameList])
+            srcList = {name: [] for name in nameList}
         for name in nameList:
             srcList[name].append(name + ".cc")
         if isinstance(libs, str):

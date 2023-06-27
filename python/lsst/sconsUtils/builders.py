@@ -427,7 +427,7 @@ class DoxygenBuilder:
         outConfigFile.write("EXCLUDE = %s\n" % _quote_paths(self.excludes))
         outConfigFile.write("FILE_PATTERNS = %s\n" % " ".join(self.patterns))
         outConfigFile.write("RECURSIVE = YES\n" if self.recursive else "RECURSIVE = NO\n")
-        allOutputs = set(("html", "latex", "man", "rtf", "xml"))
+        allOutputs = {"html", "latex", "man", "rtf", "xml"}
         for output, path in zip(self.outputs, self.outputPaths):
             try:
                 allOutputs.remove(output.lower())

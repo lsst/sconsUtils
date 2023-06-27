@@ -551,7 +551,7 @@ class PackageTree:
             "CustomCompileCheck": CustomCompileCheck,
             "CustomLinkCheck": CustomLinkCheck,
         }
-        self._current = set([primaryName])
+        self._current = {primaryName}
         if noCfgFile:
             self.primary = None
             return
