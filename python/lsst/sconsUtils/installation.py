@@ -237,7 +237,9 @@ def Declare(self, products=None):
                 self["ENV"]["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", "-1")
                 if "undeclare" in SCons.Script.COMMAND_LINE_TARGETS or self.GetOption("clean"):
                     if version:
-                        command = "eups undeclare --flavor %s %s %s" % (self["eupsFlavor"], product, version)
+                        command = "eups undeclare --flavor {} {} {}".format(
+                            self["eupsFlavor"], product, version
+                        )
                         if (
                             "current" in SCons.Script.COMMAND_LINE_TARGETS
                             and "declare" not in SCons.Script.COMMAND_LINE_TARGETS
@@ -251,7 +253,7 @@ def Declare(self, products=None):
                     else:
                         state.log.warn("I don't know your version; not undeclaring to eups")
                 else:
-                    command = "eups declare --force --flavor %s --root %s" % (
+                    command = "eups declare --force --flavor {} --root {}".format(
                         self["eupsFlavor"],
                         self["prefix"],
                     )
@@ -260,7 +262,7 @@ def Declare(self, products=None):
                         command += " -Z %s" % self["eupsPath"]
 
                     if version:
-                        command += " %s %s" % (product, version)
+                        command += f" {product} {version}"
 
                     current += [command + " --current"]
 
@@ -325,7 +327,7 @@ class DirectoryInstaller:
                     continue
                 destpath = os.path.join(prefix, root)
                 srcpath = os.path.join(root, filename)
-                state.log.info("Copying %s to %s" % (srcpath, destpath))
+                state.log.info(f"Copying {srcpath} to {destpath}")
                 shutil.copy(srcpath, destpath)
         return 0
 
@@ -405,7 +407,7 @@ def InstallEups(env, dest, files=[], presetup=""):
     else:
         presetupStr = []
         for p in presetup:
-            presetupStr += ["--product %s=%s" % (p, presetup[p])]
+            presetupStr += [f"--product {p}={presetup[p]}"]
         presetup = " ".join(presetupStr)
 
         env = env.Clone(ENV=os.environ)

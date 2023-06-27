@@ -148,13 +148,13 @@ def libraryLoaderEnvironment():
     if lib_pass_through_var is not None:
         for varname in (lib_pass_through_var, aux_pass_through_var):
             if varname in os.environ:
-                libpathstr += '{}="{}" '.format(varname, os.environ[varname])
+                libpathstr += f'{varname}="{os.environ[varname]}" '
 
         if aux_pass_through_var in os.environ and lib_pass_through_var not in os.environ:
-            libpathstr += '{}="{}" '.format(lib_pass_through_var, os.environ[aux_pass_through_var])
+            libpathstr += f'{lib_pass_through_var}="{os.environ[aux_pass_through_var]}" '
 
         if lib_pass_through_var in os.environ and aux_pass_through_var not in os.environ:
-            libpathstr += '{}="{}" '.format(aux_pass_through_var, os.environ[lib_pass_through_var])
+            libpathstr += f'{aux_pass_through_var}="{os.environ[lib_pass_through_var]}" '
 
     return libpathstr
 

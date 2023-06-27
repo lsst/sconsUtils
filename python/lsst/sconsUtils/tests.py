@@ -250,7 +250,7 @@ class Control:
                 f = os.path.splitext(f)[0]
             else:
                 interpreter = "pytest -Wd --durations=5 --junit-xml=${TARGET}.xml"
-                interpreter += " --junit-prefix={0}".format(self.junitPrefix())
+                interpreter += f" --junit-prefix={self.junitPrefix()}"
                 interpreter += " --log-level=DEBUG"
                 interpreter += self._getPytestCoverageCommand()
 
@@ -356,7 +356,7 @@ class Control:
         lfnfOpt = "none" if "install" in SCons.Script.COMMAND_LINE_TARGETS else "all"
         interpreter = f"pytest -Wd --lf --lfnf={lfnfOpt}"
         interpreter += " --durations=5 --junit-xml=${TARGET} --session2file=${TARGET}.out"
-        interpreter += " --junit-prefix={0}".format(self.junitPrefix())
+        interpreter += f" --junit-prefix={self.junitPrefix()}"
         interpreter += " --log-level=DEBUG"
         interpreter += self._getPytestCoverageCommand()
 
@@ -406,9 +406,9 @@ class Control:
             # xdist currently parses the tx option
             interpreter = interpreter + " --max-worker-restart=0"
             if " " not in executable:
-                interpreter = interpreter + " -d --tx={}*popen//python={}".format(njobs, executable)
+                interpreter = interpreter + f" -d --tx={njobs}*popen//python={executable}"
             else:
-                interpreter = interpreter + "  -n {}".format(njobs)
+                interpreter = interpreter + f"  -n {njobs}"
 
         # Remove target so that we always trigger pytest
         if os.path.exists(target):
@@ -468,7 +468,7 @@ class Control:
         prefix = self._env["eupsProduct"]
 
         if controlVar in os.environ:
-            prefix += ".{0}".format(os.environ[controlVar])
+            prefix += f".{os.environ[controlVar]}"
 
         return prefix
 
@@ -508,10 +508,10 @@ class Control:
             covpath = covfile
         else:
             covpath = os.path.join(self._tmpDirAbs, covfile)
-        options += " --cov-report=xml:'{}'".format(covpath)
+        options += f" --cov-report=xml:'{covpath}'"
 
         # Use the prefix for the HTML output directory
-        htmlfile = ":'{}-htmlcov'".format(prefix)
-        options += " --cov-report=html{}".format(htmlfile)
+        htmlfile = f":'{prefix}-htmlcov'"
+        options += f" --cov-report=html{htmlfile}"
 
         return options

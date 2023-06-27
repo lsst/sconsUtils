@@ -357,7 +357,7 @@ def _initEnvironment():
             raise RuntimeError("You can't use eupsdb=XXX without an EUPS_PATH set")
         eupsPath = None
         for d in os.environ["EUPS_PATH"].split(":"):
-            if re.search(r"/%s$|^%s/|/%s/" % (db, db, db), d):
+            if re.search(rf"/{db}$|^{db}/|/{db}/", d):
                 eupsPath = d
                 break
         if not eupsPath:
@@ -384,7 +384,7 @@ def _initEnvironment():
             env[key] = SCons.Script.Split(SCons.Script.ARGUMENTS[key])
     else:
         for key in SCons.Script.ARGUMENTS:
-            errorStr += " %s=%s" % (key, SCons.Script.ARGUMENTS[key])
+            errorStr += f" {key}={SCons.Script.ARGUMENTS[key]}"
         if errorStr:
             log.fail("Unprocessed arguments:%s" % errorStr)
     #
@@ -437,7 +437,7 @@ def _configureCommon():
                 match = re.search(reStr, ccVersDump)
                 if match:
                     compilerVersion = match.groups()[0]
-                    context.Result("%s=%s" % (compilerName, compilerVersion))
+                    context.Result(f"{compilerName}={compilerVersion}")
                     return (compilerName, compilerVersion)
         context.Result("unknown")
         return ("unknown", "unknown")
@@ -453,7 +453,7 @@ def _configureCommon():
             conf = env.Configure(custom_tests={"ClassifyCc": ClassifyCc})
             env.whichCc, env.ccVersion = conf.ClassifyCc()
             if not env.GetOption("no_progress"):
-                log.info("CC is **CONDA** %s version %s" % (env.whichCc, env.ccVersion))
+                log.info(f"CC is **CONDA** {env.whichCc} version {env.ccVersion}")
             conf.Finish()
         else:
             if env["cc"] != "":
@@ -488,7 +488,7 @@ def _configureCommon():
                 env["CXX"] = "clang++"
 
             if not env.GetOption("no_progress"):
-                log.info("CC is %s version %s" % (env.whichCc, env.ccVersion))
+                log.info(f"CC is {env.whichCc} version {env.ccVersion}")
             conf.Finish()
 
     #
@@ -513,13 +513,13 @@ def _configureCommon():
         if not env.GetOption("no_progress"):
             log.info("Checking for C++17 support")
         conf = env.Configure()
-        for cpp17Arg in ("-std=%s" % (val,) for val in ("c++17",)):
+        for cpp17Arg in (f"-std={val}" for val in ("c++17",)):
             conf.env = env.Clone()
             conf.env.Append(CXXFLAGS=cpp17Arg)
             if conf.CheckCXX():
                 env.Append(CXXFLAGS=cpp17Arg)
                 if not env.GetOption("no_progress"):
-                    log.info("C++17 supported with %r" % (cpp17Arg,))
+                    log.info(f"C++17 supported with {cpp17Arg!r}")
                 break
         else:
             log.fail("C++17 extensions could not be enabled for compiler %r" % env.whichCc)

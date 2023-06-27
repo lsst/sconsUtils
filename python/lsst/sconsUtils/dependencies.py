@@ -122,7 +122,7 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     if not state.env.GetOption("clean") and not state.env.GetOption("help"):
         packages.configure(state.env, check=state.env.GetOption("checkDependencies"))
         for target in state.env.libs:
-            state.log.info("Libraries in target '%s': %s" % (target, state.env.libs[target]))
+            state.log.info(f"Libraries in target '{target}': {state.env.libs[target]}")
     state.env.dependencies = packages
     state.log.flush()
 
@@ -237,9 +237,7 @@ class Configuration:
         if version is not None:
             self.version = version
         if productDir is None:
-            state.log.info(
-                "Could not find EUPS product dir for '%s'; using %s." % (self.eupsProduct, self.root)
-            )
+            state.log.info(f"Could not find EUPS product dir for '{self.eupsProduct}'; using {self.root}.")
         else:
             self.root = os.path.realpath(productDir)
         self.doxygen = {
@@ -329,12 +327,12 @@ class Configuration:
         for target in self.libs:
             if target not in conf.env.libs:
                 conf.env.libs[target] = self.libs[target].copy()
-                state.log.info("Adding '%s' libraries to target '%s'." % (self.libs[target], target))
+                state.log.info(f"Adding '{self.libs[target]}' libraries to target '{target}'.")
             else:
                 for lib in self.libs[target]:
                     if lib not in conf.env.libs[target]:
                         conf.env.libs[target].append(lib)
-                        state.log.info("Adding '%s' library to target '%s'." % (lib, target))
+                        state.log.info(f"Adding '{lib}' library to target '{target}'.")
         if check:
             for header in self.provides["headers"]:
                 if not conf.CheckCXXHeader(header):
@@ -646,9 +644,9 @@ class PackageTree:
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
                 except Exception as e:
-                    state.log.warn("Error loading configuration %s (%s)" % (filename, e))
+                    state.log.warn(f"Error loading configuration {filename} ({e})")
                     continue
-                state.log.info("Using configuration for package '%s' at '%s'." % (name, filename))
+                state.log.info(f"Using configuration for package '{name}' at '{filename}'.")
                 if not hasattr(module, "dependencies") or not isinstance(module.dependencies, dict):
                     state.log.warn("Configuration module for package '%s' lacks a dependencies dict." % name)
                     return None
@@ -693,7 +691,7 @@ class PackageTree:
                 self.packages[name] = None
                 self._current.remove(name)
                 state.log.warn(
-                    "Could not load all dependencies for package '%s' (missing %s)." % (name, dependency)
+                    f"Could not load all dependencies for package '{name}' (missing {dependency})."
                 )
                 return False
         for dependency in module.dependencies.get("optional", ()):

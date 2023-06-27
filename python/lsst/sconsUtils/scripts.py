@@ -370,7 +370,7 @@ class BasicSConscript:
                             post_interp = match.group(1) or ""
                             # Paths can be long so ensure that flake8 won't
                             # complain
-                            outfd.write("#!{}{}  # noqa\n".format(usepython, post_interp))
+                            outfd.write(f"#!{usepython}{post_interp}  # noqa\n")
                         else:
                             if not match:
                                 state.log.warn(
@@ -384,7 +384,7 @@ class BasicSConscript:
                 oldmode = os.stat(str(targ))[ST_MODE] & 0o7777
                 newmode = (oldmode | 0o555) & 0o7777
                 if newmode != oldmode:
-                    state.log.info("changing mode of {} from {} to {}".format(str(targ), oldmode, newmode))
+                    state.log.info(f"changing mode of {str(targ)} from {oldmode} to {newmode}")
                     os.chmod(str(targ), newmode)
 
         if src is None:

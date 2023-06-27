@@ -396,7 +396,7 @@ class DoxygenBuilder:
         # the final quoted entry.
         def _quote_path(path):
             if " " in path and not path.startswith('"') and not path.endswith('"'):
-                return '"{}"'.format(path)
+                return f'"{path}"'
             return path
 
         def _quote_paths(pathList):
@@ -417,7 +417,7 @@ class DoxygenBuilder:
         for tagPath in self.useTags:
             docDir, tagFile = os.path.split(tagPath)
             htmlDir = os.path.join(docDir, "html")
-            outConfigFile.write('TAGFILES += "%s=%s"\n' % (tagPath, htmlDir))
+            outConfigFile.write(f'TAGFILES += "{tagPath}={htmlDir}"\n')
             self.sources.append(SCons.Script.Dir(docDir))
         if self.projectName is not None:
             outConfigFile.write("PROJECT_NAME = %s\n" % self.projectName)
@@ -435,7 +435,7 @@ class DoxygenBuilder:
                 state.log.fail("Unknown Doxygen output format '%s'." % output)
                 state.log.finish()
             outConfigFile.write("GENERATE_%s = YES\n" % output.upper())
-            outConfigFile.write("%s_OUTPUT = %s\n" % (output.upper(), _quote_path(path.abspath)))
+            outConfigFile.write(f"{output.upper()}_OUTPUT = {_quote_path(path.abspath)}\n")
         for output in allOutputs:
             outConfigFile.write("GENERATE_%s = NO\n" % output.upper())
         if self.makeTag is not None:

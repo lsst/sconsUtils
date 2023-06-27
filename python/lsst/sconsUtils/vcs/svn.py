@@ -115,7 +115,7 @@ def guessVersionName(HeadURL):
             msg = "You are installing, but have switched SVN URLs"
             okVersion = False
         if oldest != youngest:
-            msg = "You have a range of revisions in your tree (%s:%s); adopting %s" % (
+            msg = "You have a range of revisions in your tree ({}:{}); adopting {}".format(
                 oldest,
                 youngest,
                 youngest,
