@@ -17,7 +17,6 @@ import platform
 import subprocess
 import sys
 import warnings
-from typing import Optional
 
 import SCons.Script
 
@@ -253,7 +252,7 @@ def memberOf(cls, name=None):
     return nested
 
 
-def get_conda_prefix() -> Optional[str]:
+def get_conda_prefix() -> str | None:
     """Returns a copy of the current conda prefix, if available."""
     _conda_prefix = os.environ.get("CONDA_PREFIX")
     if os.environ.get("CONDA_BUILD", "0") == "1":
