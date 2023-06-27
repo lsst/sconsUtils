@@ -126,7 +126,7 @@ def guessVersionName(HeadURL):
             raise RuntimeError("Problem with determining svn revision: %s" % msg)
 
         versionName += "svn" + youngest
-    except IOError:
+    except OSError:
         return "unknown"
 
     return versionName

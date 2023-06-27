@@ -563,7 +563,7 @@ def VersionModule(self, filename, versionString=None):
             import hashlib
 
             md5 = hashlib.md5(open(filename, "rb").read()).hexdigest()
-        except IOError:
+        except OSError:
             md5 = None
 
         return md5
