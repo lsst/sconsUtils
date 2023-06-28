@@ -28,7 +28,7 @@ jobs:
         shell: bash -l {0}
         run: |
           conda install mamba
-          mamba install -y -q scons eups compilers
+          mamba install -y -q scons eups compilers ruff flake8
 
       # We have two cores so we can speed up the testing with xdist
       - name: Install pytest packages

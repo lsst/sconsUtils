@@ -368,8 +368,8 @@ class Control:
         # be fast). Use a glob since it is possible that someone may switch
         # from flake8 to ruff and this can lead to confusing output if the
         # previous flake8 run failed.
-        for path in glob.glob("linter-*.log*", root_dir=self._tmpDir):
-            os.unlink(os.path.join(self._tmpDir, path))
+        for path in glob.glob(os.path.join(self._tmpDir, "linter-*.log*")):
+            os.unlink(path)
 
         cmd = f"""
         @printf "%s\\n" 'Running python linter {linter}...';
