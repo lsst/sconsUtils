@@ -2,16 +2,10 @@
 #
 # Print the options last passed to scons
 #
-from __future__ import print_function
-
 import argparse
+import configparser
 import os
 import sys
-
-try:
-    import configparser
-except ImportError:
-    import ConfigParser as configparser
 
 parser = argparse.ArgumentParser(description="Tell us how scons was invoked")
 parser.add_argument(
@@ -43,10 +37,10 @@ if os.path.exists(args.configFile):
         opt = config.get("Build", "opt")
     except Exception as e:
         if not args.quiet:
-            print("File %s: error %s" % (args.configFile, e), file=sys.stderr)
+            print(f"File {args.configFile}: error {e}", file=sys.stderr)
 
 else:
     if not args.quiet:
         print("File %s doesn't exist" % args.configFile, file=sys.stderr)
 
-print("cc=%s opt=%s" % (cc, opt))
+print(f"cc={cc} opt={opt}")
