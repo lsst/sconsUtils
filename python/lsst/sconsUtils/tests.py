@@ -313,6 +313,81 @@ class Control:
 
         return targets
 
+    def runPythonLinter(self):
+        """Add a target for running the python linter.
+
+        Returns
+        -------
+        target : `list`
+            Returns a list containing a single target. Can be empty
+            if no suitable linter configuration was found.
+        """
+        linter: str | None = None
+        root = SCons.Script.Dir("#").abspath
+
+        pyproject = os.path.join(root, "pyproject.toml")
+        if os.path.exists(pyproject):
+            import tomli
+
+            with open(pyproject) as fh:
+                try:
+                    parsed = tomli.loads(fh.read())
+                except Exception:
+                    pass
+                else:
+                    if "tool" in parsed and "ruff" in parsed["tool"]:
+                        linter = "ruff"
+
+        if linter is None:
+            flake8_cfg = os.path.join(root, "setup.cfg")
+            if os.path.exists(os.path.join(root, ".flake8")):
+                linter = "flake8"
+            elif os.path.exists(flake8_cfg):
+                # Could search for [flake8] in file but parsing might
+                # be safer.
+                import configparser
+
+                config = configparser.ConfigParser()
+                try:
+                    config.read(flake8_cfg)
+                except Exception:
+                    # No valid flake8 config item possible.
+                    pass
+                else:
+                    if "flake8" in config:
+                        linter = "flake8"
+
+        if linter is None:
+            print(f"No Python linter configuration detected at path {root}.")
+            return []
+
+        target = os.path.join(self._tmpDir, f"linter-{linter}.log")
+        print(f"Detected configuration for python linter {linter}")
+
+        # Remove target so that we always trigger the linter (which should
+        # be fast). Use a glob since it is possible that someone may switch
+        # from flake8 to ruff and this can lead to confusing output if the
+        # previous flake8 run failed.
+        for path in glob.glob("linter-*.log*", root_dir=self._tmpDir):
+            os.unlink(os.path.join(self._tmpDir, path))
+
+        cmd = f"""
+        @printf "%s\\n" 'Running python linter {linter}...';
+        @rm -f ${{TARGET}} ${{TARGET}}.failed;
+        @({linter} . > ${{TARGET}}); \
+        export rc="$?"; \
+        if [ "$$rc" -eq 0 ]; then \
+            echo "Python linting completed successfully"; \
+        else \
+            echo "Python linting failed with error"; \
+            mv ${{TARGET}} ${{TARGET}}.failed; \
+        fi;
+        """
+
+        result = self._env.Command(target, None, cmd)
+
+        return [result]
+
     def runPythonTests(self, pyList):
         """Add a single target for testing all python files.
 

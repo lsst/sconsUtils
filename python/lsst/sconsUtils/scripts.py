@@ -695,6 +695,7 @@ class BasicSConscript:
             pyList = [control.runPythonTests(pyList)]
         else:
             pyList = []
+        pyList.extend(control.runPythonLinter())
 
         # Run all pySingles sequentially before other tests.  This ensures
         # that there are no race conditions collecting coverage databases.
