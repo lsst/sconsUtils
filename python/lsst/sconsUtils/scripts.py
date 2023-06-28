@@ -3,8 +3,8 @@ files.
 """
 
 import os.path
-import pipes
 import re
+import shlex
 import warnings
 from distutils.spawn import find_executable
 from stat import ST_MODE
@@ -245,7 +245,7 @@ class BasicSConstruct:
         # suppress output
         #
         if "tests" in [str(t) for t in BUILD_TARGETS]:
-            testsDir = pipes.quote(os.path.join(os.getcwd(), "tests", ".tests"))
+            testsDir = shlex.quote(os.path.join(os.getcwd(), "tests", ".tests"))
             checkTestStatus_command = state.env.Command(
                 "checkTestStatus",
                 [],

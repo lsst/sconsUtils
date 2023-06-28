@@ -5,8 +5,8 @@ __all__ = ("filesToTag", "DoxygenBuilder")
 
 import fnmatch
 import os
-import pipes
 import re
+import shlex
 
 import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
@@ -337,7 +337,7 @@ class DoxygenBuilder:
         )
         env.AlwaysBuild(config)
         doc = env.Command(
-            target=self.targets, source=self.sources, action="doxygen %s" % pipes.quote(outConfigNode.abspath)
+            target=self.targets, source=self.sources, action="doxygen %s" % shlex.quote(outConfigNode.abspath)
         )
         for path in self.outputPaths:
             env.Clean(doc, path)
@@ -389,7 +389,7 @@ class DoxygenBuilder:
         outConfigFile = open(target[0].abspath, "w")
 
         # Need a routine to quote paths that contain spaces
-        # but can not use pipes.quote because it has to be
+        # but can not use shlex.quote because it has to be
         # a double quote for doxygen.conf
         # Do not quote a string if it is already quoted
         # Also have a version that quotes each item in a sequence and generates

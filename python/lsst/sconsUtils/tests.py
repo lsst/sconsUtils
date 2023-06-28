@@ -5,7 +5,7 @@ __all__ = ("Control",)
 
 import glob
 import os
-import pipes
+import shlex
 import sys
 
 import SCons.Script
@@ -443,7 +443,7 @@ class Control:
             mv ${{TARGET}}.out ${{TARGET}}.failed; \
         fi;
         """
-        testfiles = " ".join([pipes.quote(p) for p in pythonTestFiles])
+        testfiles = " ".join([shlex.quote(p) for p in pythonTestFiles])
         result = self._env.Command(target, None, cmd.format(interpreter, testfiles, libpathstr))
 
         self._env.Alias(os.path.basename(target), target)
