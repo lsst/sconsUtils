@@ -315,10 +315,10 @@ class DoxygenBuilder:
         self.results = []
         self.sources = []
         self.targets = []
-        self.useTags = list(SCons.Script.File(item).abspath for item in self.useTags)
-        self.inputs = list(SCons.Script.Entry(item).abspath for item in self.inputs)
-        self.excludes = list(SCons.Script.Entry(item).abspath for item in self.excludes)
-        self.outputPaths = list(SCons.Script.Dir(item) for item in self.outputs)
+        self.useTags = [SCons.Script.File(item).abspath for item in self.useTags]
+        self.inputs = [SCons.Script.Entry(item).abspath for item in self.inputs]
+        self.excludes = [SCons.Script.Entry(item).abspath for item in self.excludes]
+        self.outputPaths = [SCons.Script.Dir(item) for item in self.outputs]
 
     def __call__(self, env, config):
         self.findSources()
