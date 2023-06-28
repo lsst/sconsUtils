@@ -212,7 +212,7 @@ def memberOf(cls, name=None):
 
     Parameters
     ----------
-    cls : `class`
+    cls : `type`
         Class in which to inject this method.
     name : `str`, optional
         Name of the method. Will be determined from function name if not

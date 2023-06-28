@@ -18,7 +18,7 @@ from .utils import get_conda_prefix, use_conda_compilers
 def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath=None, noCfgFile=False):
     """Recursively configure a package using ups/.cfg files.
 
-    Aliased as `lsst.sconsUtils.configure()`.
+    Aliased as `lsst.sconsUtils.configure`.
 
     Usually, LSST packages will call this function through
     `~lsst.sconsUtils.scripts.BasicSConstruct`.

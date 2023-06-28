@@ -303,7 +303,7 @@ class BasicSConscript:
         libName : `str`
             Name of the shared libray to be built (defaults to
             ``env["packageName"]``).
-        src : `str` or `Glob`
+        src : `str` or `~SCons.Script.Glob`
             Source to compile into the library.  Defaults to a 4-directory
             deep glob of all ``*.cc`` files in ``#src``.
         libs : `str` or `list`
@@ -346,7 +346,7 @@ class BasicSConscript:
 
         Parameters
         ----------
-        src : `str` or `Glob`, optional
+        src : `str` or `~SCons.Script.Glob`, optional
             Glob to use to search for files.
         """
         # check if Python is called on the first line with this expression
@@ -427,7 +427,7 @@ class BasicSConscript:
 
         Returns
         -------
-        result : `lsst.sconsUtils.env.Pybin11LoadbleModule`
+        result : `lsst.sconsUtils.env.Pybind11LoadableModule`
             A Pybind11LoadableModule instance.
         """
         if module is None:
@@ -475,7 +475,7 @@ class BasicSConscript:
 
         Returns
         -------
-        result : `lsst.sconsUtils.env.Pybin11LoadbleModule`
+        result : `lsst.sconsUtils.env.Pybind11LoadableModule`
             A Pybind11LoadableModule instance.
         """
         warnings.warn(
