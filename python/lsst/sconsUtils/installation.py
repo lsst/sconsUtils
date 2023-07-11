@@ -237,9 +237,7 @@ def Declare(self, products=None):
                 self["ENV"]["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", "-1")
                 if "undeclare" in SCons.Script.COMMAND_LINE_TARGETS or self.GetOption("clean"):
                     if version:
-                        command = "eups undeclare --flavor {} {} {}".format(
-                            self["eupsFlavor"], product, version
-                        )
+                        command = f"eups undeclare --flavor {self['eupsFlavor']} {product} {version}"
                         if (
                             "current" in SCons.Script.COMMAND_LINE_TARGETS
                             and "declare" not in SCons.Script.COMMAND_LINE_TARGETS
