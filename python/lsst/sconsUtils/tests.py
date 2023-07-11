@@ -317,11 +317,11 @@ class Control:
 
         pyproject = os.path.join(root, "pyproject.toml")
         if os.path.exists(pyproject):
-            import tomli
+            import tomllib
 
             with open(pyproject) as fh:
                 try:
-                    parsed = tomli.loads(fh.read())
+                    parsed = tomllib.loads(fh.read())
                 except Exception:
                     pass
                 else:
