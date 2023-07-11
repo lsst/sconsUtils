@@ -483,7 +483,7 @@ class Control:
             if " " not in executable:
                 interpreter = interpreter + f" -d --tx={njobs}*popen//python={executable}"
             else:
-                interpreter = interpreter + f"  -n {njobs}"
+                interpreter = interpreter + f" -n {njobs}"
 
         # Remove target so that we always trigger pytest
         if os.path.exists(target):
