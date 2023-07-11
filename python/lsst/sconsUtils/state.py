@@ -16,6 +16,7 @@ by other code (particularly `lsst.sconsUtils.dependencies.configure`).
 import os
 import re
 import shlex
+from configparser import ConfigParser
 
 import SCons.Conftest
 import SCons.Script
@@ -622,12 +623,6 @@ def _saveState():
 
     if env.GetOption("clean"):
         return
-
-    # Python 2 uses ConfigParser, Python 3 uses configparser
-    try:
-        from configparser import ConfigParser
-    except ImportError:
-        from ConfigParser import ConfigParser
 
     config = ConfigParser()
     config.add_section("Build")
