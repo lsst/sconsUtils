@@ -518,7 +518,7 @@ class Control:
             mv ${{TARGET}}.out ${{TARGET}}.failed; \
         fi;
         """
-        testfiles = " ".join([shlex.quote(p) for p in pythonTestFiles])
+        testfiles = shlex.join(pythonTestFiles)
         result = self._env.Command(target, None, cmd.format(interpreter, testfiles, libpathstr))
 
         self._env.Alias(os.path.basename(target), target)
