@@ -317,7 +317,10 @@ class Control:
 
         pyproject = os.path.join(root, "pyproject.toml")
         if os.path.exists(pyproject):
-            import tomllib
+            try:
+                import tomllib
+            except ImportError:
+                import tomli as tomllib
 
             with open(pyproject) as fh:
                 try:
