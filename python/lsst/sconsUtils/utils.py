@@ -192,7 +192,7 @@ def runExternal(cmd, fatal=False, msg=None):
 
     # Run with shell unless given a list of options
     shell = True
-    if isinstance(cmd, (list, tuple)):
+    if isinstance(cmd, list | tuple):
         shell = False
 
     try:
