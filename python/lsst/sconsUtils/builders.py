@@ -547,11 +547,7 @@ def Doxygen(self, config, **kwargs):
 @memberOf(SConsEnvironment)
 def VersionModule(self, filename, versionString=None):
     if versionString is None:
-        for n in (
-            "git",
-            "hg",
-            "svn",
-        ):
+        for n in ("git", "hg", "svn"):
             if os.path.isdir(f".{n}"):
                 versionString = n
 
