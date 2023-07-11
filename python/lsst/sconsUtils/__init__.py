@@ -22,8 +22,8 @@ except:
 # These should remain in their own namespaces
 # These inject methods into SConsEnviroment
 from . import builders, installation, scripts, tests
-from .builders import ProductDir
 
 # Pull some names into the package namespace
+from .builders import ProductDir
 from .dependencies import Configuration, ExternalConfiguration, configure
 from .state import env, log, opts, targets
