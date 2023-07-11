@@ -175,7 +175,7 @@ class BasicSConstruct:
 
         scripts.sort(key=key)
         for script in scripts:
-            state.log.info("Using SConscript at %s" % script)
+            state.log.info(f"Using SConscript at {script}")
             SConscript(script)
         cls._initializing = False
         return state.env
@@ -657,11 +657,11 @@ class BasicSConscript:
                 return ["None"]
             return [str(i) for i in ll]
 
-        state.log.info("SWIG modules for tests: %s" % s(swigFileList))
-        state.log.info("Python tests: %s" % s(pyList))
-        state.log.info("C++ tests: %s" % s(ccList))
-        state.log.info("Files that will not be built: %s" % noBuildList)
-        state.log.info("Ignored tests: %s" % ignoreList)
+        state.log.info(f"SWIG modules for tests: {s(swigFileList)}")
+        state.log.info(f"Python tests: {s(pyList)}")
+        state.log.info(f"C++ tests: {s(ccList)}")
+        state.log.info(f"Files that will not be built: {noBuildList}")
+        state.log.info(f"Ignored tests: {ignoreList}")
         control = tests.Control(state.env, ignoreList=ignoreList, args=args, verbose=True)
         for ccTest in ccList:
             state.env.Program(ccTest, LIBS=state.env.getLibs("main test"))
@@ -756,8 +756,8 @@ class BasicSConscript:
                 for node in Glob("*.cc")
                 if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc
             ]
-        state.log.info("SWIG modules for examples: %s" % swigFileList)
-        state.log.info("C++ examples: %s" % ccList)
+        state.log.info(f"SWIG modules for examples: {swigFileList}")
+        state.log.info(f"C++ examples: {ccList}")
         results = []
         for src in ccList:
             results.extend(state.env.Program(src, LIBS=state.env.getLibs("main")))

@@ -128,7 +128,7 @@ class Control:
                     f = f[1:]
                 else:
                     if not os.path.exists(f):
-                        state.log.warn("You're ignoring a non-existent file, %s" % f)
+                        state.log.warn(f"You're ignoring a non-existent file, {f}")
                 self._info[f] = (self._IGNORE, None)
 
         if expectedFailures:
@@ -148,7 +148,7 @@ class Control:
             pass
 
         if not self.runExamples:
-            print('Not running examples; "chmod 755 %s" to run them again' % self._tmpDir, file=sys.stderr)
+            print(f'Not running examples; "chmod 755 {self._tmpDir}" to run them again', file=sys.stderr)
 
     def args(self, test):
         """Arguments to use for this test.
@@ -212,9 +212,9 @@ class Control:
             msg = self._info[test][1]
             return (
                 "false",
-                "Passed, but should have failed: %s" % msg,
+                f"Passed, but should have failed: {msg}",
                 "true",
-                "Failed as expected: %s" % msg,
+                f"Failed as expected: {msg}",
             )
         else:
             return ("true", "passed", "false", "failed")

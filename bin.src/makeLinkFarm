@@ -29,7 +29,7 @@ def linkFiles(dstDir, srcDir, verbose=0, force=False):
                 if force:
                     os.unlink(fullDst)
                 else:
-                    print("%s already exists; use --force to overwrite" % fullDst, file=sys.stderr)
+                    print(f"{fullDst} already exists; use --force to overwrite", file=sys.stderr)
                     sys.exit(1)
 
             os.symlink(fullSrc, fullDst)
@@ -58,7 +58,7 @@ creates a link farm for your current selection of products.
     linkFarmDir = os.path.abspath(args.linkFarmDir)
 
     if not args.force and os.path.exists(linkFarmDir):
-        print("Path %s already exists; use --force to overwrite" % args.linkFarmDir, file=sys.stderr)
+        print(f"Path {args.linkFarmDir} already exists; use --force to overwrite", file=sys.stderr)
         sys.exit(1)
 
     #
@@ -88,7 +88,7 @@ creates a link farm for your current selection of products.
 
         if args.verbose:
             if args.verbose > 1 or os.path.exists(binDir) or os.path.exists(incDir) or os.path.exists(libDir):
-                print("%-15s %s" % (productName, pd))
+                print(f"{productName:<15} {pd}")
 
         if os.path.exists(binDir):
             fullDstDir = os.path.join(linkFarmDir, "bin")
@@ -111,7 +111,7 @@ creates a link farm for your current selection of products.
                     if args.force:
                         os.unlink(fullDst)
                     else:
-                        print("%s already exists; use --force to overwrite" % fullDst, file=sys.stderr)
+                        print(f"{fullDst} already exists; use --force to overwrite", file=sys.stderr)
                         sys.exit(1)
 
                 os.symlink(fullSrc, fullDst)

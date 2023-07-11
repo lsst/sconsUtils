@@ -12,11 +12,10 @@ if env.GetOption("clean"):
     dirName = os.path.join(SCons.Script.Dir("#").abspath, "tests", "testFailedTests")
 
     subprocess.call(
-        """
-            cd %s
+        f"""
+            cd {dirName}
             scons -Qc > /dev/null 2>&1
-        """
-        % dirName,
+        """,
         shell=True,
     )
 

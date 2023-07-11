@@ -151,7 +151,7 @@ def _initVariables():
             files.append(configfile)
     for file in files:
         if not os.path.isfile(file):
-            log.warn("Warning: Will ignore non-existent options file, %s" % file)
+            log.warn(f"Warning: Will ignore non-existent options file, {file}")
     if "optfile" not in SCons.Script.ARGUMENTS:
         files.append("buildOpts.py")
     global opts
@@ -281,7 +281,7 @@ def _initEnvironment():
         for flag in ("-D_LIBCPP_DISABLE_AVAILABILITY=1",):
             env["CFLAGS"].append(flag)
             env["CXXFLAGS"].append(flag)
-        log.info("Setting OS X binary compatibility level: %s" % env["ENV"]["MACOSX_DEPLOYMENT_TARGET"])
+        log.info("Setting OS X binary compatibility level: {}".format(env["ENV"]["MACOSX_DEPLOYMENT_TARGET"]))
         #
         # For XCode 7.3 we need to explicitly add a trailing slash to library
         # paths. This does not hurt things on older XCodes. We can remove this
@@ -296,7 +296,7 @@ def _initEnvironment():
             LDFLAGS = [v for v in LDFLAGS if v[0:2] != "-L"]
             # this one breaks some linking in the eups build
             LDFLAGS = [v for v in LDFLAGS if v != "-Wl,-dead_strip_dylibs"]
-            env.Append(LIBPATH=["%s/lib" % _conda_prefix])
+            env.Append(LIBPATH=[f"{_conda_prefix}/lib"])
             env.Append(LINKFLAGS=LDFLAGS)
             env.Append(SHLINKFLAGS=LDFLAGS)
 
@@ -362,7 +362,7 @@ def _initEnvironment():
                 eupsPath = d
                 break
         if not eupsPath:
-            raise RuntimeError('I cannot find DB "%s" in $EUPS_PATH' % db)
+            raise RuntimeError(f'I cannot find DB "{db}" in $EUPS_PATH')
     except KeyError:
         if "EUPS_PATH" in os.environ:
             eupsPath = os.environ["EUPS_PATH"].split(":")[0]
@@ -387,7 +387,7 @@ def _initEnvironment():
         for key in SCons.Script.ARGUMENTS:
             errorStr += f" {key}={SCons.Script.ARGUMENTS[key]}"
         if errorStr:
-            log.fail("Unprocessed arguments:%s" % errorStr)
+            log.fail(f"Unprocessed arguments:{errorStr}")
     #
     # We need a binary name, not just "Posix"
     #
@@ -472,7 +472,7 @@ def _configureCommon():
                     CC = env["cc"]
                     CXX = re.sub(r"^cc", "c++", CC)
                 else:
-                    log.fail("Unrecognised compiler: %s" % env["cc"])
+                    log.fail(f"Unrecognised compiler: {env['cc']}")
                 env0 = SCons.Script.Environment()
                 if CC and env["CC"] == env0["CC"]:
                     env["CC"] = CC
@@ -523,7 +523,7 @@ def _configureCommon():
                     log.info(f"C++17 supported with {cpp17Arg!r}")
                 break
         else:
-            log.fail("C++17 extensions could not be enabled for compiler %r" % env.whichCc)
+            log.fail(f"C++17 extensions could not be enabled for compiler {env.whichCc!r}")
         conf.Finish()
 
     #
@@ -539,13 +539,13 @@ def _configureCommon():
     #
     if re.search(r"^(Linux|Linux64)$", env["eupsFlavor"]) and "LD_LIBRARY_PATH" in os.environ:
         env.Append(LINKFLAGS=["-Wl,-rpath-link"])
-        env.Append(LINKFLAGS=["-Wl,%s" % os.environ["LD_LIBRARY_PATH"]])
+        env.Append(LINKFLAGS=[f'-Wl,{os.environ["LD_LIBRARY_PATH"]}'])
     #
     # Set the optimization level.
     #
     if env["opt"]:
         env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-O(\d|s|g|fast)$", o)]
-        env.MergeFlags("-O%s" % env["opt"])
+        env.MergeFlags(f'-O{env["opt"]}')
     #
     # Set compiler-specific warning flags.
     #
@@ -570,10 +570,10 @@ def _configureCommon():
             "deprecated-register": "register is deprecated",
         }
         for k in ignoreWarnings:
-            env.Append(CCFLAGS=["-Wno-%s" % k])
+            env.Append(CCFLAGS=[f"-Wno-{k}"])
         if env.GetOption("filterWarn"):
             for k in filterWarnings:
-                env.Append(CCFLAGS=["-Wno-%s" % k])
+                env.Append(CCFLAGS=[f"-Wno-{k}"])
     elif env.whichCc == "gcc":
         env.Append(CCFLAGS=["-Wall"])
         env.Append(CCFLAGS=["-Wno-unknown-pragmas"])  # we don't want complaints about icc/clang pragmas
@@ -600,7 +600,7 @@ def _configureCommon():
             2259: 'non-pointer conversion from "int" to "float" may lose significant bits',
         }
         if env.GetOption("filterWarn"):
-            env.Append(CCFLAGS=["-wd%s" % (",".join([str(k) for k in filterWarnings]))])
+            env.Append(CCFLAGS=["-wd{}".format(",".join([str(k) for k in filterWarnings]))])
         # Workaround intel bug; cf. RHL's intel bug report 580167
         env.Append(LINKFLAGS=["-Wl,-no_compact_unwind", "-wd,11015"])
     #
@@ -635,7 +635,7 @@ def _saveState():
         with open(confFile, "w") as configfile:
             config.write(configfile)
     except Exception as e:
-        log.warn("Unexpected exception in _saveState: %s" % e)
+        log.warn(f"Unexpected exception in _saveState: {e}")
 
 
 _initOptions()

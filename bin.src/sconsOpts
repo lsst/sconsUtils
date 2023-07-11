@@ -41,6 +41,6 @@ if os.path.exists(args.configFile):
 
 else:
     if not args.quiet:
-        print("File %s doesn't exist" % args.configFile, file=sys.stderr)
+        print(f"File {args.configFile} doesn't exist", file=sys.stderr)
 
 print(f"cc={cc} opt={opt}")

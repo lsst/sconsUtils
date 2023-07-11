@@ -186,7 +186,7 @@ def runExternal(cmd, fatal=False, msg=None):
     """
     if msg is None:
         try:
-            msg = "Error running %s" % cmd.split()[0]
+            msg = f"Error running {cmd.split()[0]}"
         except Exception:
             msg = "Error running external command"
 

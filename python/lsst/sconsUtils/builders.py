@@ -97,7 +97,7 @@ def SourcesForSharedLibrary(self, files):
     if opt == 0:
         opt = 3
 
-    CCFLAGS_OPT = re.sub(r"-O(\d|s)\s*", "-O%d " % opt, " ".join(self["CCFLAGS"]))
+    CCFLAGS_OPT = re.sub(r"-O(\d|s)\s*", f"-O{opt} ", " ".join(self["CCFLAGS"]))
     CCFLAGS_NOOPT = re.sub(r"-O(\d|s)\s*", "-O0 ", " ".join(self["CCFLAGS"]))  # remove -O flags from CCFLAGS
 
     objs = []
@@ -168,7 +168,7 @@ def filesToTag(root=None, fileRegex=None, ignoreDirs=None):
         #
         for swigFile in [f for f in filenames if f.endswith(".i")]:
             name = os.path.splitext(swigFile)[0]
-            candidates = [f for f in candidates if not re.search(r"%s(_wrap\.cc?|\.py)$" % name, f)]
+            candidates = [f for f in candidates if not re.search(rf"{name}(_wrap\.cc?|\.py)$", f)]
 
         files += [os.path.join(dirpath, f) for f in candidates]
 
@@ -337,7 +337,7 @@ class DoxygenBuilder:
         )
         env.AlwaysBuild(config)
         doc = env.Command(
-            target=self.targets, source=self.sources, action="doxygen %s" % shlex.quote(outConfigNode.abspath)
+            target=self.targets, source=self.sources, action=f"doxygen {shlex.quote(outConfigNode.abspath)}"
         )
         for path in self.outputPaths:
             env.Clean(doc, path)
@@ -406,13 +406,13 @@ class DoxygenBuilder:
         incFiles = []
         for incPath in self.includes:
             docDir, incFile = os.path.split(incPath)
-            docPaths.append('"%s"' % docDir)
-            incFiles.append('"%s"' % incFile)
+            docPaths.append(f'"{docDir}"')
+            incFiles.append(f'"{incFile}"')
             self.sources.append(SCons.Script.File(incPath))
         if docPaths:
-            outConfigFile.write("@INCLUDE_PATH = %s\n" % _quote_paths(docPaths))
+            outConfigFile.write(f"@INCLUDE_PATH = {_quote_paths(docPaths)}\n")
         for incFile in incFiles:
-            outConfigFile.write("@INCLUDE = %s\n" % _quote_path(incFile))
+            outConfigFile.write(f"@INCLUDE = {_quote_path(incFile)}\n")
 
         for tagPath in self.useTags:
             docDir, tagFile = os.path.split(tagPath)
@@ -420,26 +420,26 @@ class DoxygenBuilder:
             outConfigFile.write(f'TAGFILES += "{tagPath}={htmlDir}"\n')
             self.sources.append(SCons.Script.Dir(docDir))
         if self.projectName is not None:
-            outConfigFile.write("PROJECT_NAME = %s\n" % self.projectName)
+            outConfigFile.write(f"PROJECT_NAME = {self.projectName}\n")
         if self.projectNumber is not None:
-            outConfigFile.write("PROJECT_NUMBER = %s\n" % self.projectNumber)
-        outConfigFile.write("INPUT = %s\n" % _quote_paths(self.inputs))
-        outConfigFile.write("EXCLUDE = %s\n" % _quote_paths(self.excludes))
-        outConfigFile.write("FILE_PATTERNS = %s\n" % " ".join(self.patterns))
+            outConfigFile.write(f"PROJECT_NUMBER = {self.projectNumber}\n")
+        outConfigFile.write(f"INPUT = {_quote_paths(self.inputs)}\n")
+        outConfigFile.write(f"EXCLUDE = {_quote_paths(self.excludes)}\n")
+        outConfigFile.write(f"FILE_PATTERNS = {' '.join(self.patterns)}\n")
         outConfigFile.write("RECURSIVE = YES\n" if self.recursive else "RECURSIVE = NO\n")
         allOutputs = {"html", "latex", "man", "rtf", "xml"}
         for output, path in zip(self.outputs, self.outputPaths):
             try:
                 allOutputs.remove(output.lower())
             except Exception:
-                state.log.fail("Unknown Doxygen output format '%s'." % output)
+                state.log.fail(f"Unknown Doxygen output format '{output}'.")
                 state.log.finish()
-            outConfigFile.write("GENERATE_%s = YES\n" % output.upper())
+            outConfigFile.write(f"GENERATE_{output.upper()} = YES\n")
             outConfigFile.write(f"{output.upper()}_OUTPUT = {_quote_path(path.abspath)}\n")
         for output in allOutputs:
-            outConfigFile.write("GENERATE_%s = NO\n" % output.upper())
+            outConfigFile.write(f"GENERATE_{output.upper()} = NO\n")
         if self.makeTag is not None:
-            outConfigFile.write("GENERATE_TAGFILE = %s\n" % _quote_path(self.makeTag))
+            outConfigFile.write(f"GENERATE_TAGFILE = {_quote_path(self.makeTag)}\n")
         #
         # Append the local overrides (usually doxygen.conf.in)
         #
@@ -552,7 +552,7 @@ def VersionModule(self, filename, versionString=None):
             "hg",
             "svn",
         ):
-            if os.path.isdir(".%s" % n):
+            if os.path.isdir(f".{n}"):
                 versionString = n
 
         if not versionString:
@@ -636,7 +636,7 @@ def VersionModule(self, filename, versionString=None):
             outFile.write(")\n")
 
         if calcMd5(target[0].abspath) != oldMd5:  # only print if something's changed
-            state.log.info('makeVersionModule(["%s"], [])' % str(target[0]))
+            state.log.info(f'makeVersionModule(["{target[0]}"], [])')
 
     result = self.Command(filename, [], self.Action(makeVersionModule, strfunction=lambda *args: None))
 

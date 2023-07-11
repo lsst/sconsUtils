@@ -21,7 +21,7 @@ def guessVersionName():
     """
     version = "unknown"
     if not os.path.exists(".hg"):
-        state.log.warn("Cannot guess version without .hg directory; will be set to '%s'." % version)
+        state.log.warn(f"Cannot guess version without .hg directory; will be set to '{version}'.")
         return version
 
     idents = utils.runExternal("hg id", fatal=True)
@@ -60,7 +60,7 @@ def guessFingerprint():
     """
     fingerprint, modified = "0x0", False
     if not os.path.exists(".hg"):
-        state.log.warn("Cannot guess fingerprint without .hg directory; will be set to '%s'." % fingerprint)
+        state.log.warn(f"Cannot guess fingerprint without .hg directory; will be set to '{fingerprint}'.")
     else:
         idents = utils.runExternal("hg id", fatal=True)
         ident = re.split(r"\s+", idents)

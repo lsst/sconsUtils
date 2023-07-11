@@ -42,7 +42,7 @@ def guessFingerprint():
     fingerprint, modified = "0x0", False
 
     if not os.path.exists(".git"):
-        state.log.warn("Cannot guess fingerprint without .git directory; will be set to '%s'." % fingerprint)
+        state.log.warn(f"Cannot guess fingerprint without .git directory; will be set to '{fingerprint}'.")
     else:
         status = utils.runExternal("git status --porcelain --untracked-files=no", fatal=True)
         if status.strip():

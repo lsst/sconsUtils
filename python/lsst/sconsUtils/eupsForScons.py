@@ -30,7 +30,7 @@ if not haveEups():
             return env["PLATFORM"].title()
 
     def productDir(name):
-        return os.environ.get("%s_DIR" % name.upper())
+        return os.environ.get(f"{name.upper()}_DIR")
 
     def findSetupVersion(eupsProduct):
         return None, None, None, None, flavor()
@@ -49,7 +49,7 @@ if not haveEups():
     utils = _Utils()
 
     def setupEnvNameFor(productName):
-        return "SETUP_%s" % productName
+        return f"SETUP_{productName}"
 
     utils.setupEnvNameFor = setupEnvNameFor
 

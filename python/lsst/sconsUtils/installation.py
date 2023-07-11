@@ -149,7 +149,7 @@ def setPrefix(env, versionString, eupsProductPath=None):
         env["version"] = "unknown"
         if (env.installing or env.declaring) and not env["force"]:
             state.log.fail(
-                "%s\nFound problem with version number; update or specify force=True to proceed" % err
+                f"{err}\nFound problem with version number; update or specify force=True to proceed"
             )
 
     if state.env["no_eups"]:
@@ -175,7 +175,7 @@ def setPrefix(env, versionString, eupsProductPath=None):
         eupsPrefix = None
     if "prefix" in env:
         if env["version"] != "unknown" and eupsPrefix and eupsPrefix != env["prefix"]:
-            state.log.warn("Ignoring prefix %s from EUPS_PATH" % eupsPrefix)
+            state.log.warn(f"Ignoring prefix {eupsPrefix} from EUPS_PATH")
         return makeProductPath(env, env["prefix"])
     elif "eupsPath" in env and env["eupsPath"]:
         prefix = eupsPrefix
@@ -233,7 +233,7 @@ def Declare(self, products=None):
                 product = self["eupsProduct"]
 
             if "EUPS_DIR" in os.environ:
-                self["ENV"]["PATH"] += os.pathsep + "%s/bin" % (os.environ["EUPS_DIR"])
+                self["ENV"]["PATH"] += os.pathsep + f'{os.environ["EUPS_DIR"]}/bin'
                 self["ENV"]["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", "-1")
                 if "undeclare" in SCons.Script.COMMAND_LINE_TARGETS or self.GetOption("clean"):
                     if version:
@@ -259,7 +259,7 @@ def Declare(self, products=None):
                     )
 
                     if "eupsPath" in self:
-                        command += " -Z %s" % self["eupsPath"]
+                        command += f' -Z {self["eupsPath"]}'
 
                     if version:
                         command += f" {product} {version}"
@@ -267,7 +267,7 @@ def Declare(self, products=None):
                     current += [command + " --current"]
 
                     if self.GetOption("tag"):
-                        command += " --tag=%s" % self.GetOption("tag")
+                        command += f' --tag={self.GetOption("tag")}'
 
                     declare += [command]
 
@@ -310,7 +310,7 @@ class DirectoryInstaller:
         prefix = os.path.abspath(os.path.join(target[0].abspath, ".."))
         destpath = os.path.join(target[0].abspath)
         if not os.path.isdir(destpath):
-            state.log.info("Creating directory %s" % destpath)
+            state.log.info(f"Creating directory {destpath}")
             os.makedirs(destpath)
         for root, dirnames, filenames in os.walk(source[0].path):
             if not self.recursive:
@@ -320,7 +320,7 @@ class DirectoryInstaller:
             for dirname in dirnames:
                 destpath = os.path.join(prefix, root, dirname)
                 if not os.path.isdir(destpath):
-                    state.log.info("Creating directory %s" % destpath)
+                    state.log.info(f"Creating directory {destpath}")
                     os.makedirs(destpath)
             for filename in filenames:
                 if self.ignoreRegex.search(filename):
@@ -454,11 +454,11 @@ def InstallEups(env, dest, files=[], presetup=""):
         for i in build_obj:
             env.AlwaysBuild(i)
 
-            cmd = "eups expandbuild -i --version %s " % env["version"]
+            cmd = f'eups expandbuild -i --version {env["version"]} '
             if "baseversion" in env:
-                cmd += " --repoversion %s " % env["baseversion"]
+                cmd += f' --repoversion {env["baseversion"]} '
             cmd += str(i)
-            eupsTargets.extend(env.AddPostAction(build_obj, env.Action("%s" % (cmd), cmd)))
+            eupsTargets.extend(env.AddPostAction(build_obj, env.Action(f"{cmd}", cmd)))
 
         for i in table_obj:
             env.AlwaysBuild(i)
@@ -468,7 +468,7 @@ def InstallEups(env, dest, files=[], presetup=""):
                 cmd += presetup + " "
             cmd += str(i)
 
-            act = env.Command("table", "", env.Action("%s" % (cmd), cmd))
+            act = env.Command("table", "", env.Action(f"{cmd}", cmd))
             eupsTargets.extend(act)
             acts += act
             env.Depends(act, i)

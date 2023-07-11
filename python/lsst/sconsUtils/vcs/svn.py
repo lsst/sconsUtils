@@ -11,9 +11,7 @@ import sys
 def isSvnFile(file):
     """Is file under svn control?"""
 
-    return (
-        re.search(r"is not a working copy", "".join(os.popen("svn info %s 2>&1" % file).readlines())) is None
-    )
+    return re.search(r"is not a working copy", "".join(os.popen(f"svn info {file} 2>&1").readlines())) is None
 
 
 def getInfo(file="."):
@@ -21,9 +19,9 @@ def getInfo(file="."):
     the specified file"""
 
     if not isSvnFile(file):
-        raise RuntimeError("%s is not under svn control" % file)
+        raise RuntimeError(f"{file} is not under svn control")
 
-    infoList = os.popen("svn info %s" % file).readlines()
+    infoList = os.popen(f"svn info {file}").readlines()
 
     info = {}
     for line in infoList:
@@ -84,7 +82,7 @@ def revision(file=None, lastChanged=False):
 
         return matches["oldest"], matches["youngest"], tuple(matches["flags"])
 
-    raise RuntimeError('svnversion returned unexpected result "%s"' % res[:-1])
+    raise RuntimeError(f'svnversion returned unexpected result "{res[:-1]}"')
 
 
 def guessVersionName(HeadURL):
@@ -101,7 +99,7 @@ def guessVersionName(HeadURL):
     elif re.search(r"/tickets/(\d+)$", HeadURL):
         versionName = "ticket_%s+" % re.search(r"/tickets/(\d+)$", HeadURL).group(1)
     else:
-        print("Unable to guess versionName name from %s" % HeadURL, file=sys.stderr)
+        print(f"Unable to guess versionName name from {HeadURL}", file=sys.stderr)
         versionName = "unknown+"
 
     try:  # Try to lookup the svn versionName
@@ -115,15 +113,11 @@ def guessVersionName(HeadURL):
             msg = "You are installing, but have switched SVN URLs"
             okVersion = False
         if oldest != youngest:
-            msg = "You have a range of revisions in your tree ({}:{}); adopting {}".format(
-                oldest,
-                youngest,
-                youngest,
-            )
+            msg = f"You have a range of revisions in your tree ({oldest}:{youngest}); adopting {youngest}"
             okVersion = False
 
         if not okVersion:
-            raise RuntimeError("Problem with determining svn revision: %s" % msg)
+            raise RuntimeError(f"Problem with determining svn revision: {msg}")
 
         versionName += "svn" + youngest
     except OSError:
