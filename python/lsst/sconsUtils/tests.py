@@ -281,28 +281,18 @@ class Control:
             result = self._env.Command(
                 target,
                 f,
-                """
-            @rm -f ${TARGET}.failed;
-            @printf "%%s" 'running ${SOURCES}... ';
-            @echo $SOURCES %s > $TARGET; echo >> $TARGET;
-            @if %s %s $SOURCES %s >> $TARGET 2>&1; then \
-               if ! %s; then mv $TARGET ${TARGET}.failed; fi; \
-               echo "%s"; \
+                f"""
+            @rm -f ${{TARGET}}.failed;
+            @printf "%s" 'running ${{SOURCES}}... ';
+            @echo $SOURCES {expandedArgs} > $TARGET; echo >> $TARGET;
+            @if {libpathstr} {interpreter} $SOURCES {expandedArgs} >> $TARGET 2>&1; then \
+               if ! {should_pass}; then mv $TARGET ${{TARGET}}.failed; fi; \
+               echo "{passedMsg}"; \
             else \
-               if ! %s; then mv $TARGET ${TARGET}.failed; fi; \
-               echo "%s"; \
+               if ! {should_fail}; then mv $TARGET ${{TARGET}}.failed; fi; \
+               echo "{failedMsg}"; \
             fi;
-            """
-                % (
-                    expandedArgs,
-                    libpathstr,
-                    interpreter,
-                    expandedArgs,
-                    should_pass,
-                    passedMsg,
-                    should_fail,
-                    failedMsg,
-                ),
+            """,
             )
 
             targets.extend(result)
