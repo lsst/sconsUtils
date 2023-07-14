@@ -16,7 +16,7 @@ except ImportError:
 # Try to import the generated version module.
 try:
     from .version import *
-except:
+except Exception:
     __version__ = "unknown"
 
 # These should remain in their own namespaces
