@@ -364,10 +364,14 @@ class Control:
         for path in glob.glob(os.path.join(self._tmpDir, "linter-*.log*")):
             os.unlink(path)
 
+        # Always exclude the tests output directory. This should never be
+        # examined.
+        lint_options = "--extend-exclude=tests/.tests"
+
         cmd = f"""
         @printf "%s\\n" 'Running python linter {linter}...';
         @rm -f ${{TARGET}} ${{TARGET}}.failed;
-        @({linter} . > ${{TARGET}}); \
+        @({linter} {lint_options} . > ${{TARGET}}); \
         export rc="$?"; \
         if [ "$$rc" -eq 0 ]; then \
             echo "Python linting completed successfully"; \
