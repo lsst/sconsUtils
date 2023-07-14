@@ -3,27 +3,25 @@
 
 __all__ = ("filesToTag", "DoxygenBuilder")
 
+import fnmatch
 import os
 import re
-import fnmatch
-import pipes
+import shlex
 
 import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
 
-from .utils import memberOf
-from .installation import determineVersion, getFingerprint
 from . import state
+from .installation import determineVersion, getFingerprint
+from .utils import memberOf
 
 
 @memberOf(SConsEnvironment)
 def SharedLibraryIncomplete(self, target, source, **keywords):
-    """Like SharedLibrary, but don't insist that all symbols are resolved.
-    """
+    """Like SharedLibrary, but don't insist that all symbols are resolved."""
     myenv = self.Clone()
-    if myenv['PLATFORM'] == 'darwin':
-        myenv['SHLINKFLAGS'] += ["-undefined", "dynamic_lookup",
-                                 "-headerpad_max_install_names"]
+    if myenv["PLATFORM"] == "darwin":
+        myenv["SHLINKFLAGS"] += ["-undefined", "dynamic_lookup", "-headerpad_max_install_names"]
     return myenv.SharedLibrary(target, source, **keywords)
 
 
@@ -34,9 +32,8 @@ def Pybind11LoadableModule(self, target, source, **keywords):
     """
     myenv = self.Clone()
     myenv.Append(CCFLAGS=["-fvisibility=hidden"])
-    if myenv['PLATFORM'] == 'darwin':
-        myenv.Append(LDMODULEFLAGS=["-undefined", "dynamic_lookup",
-                                    "-headerpad_max_install_names"])
+    if myenv["PLATFORM"] == "darwin":
+        myenv.Append(LDMODULEFLAGS=["-undefined", "dynamic_lookup", "-headerpad_max_install_names"])
     return myenv.LoadableModule(target, source, **keywords)
 
 
@@ -100,7 +97,7 @@ def SourcesForSharedLibrary(self, files):
     if opt == 0:
         opt = 3
 
-    CCFLAGS_OPT = re.sub(r"-O(\d|s)\s*", "-O%d " % opt, " ".join(self["CCFLAGS"]))
+    CCFLAGS_OPT = re.sub(r"-O(\d|s)\s*", f"-O{opt} ", " ".join(self["CCFLAGS"]))
     CCFLAGS_NOOPT = re.sub(r"-O(\d|s)\s*", "-O0 ", " ".join(self["CCFLAGS"]))  # remove -O flags from CCFLAGS
 
     objs = []
@@ -171,7 +168,7 @@ def filesToTag(root=None, fileRegex=None, ignoreDirs=None):
         #
         for swigFile in [f for f in filenames if f.endswith(".i")]:
             name = os.path.splitext(swigFile)[0]
-            candidates = [f for f in candidates if not re.search(r"%s(_wrap\.cc?|\.py)$" % name, f)]
+            candidates = [f for f in candidates if not re.search(rf"{name}(_wrap\.cc?|\.py)$", f)]
 
         files += [os.path.join(dirpath, f) for f in candidates]
 
@@ -289,13 +286,14 @@ def ProductDir(env, product):
         The product directory. `None` if the product is not known.
     """
     from . import eupsForScons
+
     global _productDirs
     try:
         _productDirs
     except Exception:
         try:
             _productDirs = eupsForScons.productDir(eupsenv=eupsForScons.getEups())
-        except TypeError:               # old version of eups (pre r18588)
+        except TypeError:  # old version of eups (pre r18588)
             _productDirs = None
     if _productDirs:
         pdir = _productDirs.get(product)
@@ -317,10 +315,10 @@ class DoxygenBuilder:
         self.results = []
         self.sources = []
         self.targets = []
-        self.useTags = list(SCons.Script.File(item).abspath for item in self.useTags)
-        self.inputs = list(SCons.Script.Entry(item).abspath for item in self.inputs)
-        self.excludes = list(SCons.Script.Entry(item).abspath for item in self.excludes)
-        self.outputPaths = list(SCons.Script.Dir(item) for item in self.outputs)
+        self.useTags = [SCons.Script.File(item).abspath for item in self.useTags]
+        self.inputs = [SCons.Script.Entry(item).abspath for item in self.inputs]
+        self.excludes = [SCons.Script.Entry(item).abspath for item in self.excludes]
+        self.outputPaths = [SCons.Script.Dir(item) for item in self.outputs]
 
     def __call__(self, env, config):
         self.findSources()
@@ -332,11 +330,15 @@ class DoxygenBuilder:
             tagNode = SCons.Script.File(self.makeTag)
             self.makeTag = tagNode.abspath
             self.targets.append(tagNode)
-        config = env.Command(target=outConfigNode, source=inConfigNode if os.path.exists(config) else None,
-                             action=self.buildConfig)
+        config = env.Command(
+            target=outConfigNode,
+            source=inConfigNode if os.path.exists(config) else None,
+            action=self.buildConfig,
+        )
         env.AlwaysBuild(config)
-        doc = env.Command(target=self.targets, source=self.sources,
-                          action="doxygen %s" % pipes.quote(outConfigNode.abspath))
+        doc = env.Command(
+            target=self.targets, source=self.sources, action=f"doxygen {shlex.quote(outConfigNode.abspath)}"
+        )
         for path in self.outputPaths:
             env.Clean(doc, path)
         env.Depends(doc, config)
@@ -387,14 +389,14 @@ class DoxygenBuilder:
         outConfigFile = open(target[0].abspath, "w")
 
         # Need a routine to quote paths that contain spaces
-        # but can not use pipes.quote because it has to be
+        # but can not use shlex.quote because it has to be
         # a double quote for doxygen.conf
         # Do not quote a string if it is already quoted
         # Also have a version that quotes each item in a sequence and generates
         # the final quoted entry.
         def _quote_path(path):
             if " " in path and not path.startswith('"') and not path.endswith('"'):
-                return '"{}"'.format(path)
+                return f'"{path}"'
             return path
 
         def _quote_paths(pathList):
@@ -404,45 +406,45 @@ class DoxygenBuilder:
         incFiles = []
         for incPath in self.includes:
             docDir, incFile = os.path.split(incPath)
-            docPaths.append('"%s"' % docDir)
-            incFiles.append('"%s"' % incFile)
+            docPaths.append(f'"{docDir}"')
+            incFiles.append(f'"{incFile}"')
             self.sources.append(SCons.Script.File(incPath))
         if docPaths:
-            outConfigFile.write('@INCLUDE_PATH = %s\n' % _quote_paths(docPaths))
+            outConfigFile.write(f"@INCLUDE_PATH = {_quote_paths(docPaths)}\n")
         for incFile in incFiles:
-            outConfigFile.write('@INCLUDE = %s\n' % _quote_path(incFile))
+            outConfigFile.write(f"@INCLUDE = {_quote_path(incFile)}\n")
 
         for tagPath in self.useTags:
             docDir, tagFile = os.path.split(tagPath)
             htmlDir = os.path.join(docDir, "html")
-            outConfigFile.write('TAGFILES += "%s=%s"\n' % (tagPath, htmlDir))
+            outConfigFile.write(f'TAGFILES += "{tagPath}={htmlDir}"\n')
             self.sources.append(SCons.Script.Dir(docDir))
         if self.projectName is not None:
-            outConfigFile.write("PROJECT_NAME = %s\n" % self.projectName)
+            outConfigFile.write(f"PROJECT_NAME = {self.projectName}\n")
         if self.projectNumber is not None:
-            outConfigFile.write("PROJECT_NUMBER = %s\n" % self.projectNumber)
-        outConfigFile.write("INPUT = %s\n" % _quote_paths(self.inputs))
-        outConfigFile.write("EXCLUDE = %s\n" % _quote_paths(self.excludes))
-        outConfigFile.write("FILE_PATTERNS = %s\n" % " ".join(self.patterns))
+            outConfigFile.write(f"PROJECT_NUMBER = {self.projectNumber}\n")
+        outConfigFile.write(f"INPUT = {_quote_paths(self.inputs)}\n")
+        outConfigFile.write(f"EXCLUDE = {_quote_paths(self.excludes)}\n")
+        outConfigFile.write(f"FILE_PATTERNS = {' '.join(self.patterns)}\n")
         outConfigFile.write("RECURSIVE = YES\n" if self.recursive else "RECURSIVE = NO\n")
-        allOutputs = set(("html", "latex", "man", "rtf", "xml"))
+        allOutputs = {"html", "latex", "man", "rtf", "xml"}
         for output, path in zip(self.outputs, self.outputPaths):
             try:
                 allOutputs.remove(output.lower())
             except Exception:
-                state.log.fail("Unknown Doxygen output format '%s'." % output)
+                state.log.fail(f"Unknown Doxygen output format '{output}'.")
                 state.log.finish()
-            outConfigFile.write("GENERATE_%s = YES\n" % output.upper())
-            outConfigFile.write("%s_OUTPUT = %s\n" % (output.upper(), _quote_path(path.abspath)))
+            outConfigFile.write(f"GENERATE_{output.upper()} = YES\n")
+            outConfigFile.write(f"{output.upper()}_OUTPUT = {_quote_path(path.abspath)}\n")
         for output in allOutputs:
-            outConfigFile.write("GENERATE_%s = NO\n" % output.upper())
+            outConfigFile.write(f"GENERATE_{output.upper()} = NO\n")
         if self.makeTag is not None:
-            outConfigFile.write("GENERATE_TAGFILE = %s\n" % _quote_path(self.makeTag))
+            outConfigFile.write(f"GENERATE_TAGFILE = {_quote_path(self.makeTag)}\n")
         #
         # Append the local overrides (usually doxygen.conf.in)
         #
         if len(source) > 0:
-            with open(source[0].abspath, "r") as inConfigFile:
+            with open(source[0].abspath) as inConfigFile:
                 outConfigFile.write(inConfigFile.read())
 
         outConfigFile.close()
@@ -519,8 +521,9 @@ def Doxygen(self, config, **kwargs):
     The workaround is just to build the docs after building the source.
     """
 
-    inputs = [d for d in ["#doc", "#include", "#python", "#src"]
-              if os.path.exists(SCons.Script.Entry(d).abspath)]
+    inputs = [
+        d for d in ["#doc", "#include", "#python", "#src"] if os.path.exists(SCons.Script.Entry(d).abspath)
+    ]
     defaults = {
         "inputs": inputs,
         "recursive": True,
@@ -532,7 +535,7 @@ def Doxygen(self, config, **kwargs):
         "makeTag": None,
         "projectName": None,
         "projectNumber": None,
-        "excludeSwig": True
+        "excludeSwig": True,
     }
     for k in defaults:
         if kwargs.get(k) is None:
@@ -544,8 +547,8 @@ def Doxygen(self, config, **kwargs):
 @memberOf(SConsEnvironment)
 def VersionModule(self, filename, versionString=None):
     if versionString is None:
-        for n in ("git", "hg", "svn",):
-            if os.path.isdir(".%s" % n):
+        for n in ("git", "hg", "svn"):
+            if os.path.isdir(f".{n}"):
                 versionString = n
 
         if not versionString:
@@ -554,8 +557,9 @@ def VersionModule(self, filename, versionString=None):
     def calcMd5(filename):
         try:
             import hashlib
+
             md5 = hashlib.md5(open(filename, "rb").read()).hexdigest()
-        except IOError:
+        except OSError:
             md5 = None
 
         return md5
@@ -580,13 +584,9 @@ def VersionModule(self, filename, versionString=None):
                 info = tuple(int(v) for v in parts[0].split("."))
                 what = "__version_info__"
                 names.append(what)
-                version_info = f"{what} : Tuple[int, ...] = {info!r}\n"
+                version_info = f"{what} : tuple[int, ...] = {info!r}\n"
             except ValueError:
                 pass
-
-            tuple_txt = ", Tuple" if version_info is not None else ""
-            outFile.write(f"from typing import Dict, Optional{tuple_txt}\n")
-            outFile.write("\n\n")
 
             what = "__version__"
             outFile.write(f'{what}: str = "{version}"\n')
@@ -613,7 +613,7 @@ def VersionModule(self, filename, versionString=None):
 
             what = "__dependency_versions__"
             names.append(what)
-            outFile.write(f"{what}: Dict[str, Optional[str]] = {{")
+            outFile.write(f"{what}: dict[str, str | None] = {{")
             if env.dependencies.packages:
                 outFile.write("\n")
                 for name, mod in env.dependencies.packages.items():
@@ -632,7 +632,7 @@ def VersionModule(self, filename, versionString=None):
             outFile.write(")\n")
 
         if calcMd5(target[0].abspath) != oldMd5:  # only print if something's changed
-            state.log.info("makeVersionModule([\"%s\"], [])" % str(target[0]))
+            state.log.info(f'makeVersionModule(["{target[0]}"], [])')
 
     result = self.Command(filename, [], self.Action(makeVersionModule, strfunction=lambda *args: None))
 

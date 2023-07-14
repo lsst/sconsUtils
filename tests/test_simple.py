@@ -4,8 +4,8 @@ infrastructure can run more than one test file.
 There is nothing scons-specific about these tests.
 """
 
-import unittest
 import os
+import unittest
 
 
 class SimplestPossibleTestCase(unittest.TestCase):

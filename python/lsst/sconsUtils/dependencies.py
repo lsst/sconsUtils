@@ -1,26 +1,24 @@
-
 """Dependency configuration and definition."""
 
 __all__ = ("Configuration", "ExternalConfiguration", "PackageTree", "configure")
 
-import os
-import os.path
 import collections
 import importlib
+import os
+import os.path
 from sys import platform
+
 import SCons.Script
-from . import eupsForScons
 from SCons.Script.SConscript import SConsEnvironment
 
-from . import installation
-from . import state
+from . import eupsForScons, installation, state
 from .utils import get_conda_prefix, use_conda_compilers
 
 
 def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath=None, noCfgFile=False):
     """Recursively configure a package using ups/.cfg files.
 
-    Aliased as `lsst.sconsUtils.configure()`.
+    Aliased as `lsst.sconsUtils.configure`.
 
     Usually, LSST packages will call this function through
     `~lsst.sconsUtils.scripts.BasicSConstruct`.
@@ -49,13 +47,13 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     """
 
     if not state.env.GetOption("no_progress"):
-        state.log.info("Setting up environment to build package '%s'." % packageName)
+        state.log.info(f"Setting up environment to build package '{packageName}'.")
     if eupsProduct is None:
         eupsProduct = packageName
     if versionString is None:
         versionString = "git"
-    state.env['eupsProduct'] = eupsProduct
-    state.env['packageName'] = packageName
+    state.env["eupsProduct"] = eupsProduct
+    state.env["packageName"] = packageName
     #
     # Setup installation directories and variables
     #
@@ -66,9 +64,9 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     if state.env.linkFarmDir:
         state.env.linkFarmDir = os.path.abspath(os.path.expanduser(state.env.linkFarmDir))
     prefix = installation.setPrefix(state.env, versionString, eupsProductPath)
-    state.env['prefix'] = prefix
-    state.env["libDir"] = "%s/lib" % prefix
-    state.env["pythonDir"] = "%s/python" % prefix
+    state.env["prefix"] = prefix
+    state.env["libDir"] = f"{prefix}/lib"
+    state.env["pythonDir"] = f"{prefix}/python"
     #
     # Process dependencies
     #
@@ -78,52 +76,53 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     state.log.flush()  # if we've already hit a fatal error, die now.
     state.env.libs = {"main": [], "python": [], "test": []}
     state.env.doxygen = {"tags": [], "includes": []}
-    state.env['CPPPATH'] = []
+    state.env["CPPPATH"] = []
 
     _conda_prefix = get_conda_prefix()
     # _conda_prefix is usually around, even if not using conda compilers
     if use_conda_compilers():
         # if using the conda-force conda compilers, they handle rpath for us
         _conda_lib = f"{_conda_prefix}/lib"
-        state.env['LIBPATH'] = [_conda_lib]
+        state.env["LIBPATH"] = [_conda_lib]
         if platform == "darwin":
             state.env["_RPATH"] = f"-rpath {_conda_lib}"
         else:
             state.env.AppendUnique(RPATH=[_conda_lib])
     else:
-        state.env['LIBPATH'] = []
+        state.env["LIBPATH"] = []
 
     # XCPPPATH is a new variable defined by sconsUtils - it's like CPPPATH,
     # but the headers found there aren't treated as dependencies.  This can
     # make scons a lot faster.
-    state.env['XCPPPATH'] = []
+    state.env["XCPPPATH"] = []
 
     if use_conda_compilers():
-        state.env.Append(XCPPPATH=["%s/include" % _conda_prefix])
+        state.env.Append(XCPPPATH=[f"{_conda_prefix}/include"])
 
     # XCPPPPREFIX is a replacement for SCons' built-in INCPREFIX. It is used
     # when compiling headers in XCPPPATH directories. Here, we set it to
     # `-isystem`, so that those are regarded as "system headers" and warnings
     # are suppressed.
-    state.env['XCPPPREFIX'] = "-isystem "
+    state.env["XCPPPREFIX"] = "-isystem "
 
-    state.env['_CPPINCFLAGS'] = \
-        "$( ${_concat(INCPREFIX, CPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)}"\
+    state.env["_CPPINCFLAGS"] = (
+        "$( ${_concat(INCPREFIX, CPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)}"
         " ${_concat(XCPPPREFIX, XCPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)} $)"
-    state.env['_SWIGINCFLAGS'] = state.env['_CPPINCFLAGS'] \
-                                      .replace("CPPPATH", "SWIGPATH") \
-                                      .replace("XCPPPREFIX", "SWIGINCPREFIX")
+    )
+    state.env["_SWIGINCFLAGS"] = (
+        state.env["_CPPINCFLAGS"].replace("CPPPATH", "SWIGPATH").replace("XCPPPREFIX", "SWIGINCPREFIX")
+    )
 
     if state.env.linkFarmDir:
         for d in [state.env.linkFarmDir, "#"]:
             state.env.Append(CPPPATH=os.path.join(d, "include"))
             state.env.Append(LIBPATH=os.path.join(d, "lib"))
-        state.env['SWIGPATH'] = state.env['CPPPATH']
+        state.env["SWIGPATH"] = state.env["CPPPATH"]
 
     if not state.env.GetOption("clean") and not state.env.GetOption("help"):
         packages.configure(state.env, check=state.env.GetOption("checkDependencies"))
         for target in state.env.libs:
-            state.log.info("Libraries in target '%s': %s" % (target, state.env.libs[target]))
+            state.log.info(f"Libraries in target '{target}': {state.env.libs[target]}")
     state.env.dependencies = packages
     state.log.flush()
 
@@ -218,9 +217,18 @@ class Configuration:
             productDir = eupsForScons.productDir(eupsProduct)
         return version, productDir
 
-    def __init__(self, cfgFile, headers=(), libs=None, hasSwigFiles=True,
-                 includeFileDirs=["include"], libFileDirs=["lib"],
-                 hasDoxygenInclude=False, hasDoxygenTag=True, eupsProduct=None):
+    def __init__(
+        self,
+        cfgFile,
+        headers=(),
+        libs=None,
+        hasSwigFiles=True,
+        includeFileDirs=["include"],
+        libFileDirs=["lib"],
+        hasDoxygenInclude=False,
+        hasDoxygenTag=True,
+        eupsProduct=None,
+    ):
         self.name, self.root = self.parseFilename(cfgFile)
         if eupsProduct is None:
             eupsProduct = self.name
@@ -229,18 +237,15 @@ class Configuration:
         if version is not None:
             self.version = version
         if productDir is None:
-            state.log.info("Could not find EUPS product dir for '%s'; using %s."
-                           % (self.eupsProduct, self.root))
+            state.log.info(f"Could not find EUPS product dir for '{self.eupsProduct}'; using {self.root}.")
         else:
             self.root = os.path.realpath(productDir)
         self.doxygen = {
             # Doxygen tag files generated by this package
-            "tags": ([os.path.join(self.root, "doc", "%s.tag" % self.name)]
-                     if hasDoxygenTag else []),
+            "tags": ([os.path.join(self.root, "doc", f"{self.name}.tag")] if hasDoxygenTag else []),
             # Doxygen include files to include in the configuration of
             # dependent products
-            "includes": ([os.path.join(self.root, "doc", "%s.inc" % self.name)]
-                         if hasDoxygenInclude else [])
+            "includes": ([os.path.join(self.root, "doc", f"{self.name}.inc")] if hasDoxygenInclude else []),
         }
         if libs is None:
             self.libs = {
@@ -263,8 +268,7 @@ class Configuration:
         else:
             self.paths["SWIGPATH"] = []
 
-        for pathName, subDirs in [("CPPPATH", includeFileDirs),
-                                  ("LIBPATH", libFileDirs)]:
+        for pathName, subDirs in [("CPPPATH", includeFileDirs), ("LIBPATH", libFileDirs)]:
             self.paths[pathName] = []
 
             if state.env.linkFarmDir:
@@ -275,10 +279,7 @@ class Configuration:
                 if os.path.isdir(pathDir):
                     self.paths[pathName].append(pathDir)
 
-        self.provides = {
-            "headers": tuple(headers),
-            "libs": tuple(self.libs["main"])
-        }
+        self.provides = {"headers": tuple(headers), "libs": tuple(self.libs["main"])}
 
     def addCustomTests(self, tests):
         """Add custom SCons configuration tests to the Configure Context
@@ -317,21 +318,21 @@ class Configuration:
             "buildRequired" and "buildOptional" dependencies will also be
             present in the packages dict.
         """
-        assert(not (check and build))
+        assert not (check and build)
         conf.env.PrependUnique(**self.paths)
-        state.log.info("Configuring package '%s'." % self.name)
+        state.log.info(f"Configuring package '{self.name}'.")
         conf.env.doxygen["includes"].extend(self.doxygen["includes"])
         if not build:
             conf.env.doxygen["tags"].extend(self.doxygen["tags"])
         for target in self.libs:
             if target not in conf.env.libs:
                 conf.env.libs[target] = self.libs[target].copy()
-                state.log.info("Adding '%s' libraries to target '%s'." % (self.libs[target], target))
+                state.log.info(f"Adding '{self.libs[target]}' libraries to target '{target}'.")
             else:
                 for lib in self.libs[target]:
                     if lib not in conf.env.libs[target]:
                         conf.env.libs[target].append(lib)
-                        state.log.info("Adding '%s' library to target '%s'." % (lib, target))
+                        state.log.info(f"Adding '{lib}' library to target '{target}'.")
         if check:
             for header in self.provides["headers"]:
                 if not conf.CheckCXXHeader(header):
@@ -375,9 +376,18 @@ class ExternalConfiguration(Configuration):
     eupsProduct : `str`, optional
         The EUPS product being built.
     """
+
     def __init__(self, cfgFile, headers=(), libs=None, eupsProduct=None):
-        Configuration.__init__(self, cfgFile, headers, libs, eupsProduct=eupsProduct, hasSwigFiles=False,
-                               hasDoxygenTag=False, hasDoxygenInclude=False)
+        Configuration.__init__(
+            self,
+            cfgFile,
+            headers,
+            libs,
+            eupsProduct=eupsProduct,
+            hasSwigFiles=False,
+            hasDoxygenTag=False,
+            hasDoxygenInclude=False,
+        )
         self.paths["XCPPPATH"] = self.paths["CPPPATH"]
         del self.paths["CPPPATH"]
 
@@ -464,7 +474,7 @@ def CustomCompileCheck(context, message, source, extension=".cc"):
     context.Message(message)
 
     env = context.env
-    if (env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec")):
+    if env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec"):
         result = True
     else:
         result = context.TryCompile(source, extension)
@@ -531,6 +541,7 @@ class PackageTree:
     `OrderedDict` of dependencies (excluding ``self.primary``), ordered
     such that configuration can proceed in iteration order.
     """
+
     def __init__(self, primaryName, noCfgFile=False):
         self.cfgPath = state.env.cfgPath
         self.packages = collections.OrderedDict()
@@ -540,28 +551,28 @@ class PackageTree:
             "CustomCompileCheck": CustomCompileCheck,
             "CustomLinkCheck": CustomLinkCheck,
         }
-        self._current = set([primaryName])
+        self._current = {primaryName}
         if noCfgFile:
             self.primary = None
             return
 
         self.primary = self._tryImport(primaryName)
         if self.primary is None:
-            state.log.fail("Failed to load primary package configuration for %s." % primaryName)
+            state.log.fail(f"Failed to load primary package configuration for {primaryName}.")
 
         missingDeps = []
         for dependency in self.primary.dependencies.get("required", ()):
             if not self._recurse(dependency):
                 missingDeps.append(dependency)
         if missingDeps:
-            state.log.fail("Failed to load required dependencies: \"%s\"" % '", "'.join(missingDeps))
+            state.log.fail('Failed to load required dependencies: "%s"' % '", "'.join(missingDeps))
 
         missingDeps = []
         for dependency in self.primary.dependencies.get("buildRequired", ()):
             if not self._recurse(dependency):
                 missingDeps.append(dependency)
         if missingDeps:
-            state.log.fail("Failed to load required build dependencies: \"%s\"" % '", "'.join(missingDeps))
+            state.log.fail('Failed to load required build dependencies: "%s"' % '", "'.join(missingDeps))
 
         for dependency in self.primary.dependencies.get("optional", ()):
             self._recurse(dependency)
@@ -577,10 +588,10 @@ class PackageTree:
         conf = env.Configure(custom_tests=self.customTests)
         for name, module in self.packages.items():
             if module is None:
-                state.log.info("Skipping missing optional package %s." % name)
+                state.log.info(f"Skipping missing optional package {name}.")
                 continue
             if not module.config.configure(conf, packages=self.packages, check=check, build=False):
-                state.log.fail("%s was found but did not pass configuration checks." % name)
+                state.log.fail(f"{name} was found but did not pass configuration checks.")
         if self.primary:
             self.primary.config.configure(conf, packages=self.packages, check=False, build=True)
         env.AppendUnique(SWIGPATH=env["CPPPATH"])
@@ -627,25 +638,25 @@ class PackageTree:
                     # have a .py extension.
                     module_name = f"{name}_cfg"
                     loader = importlib.machinery.SourceFileLoader(module_name, filename)
-                    spec = importlib.util.spec_from_file_location(module_name, filename,
-                                                                  submodule_search_locations=None,
-                                                                  loader=loader)
+                    spec = importlib.util.spec_from_file_location(
+                        module_name, filename, submodule_search_locations=None, loader=loader
+                    )
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
                 except Exception as e:
-                    state.log.warn("Error loading configuration %s (%s)" % (filename, e))
+                    state.log.warn(f"Error loading configuration {filename} ({e})")
                     continue
-                state.log.info("Using configuration for package '%s' at '%s'." % (name, filename))
+                state.log.info(f"Using configuration for package '{name}' at '{filename}'.")
                 if not hasattr(module, "dependencies") or not isinstance(module.dependencies, dict):
-                    state.log.warn("Configuration module for package '%s' lacks a dependencies dict." % name)
+                    state.log.warn(f"Configuration module for package '{name}' lacks a dependencies dict.")
                     return None
                 if not hasattr(module, "config") or not isinstance(module.config, Configuration):
-                    state.log.warn("Configuration module for package '%s' lacks a config object." % name)
+                    state.log.warn(f"Configuration module for package '{name}' lacks a config object.")
                     return None
                 else:
                     module.config.addCustomTests(self.customTests)
                 return module
-        state.log.info("Failed to import configuration for optional package '%s'." % name)
+        state.log.info(f"Failed to import configuration for optional package '{name}'.")
 
     def _recurse(self, name):
         """Recursively load a dependency.
@@ -661,7 +672,7 @@ class PackageTree:
             Was the dependency loaded?
         """
         if name in self._current:
-            state.log.fail("Detected recursive dependency involving package '%s'" % name)
+            state.log.fail(f"Detected recursive dependency involving package '{name}'")
         else:
             self._current.add(name)
         if name in self.packages:
@@ -679,8 +690,9 @@ class PackageTree:
                 # optional, so we don't die yet.
                 self.packages[name] = None
                 self._current.remove(name)
-                state.log.warn("Could not load all dependencies for package '%s' (missing %s)." %
-                               (name, dependency))
+                state.log.warn(
+                    f"Could not load all dependencies for package '{name}' (missing {dependency})."
+                )
                 return False
         for dependency in module.dependencies.get("optional", ()):
             self._recurse(dependency)

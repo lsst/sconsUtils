@@ -36,6 +36,7 @@ import unittest
 
 class SconsUtilsTestCase(unittest.TestCase):
     """A test case for sconsUtils"""
+
     def setUp(self):
         pass
 
@@ -43,11 +44,16 @@ class SconsUtilsTestCase(unittest.TestCase):
         pass
 
     def testCheckErrorCode(self):
-        self.assertTrue(subprocess.call("""
-                cd "%s/testFailedTests"
+        self.assertTrue(
+            subprocess.call(
+                f"""
+                cd "{os.path.dirname(__file__)}/testFailedTests"
                 scons > /dev/null 2>&1
-            """ % os.path.dirname(__file__), shell=True),
-            "Failed to detect failed tests")
+            """,
+                shell=True,
+            ),
+            "Failed to detect failed tests",
+        )
 
 
 if __name__ == "__main__":

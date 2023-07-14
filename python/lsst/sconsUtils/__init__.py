@@ -19,15 +19,11 @@ try:
 except:
     __version__ = "unknown"
 
-# Pull some names into the package namespace
-from .dependencies import configure, Configuration, ExternalConfiguration
-from .state import env, opts, log, targets
-from .builders import ProductDir
-
-# These inject methods into SConsEnviroment
-from . import installation
-from . import builders
-
 # These should remain in their own namespaces
-from . import scripts
-from . import tests
+# These inject methods into SConsEnviroment
+from . import builders, installation, scripts, tests
+
+# Pull some names into the package namespace
+from .builders import ProductDir
+from .dependencies import Configuration, ExternalConfiguration, configure
+from .state import env, log, opts, targets

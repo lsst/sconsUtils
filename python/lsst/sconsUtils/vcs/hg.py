@@ -7,8 +7,8 @@ the supported svn/python packages
 """
 import os
 import re
-from .. import state
-from .. import utils
+
+from .. import state, utils
 
 
 def guessVersionName():
@@ -21,7 +21,7 @@ def guessVersionName():
     """
     version = "unknown"
     if not os.path.exists(".hg"):
-        state.log.warn("Cannot guess version without .hg directory; will be set to '%s'." % version)
+        state.log.warn(f"Cannot guess version without .hg directory; will be set to '{version}'.")
         return version
 
     idents = utils.runExternal("hg id", fatal=True)
@@ -38,7 +38,7 @@ def guessVersionName():
 
     # Prefer tag name to branch name; branch names get printed in parens
     index = 1
-    while ident[index].startswith('(') and ident[index].endswith(')') and len(ident) > index + 1:
+    while ident[index].startswith("(") and ident[index].endswith(")") and len(ident) > index + 1:
         index += 1
 
     # Prefer hash to "tip"
@@ -60,7 +60,7 @@ def guessFingerprint():
     """
     fingerprint, modified = "0x0", False
     if not os.path.exists(".hg"):
-        state.log.warn("Cannot guess fingerprint without .hg directory; will be set to '%s'." % fingerprint)
+        state.log.warn(f"Cannot guess fingerprint without .hg directory; will be set to '{fingerprint}'.")
     else:
         idents = utils.runExternal("hg id", fatal=True)
         ident = re.split(r"\s+", idents)

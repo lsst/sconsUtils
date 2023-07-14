@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 
-from __future__ import print_function
+
 import argparse
 import os
 import sys
+
 import eups
 
 
 def linkFiles(dstDir, srcDir, verbose=0, force=False):
-    """Link all the regular files in srcDir into dstDir; mkdir all the directories in srcDir and
-    descend recursively"""
+    """Link all the regular files in srcDir into dstDir; mkdir all the
+    directories in srcDir and descend recursively"""
 
     if not os.path.exists(dstDir):
         os.makedirs(dstDir)
@@ -22,20 +23,21 @@ def linkFiles(dstDir, srcDir, verbose=0, force=False):
             linkFiles(fullDst, fullSrc, verbose, force)
         else:
             if verbose > 1:
-                print("%s -> %s" % (fullSrc, fullDst))
+                print(f"{fullSrc} -> {fullDst}")
 
             if os.path.exists(fullDst):
                 if force:
                     os.unlink(fullDst)
                 else:
-                    print("%s already exists; use --force to overwrite" % fullDst, file=sys.stderr)
+                    print(f"{fullDst} already exists; use --force to overwrite", file=sys.stderr)
                     sys.exit(1)
 
             os.symlink(fullSrc, fullDst)
 
 
 def main():
-    parser = argparse.ArgumentParser(description='''Build a link farm to replace long -I/-L argument lists.
+    parser = argparse.ArgumentParser(
+        description="""Build a link farm to replace long -I/-L argument lists.
 All the bin, include files, and libraries for all the dependencies of the specified product are linked into
     linkFarmDir/bin, linkFarmDir/include, or linkFarmDir/lib
 as appropriate.  Note that the setup dependencies are used, so you can say e.g.
@@ -43,19 +45,20 @@ $ setup pipe_tasks
 $ setup -r ~/LSST/afw
 $ makeLinkFarm /tmp/linkFarm pipe_tasks
 creates a link farm for your current selection of products.
-''')
-    parser.add_argument('linkFarmDir', type=str, help='The directory to setup as a link farm')
-    parser.add_argument('productName', type=str, help='The desired product (must be setup)')
+"""
+    )
+    parser.add_argument("linkFarmDir", type=str, help="The directory to setup as a link farm")
+    parser.add_argument("productName", type=str, help="The desired product (must be setup)")
 
-    parser.add_argument('--force', '-f', action='store_true', help="Force creation of farm even if it exists")
-    parser.add_argument('--verbose', '-v', action='count', help="Be chatty")
+    parser.add_argument("--force", "-f", action="store_true", help="Force creation of farm even if it exists")
+    parser.add_argument("--verbose", "-v", action="count", help="Be chatty")
 
     args = parser.parse_args()
 
     linkFarmDir = os.path.abspath(args.linkFarmDir)
 
     if not args.force and os.path.exists(linkFarmDir):
-        print("Path %s already exists; use --force to overwrite" % args.linkFarmDir, file=sys.stderr)
+        print(f"Path {args.linkFarmDir} already exists; use --force to overwrite", file=sys.stderr)
         sys.exit(1)
 
     #
@@ -67,15 +70,16 @@ creates a link farm for your current selection of products.
             os.makedirs(d)
 
     products = {}
-    for productName, versionName, optional, recursionDepth in \
-            eups.getDependencies(args.productName, None, setup=True):
+    for productName, versionName, optional, recursionDepth in eups.getDependencies(
+        args.productName, None, setup=True
+    ):
         if productName in products:
             continue
 
         products[productName] = 1
 
         pd = eups.productDir(productName)
-        if not pd:                      # no product
+        if not pd:  # no product
             continue
 
         binDir = os.path.join(pd, "bin")
@@ -83,9 +87,8 @@ creates a link farm for your current selection of products.
         libDir = os.path.join(pd, "lib")
 
         if args.verbose:
-            if args.verbose > 1 or \
-                    os.path.exists(binDir) or os.path.exists(incDir) or os.path.exists(libDir):
-                print("%-15s %s" % (productName, pd))
+            if args.verbose > 1 or os.path.exists(binDir) or os.path.exists(incDir) or os.path.exists(libDir):
+                print(f"{productName:<15} {pd}")
 
         if os.path.exists(binDir):
             fullDstDir = os.path.join(linkFarmDir, "bin")
@@ -108,7 +111,7 @@ creates a link farm for your current selection of products.
                     if args.force:
                         os.unlink(fullDst)
                     else:
-                        print("%s already exists; use --force to overwrite" % fullDst, file=sys.stderr)
+                        print(f"{fullDst} already exists; use --force to overwrite", file=sys.stderr)
                         sys.exit(1)
 
                 os.symlink(fullSrc, fullDst)

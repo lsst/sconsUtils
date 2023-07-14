@@ -2,6 +2,7 @@
 #
 # Setup our environment
 #
-from lsst.sconsUtils import scripts, targets, env
+from lsst.sconsUtils import env, scripts, targets
+
 scripts.BasicSConstruct.initialize(packageName="testFailedTest")
 scripts.BasicSConstruct.finish()

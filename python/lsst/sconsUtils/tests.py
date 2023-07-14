@@ -1,15 +1,16 @@
 """Control which tests run, and how.
 """
 
-__all__ = ("Control", )
+__all__ = ("Control",)
 
 import glob
 import os
+import shlex
 import sys
-import pipes
+
 import SCons.Script
-from . import state
-from . import utils
+
+from . import state, utils
 
 
 class Control:
@@ -66,9 +67,9 @@ class Control:
     _IGNORE = "IGNORE"
     _EXPECT_FAILURE = "EXPECT_FAILURE"
 
-    def __init__(self, env, ignoreList=None, expectedFailures=None, args=None,
-                 tmpDir=".tests", verbose=False):
-
+    def __init__(
+        self, env, ignoreList=None, expectedFailures=None, args=None, tmpDir=".tests", verbose=False
+    ):
         # Need to define our own Astropy cache directories.
         # Unfortunately we can not simply set XDG_CACHE_HOME
         # to $HOME/.astropy. Do not forward $HOME or the XDG_CONFIG_HOME
@@ -88,10 +89,11 @@ class Control:
                     os.makedirs(astropyCacheDir, exist_ok=True)  # Race condition is okay
                 os.environ[xdgCacheVar] = cacheDir
         else:
-            if not os.path.exists(os.path.expanduser(os.path.join(os.environ[xdgCacheVar],
-                                                                  "astropy"))):
-                state.log.warn(f"{xdgCacheVar} is set but will not be used for "
-                               "astropy due to lack of astropy directory within it")
+            if not os.path.exists(os.path.expanduser(os.path.join(os.environ[xdgCacheVar], "astropy"))):
+                state.log.warn(
+                    f"{xdgCacheVar} is set but will not be used for "
+                    "astropy due to lack of astropy directory within it"
+                )
 
         # Forward some environment to the tests
         for envvar in ["PYTHONPATH", "HTTP_PROXY", "HTTPS_PROXY", xdgCacheVar]:
@@ -119,14 +121,14 @@ class Control:
 
         self._verbose = verbose
 
-        self._info = {}                 # information about processing targets
+        self._info = {}  # information about processing targets
         if ignoreList:
             for f in ignoreList:
                 if f.startswith("@"):  # @dfilename => don't complain if filename doesn't exist
                     f = f[1:]
                 else:
                     if not os.path.exists(f):
-                        state.log.warn("You're ignoring a non-existent file, %s" % f)
+                        state.log.warn(f"You're ignoring a non-existent file, {f}")
                 self._info[f] = (self._IGNORE, None)
 
         if expectedFailures:
@@ -134,11 +136,11 @@ class Control:
                 self._info[f] = (self._EXPECT_FAILURE, expectedFailures[f])
 
         if args:
-            self._args = args           # arguments for tests
+            self._args = args  # arguments for tests
         else:
             self._args = {}
 
-        self.runExamples = True                      # should I run the examples?
+        self.runExamples = True  # should I run the examples?
         try:
             # file is user read/write/executable
             self.runExamples = (os.stat(self._tmpDir).st_mode & 0o700) != 0
@@ -146,8 +148,7 @@ class Control:
             pass
 
         if not self.runExamples:
-            print("Not running examples; \"chmod 755 %s\" to run them again" % self._tmpDir,
-                  file=sys.stderr)
+            print(f'Not running examples; "chmod 755 {self._tmpDir}" to run them again', file=sys.stderr)
 
     def args(self, test):
         """Arguments to use for this test.
@@ -181,8 +182,7 @@ class Control:
         ignore : `bool`
             Whether the test should be ignored or not.
         """
-        if not test.endswith(".py") and \
-           len(self._env.Glob(test)) == 0:  # we don't know how to build it
+        if not test.endswith(".py") and len(self._env.Glob(test)) == 0:  # we don't know how to build it
             return True
 
         ignoreFile = test in self._info and self._info[test][0] == self._IGNORE
@@ -210,11 +210,14 @@ class Control:
 
         if test in self._info and self._info[test][0] == self._EXPECT_FAILURE:
             msg = self._info[test][1]
-            return ("false", "Passed, but should have failed: %s" % msg,
-                    "true", "Failed as expected: %s" % msg)
+            return (
+                "false",
+                f"Passed, but should have failed: {msg}",
+                "true",
+                f"Failed as expected: {msg}",
+            )
         else:
-            return ("true", "passed",
-                    "false", "failed")
+            return ("true", "passed", "false", "failed")
 
     def run(self, fileGlob):
         """Create a test target for each file matching the supplied glob.
@@ -241,13 +244,13 @@ class Control:
         libpathstr = utils.libraryLoaderEnvironment()
 
         for f in glob.glob(fileGlob):
-            interpreter = ""            # interpreter to run test, if needed
+            interpreter = ""  # interpreter to run test, if needed
 
             if f.endswith(".cc"):  # look for executable
                 f = os.path.splitext(f)[0]
             else:
                 interpreter = "pytest -Wd --durations=5 --junit-xml=${TARGET}.xml"
-                interpreter += " --junit-prefix={0}".format(self.junitPrefix())
+                interpreter += f" --junit-prefix={self.junitPrefix()}"
                 interpreter += " --log-level=DEBUG"
                 interpreter += self._getPytestCoverageCommand()
 
@@ -262,9 +265,9 @@ class Control:
                 # the root directory
                 filePrefix = "file:"
                 if a.startswith(filePrefix):  # they explicitly said that this was a file
-                    a = os.path.join(self._cwd, a[len(filePrefix):])
+                    a = os.path.join(self._cwd, a[len(filePrefix) :])
                 else:
-                    try:                # see if it's a file
+                    try:  # see if it's a file
                         os.stat(a)
                         a = os.path.join(self._cwd, a)
                     except OSError:
@@ -275,19 +278,22 @@ class Control:
             (should_pass, passedMsg, should_fail, failedMsg) = self.messages(f)
 
             expandedArgs = " ".join(args)
-            result = self._env.Command(target, f, """
-            @rm -f ${TARGET}.failed;
-            @printf "%%s" 'running ${SOURCES}... ';
-            @echo $SOURCES %s > $TARGET; echo >> $TARGET;
-            @if %s %s $SOURCES %s >> $TARGET 2>&1; then \
-               if ! %s; then mv $TARGET ${TARGET}.failed; fi; \
-               echo "%s"; \
+            result = self._env.Command(
+                target,
+                f,
+                f"""
+            @rm -f ${{TARGET}}.failed;
+            @printf "%s" 'running ${{SOURCES}}... ';
+            @echo $SOURCES {expandedArgs} > $TARGET; echo >> $TARGET;
+            @if {libpathstr} {interpreter} $SOURCES {expandedArgs} >> $TARGET 2>&1; then \
+               if ! {should_pass}; then mv $TARGET ${{TARGET}}.failed; fi; \
+               echo "{passedMsg}"; \
             else \
-               if ! %s; then mv $TARGET ${TARGET}.failed; fi; \
-               echo "%s"; \
+               if ! {should_fail}; then mv $TARGET ${{TARGET}}.failed; fi; \
+               echo "{failedMsg}"; \
             fi;
-            """ % (expandedArgs, libpathstr, interpreter, expandedArgs, should_pass,
-                   passedMsg, should_fail, failedMsg))
+            """,
+            )
 
             targets.extend(result)
 
@@ -296,6 +302,84 @@ class Control:
             self._env.Clean(target, self._tmpDir)
 
         return targets
+
+    def runPythonLinter(self):
+        """Add a target for running the python linter.
+
+        Returns
+        -------
+        target : `list`
+            Returns a list containing a single target. Can be empty
+            if no suitable linter configuration was found.
+        """
+        linter: str | None = None
+        root = SCons.Script.Dir("#").abspath
+
+        pyproject = os.path.join(root, "pyproject.toml")
+        if os.path.exists(pyproject):
+            try:
+                import tomllib
+            except ImportError:
+                import tomli as tomllib
+
+            with open(pyproject) as fh:
+                try:
+                    parsed = tomllib.loads(fh.read())
+                except Exception:
+                    pass
+                else:
+                    if "tool" in parsed and "ruff" in parsed["tool"]:
+                        linter = "ruff"
+
+        if linter is None:
+            flake8_cfg = os.path.join(root, "setup.cfg")
+            if os.path.exists(os.path.join(root, ".flake8")):
+                linter = "flake8"
+            elif os.path.exists(flake8_cfg):
+                # Could search for [flake8] in file but parsing might
+                # be safer.
+                import configparser
+
+                config = configparser.ConfigParser()
+                try:
+                    config.read(flake8_cfg)
+                except Exception:
+                    # No valid flake8 config item possible.
+                    pass
+                else:
+                    if "flake8" in config:
+                        linter = "flake8"
+
+        if linter is None:
+            print(f"No Python linter configuration detected at path {root}.")
+            return []
+
+        target = os.path.join(self._tmpDir, f"linter-{linter}.log")
+        print(f"Detected configuration for python linter {linter}")
+
+        # Remove target so that we always trigger the linter (which should
+        # be fast). Use a glob since it is possible that someone may switch
+        # from flake8 to ruff and this can lead to confusing output if the
+        # previous flake8 run failed.
+        for path in glob.glob(os.path.join(self._tmpDir, "linter-*.log*")):
+            os.unlink(path)
+
+        cmd = f"""
+        @printf "%s\\n" 'Running python linter {linter}...';
+        @rm -f ${{TARGET}} ${{TARGET}}.failed;
+        @({linter} . > ${{TARGET}}); \
+        export rc="$?"; \
+        if [ "$$rc" -eq 0 ]; then \
+            echo "Python linting completed successfully"; \
+        else \
+            echo "Python linting failed with error"; \
+            mv ${{TARGET}} ${{TARGET}}.failed; \
+        fi;
+        """
+
+        result = self._env.Command(target, None, cmd)
+
+        return [result]
 
     def runPythonTests(self, pyList):
         """Add a single target for testing all python files.
@@ -337,10 +421,10 @@ class Control:
         # We always want to run this with the tests target.
         # We have decided to use pytest caching so that on reruns we only
         # run failed tests.
-        lfnfOpt = "none" if 'install' in SCons.Script.COMMAND_LINE_TARGETS else "all"
+        lfnfOpt = "none" if "install" in SCons.Script.COMMAND_LINE_TARGETS else "all"
         interpreter = f"pytest -Wd --lf --lfnf={lfnfOpt}"
         interpreter += " --durations=5 --junit-xml=${TARGET} --session2file=${TARGET}.out"
-        interpreter += " --junit-prefix={0}".format(self.junitPrefix())
+        interpreter += f" --junit-prefix={self.junitPrefix()}"
         interpreter += " --log-level=DEBUG"
         interpreter += self._getPytestCoverageCommand()
 
@@ -365,7 +449,7 @@ class Control:
         # These can come from examples directories that include C++.
         interpreter += " --ignore-glob='*.tmp'"
 
-        target = os.path.join(self._tmpDir, "pytest-{}.xml".format(self._env['eupsProduct']))
+        target = os.path.join(self._tmpDir, "pytest-{}.xml".format(self._env["eupsProduct"]))
 
         # Work out how many jobs scons has been configured to use
         # and use that number with pytest. This could cause trouble
@@ -390,10 +474,9 @@ class Control:
             # xdist currently parses the tx option
             interpreter = interpreter + " --max-worker-restart=0"
             if " " not in executable:
-                interpreter = (interpreter
-                               + " -d --tx={}*popen//python={}".format(njobs, executable))
+                interpreter = interpreter + f" -d --tx={njobs}*popen//python={executable}"
             else:
-                interpreter = interpreter + "  -n {}".format(njobs)
+                interpreter = interpreter + f" -n {njobs}"
 
         # Remove target so that we always trigger pytest
         if os.path.exists(target):
@@ -428,7 +511,7 @@ class Control:
             mv ${{TARGET}}.out ${{TARGET}}.failed; \
         fi;
         """
-        testfiles = " ".join([pipes.quote(p) for p in pythonTestFiles])
+        testfiles = shlex.join(pythonTestFiles)
         result = self._env.Command(target, None, cmd.format(interpreter, testfiles, libpathstr))
 
         self._env.Alias(os.path.basename(target), target)
@@ -450,10 +533,10 @@ class Control:
         ``LSST_JUNIT_PREFIX`` environment variable if that is set.
         """
         controlVar = "LSST_JUNIT_PREFIX"
-        prefix = self._env['eupsProduct']
+        prefix = self._env["eupsProduct"]
 
         if controlVar in os.environ:
-            prefix += ".{0}".format(os.environ[controlVar])
+            prefix += f".{os.environ[controlVar]}"
 
         return prefix
 
@@ -485,7 +568,7 @@ class Control:
         # Always enabled branch coverage and terminal summary
         options += " --cov-branch --cov-report=term "
 
-        covfile = "{}-cov-{}.xml".format(prefix, self._env['eupsProduct'])
+        covfile = "{}-cov-{}.xml".format(prefix, self._env["eupsProduct"])
 
         # We should specify the output directory explicitly unless the prefix
         # indicates that we are using the SCons target
@@ -493,10 +576,10 @@ class Control:
             covpath = covfile
         else:
             covpath = os.path.join(self._tmpDirAbs, covfile)
-        options += " --cov-report=xml:'{}'".format(covpath)
+        options += f" --cov-report=xml:'{covpath}'"
 
         # Use the prefix for the HTML output directory
-        htmlfile = ":'{}-htmlcov'".format(prefix)
-        options += " --cov-report=html{}".format(htmlfile)
+        htmlfile = f":'{prefix}-htmlcov'"
+        options += f" --cov-report=html{htmlfile}"
 
         return options

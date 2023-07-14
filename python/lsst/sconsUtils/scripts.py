@@ -3,17 +3,15 @@ files.
 """
 
 import os.path
-import warnings
 import re
-import pipes
-from stat import ST_MODE
-from SCons.Script import SConscript, File, Dir, Glob, BUILD_TARGETS
+import shlex
+import warnings
 from distutils.spawn import find_executable
+from stat import ST_MODE
 
-from . import dependencies
-from . import state
-from . import tests
-from . import utils
+from SCons.Script import BUILD_TARGETS, Dir, File, Glob, SConscript
+
+from . import dependencies, state, tests, utils
 
 DEFAULT_TARGETS = ("lib", "python", "shebang", "tests", "examples", "doc")
 
@@ -43,21 +41,48 @@ class BasicSConstruct:
 
     _initializing = False
 
-    def __new__(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None, cleanExt=None,
-                defaultTargets=DEFAULT_TARGETS,
-                subDirList=None, ignoreRegex=None,
-                versionModuleName="python/lsst/%s/version.py", noCfgFile=False,
-                sconscriptOrder=None, disableCc=False):
-        cls.initialize(packageName, versionString, eupsProduct, eupsProductPath, cleanExt,
-                       versionModuleName, noCfgFile=noCfgFile, sconscriptOrder=sconscriptOrder,
-                       disableCc=disableCc)
+    def __new__(
+        cls,
+        packageName,
+        versionString=None,
+        eupsProduct=None,
+        eupsProductPath=None,
+        cleanExt=None,
+        defaultTargets=DEFAULT_TARGETS,
+        subDirList=None,
+        ignoreRegex=None,
+        versionModuleName="python/lsst/%s/version.py",
+        noCfgFile=False,
+        sconscriptOrder=None,
+        disableCc=False,
+    ):
+        cls.initialize(
+            packageName,
+            versionString,
+            eupsProduct,
+            eupsProductPath,
+            cleanExt,
+            versionModuleName,
+            noCfgFile=noCfgFile,
+            sconscriptOrder=sconscriptOrder,
+            disableCc=disableCc,
+        )
         cls.finish(defaultTargets, subDirList, ignoreRegex)
         return state.env
 
     @classmethod
-    def initialize(cls, packageName, versionString=None, eupsProduct=None, eupsProductPath=None,
-                   cleanExt=None, versionModuleName="python/lsst/%s/version.py", noCfgFile=False,
-                   sconscriptOrder=None, disableCc=False):
+    def initialize(
+        cls,
+        packageName,
+        versionString=None,
+        eupsProduct=None,
+        eupsProductPath=None,
+        cleanExt=None,
+        versionModuleName="python/lsst/%s/version.py",
+        noCfgFile=False,
+        sconscriptOrder=None,
+        disableCc=False,
+    ):
         """Convenience function to replace standard SConstruct boilerplate
         (step 1).
 
@@ -132,7 +157,7 @@ class BasicSConstruct:
             if "SConstruct" in files and root != ".":
                 dirs[:] = []
                 continue
-            dirs[:] = [d for d in dirs if not d.startswith('.')]
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
             dirs.sort()  # os.walk order is not specified, but we want builds to be deterministic
             if "SConscript" in files:
                 scripts.append(os.path.join(root, "SConscript"))
@@ -147,16 +172,16 @@ class BasicSConstruct:
                 if path.lstrip("./").startswith(item):
                     return i
             return len(sconscriptOrder)
+
         scripts.sort(key=key)
         for script in scripts:
-            state.log.info("Using SConscript at %s" % script)
+            state.log.info(f"Using SConscript at {script}")
             SConscript(script)
         cls._initializing = False
         return state.env
 
     @staticmethod
-    def finish(defaultTargets=DEFAULT_TARGETS,
-               subDirList=None, ignoreRegex=None):
+    def finish(defaultTargets=DEFAULT_TARGETS, subDirList=None, ignoreRegex=None):
         """Convenience function to replace standard SConstruct boilerplate
         (step 2).
 
@@ -193,9 +218,7 @@ class BasicSConstruct:
         if "bin.src" in subDirList and "shebang" in state.targets and state.targets["shebang"]:
             # shebang makes a directory that should be installed
             subDirList += ["bin"]
-        install = state.env.InstallLSST(state.env["prefix"],
-                                        [subDir for subDir in subDirList],
-                                        ignoreRegex=ignoreRegex)
+        install = state.env.InstallLSST(state.env["prefix"], list(subDirList), ignoreRegex=ignoreRegex)
         for name, target in state.targets.items():
             state.env.Requires(install, target)
             state.env.Alias(name, target)
@@ -205,8 +228,9 @@ class BasicSConstruct:
 
         # shebang should be in the list if bin.src exists but the location
         # matters so we can not append it afterwards.
-        state.env.Default([t for t in defaultTargets
-                           if os.path.exists(t) or (t == "shebang" and os.path.exists("bin.src"))])
+        state.env.Default(
+            [t for t in defaultTargets if os.path.exists(t) or (t == "shebang" and os.path.exists("bin.src"))]
+        )
         if "version" in state.targets:
             state.env.Default(state.targets["version"])
         state.env.Requires(state.targets["tests"], state.targets["version"])
@@ -219,8 +243,11 @@ class BasicSConstruct:
         # suppress output
         #
         if "tests" in [str(t) for t in BUILD_TARGETS]:
-            testsDir = pipes.quote(os.path.join(os.getcwd(), "tests", ".tests"))
-            checkTestStatus_command = state.env.Command('checkTestStatus', [], """
+            testsDir = shlex.quote(os.path.join(os.getcwd(), "tests", ".tests"))
+            checkTestStatus_command = state.env.Command(
+                "checkTestStatus",
+                [],
+                """
                 @ if [ -d {0} ]; then \
                       nfail=`find {0} -name "*.failed" | wc -l | sed -e 's/ //g'`; \
                       if [ $$nfail -gt 0 ]; then \
@@ -240,7 +267,10 @@ class BasicSConstruct:
                           echo "$$nfail tests failed" >&2; exit 1; \
                       fi; \
                   fi; \
-            """.format(testsDir))
+            """.format(
+                    testsDir
+                ),
+            )
 
             state.env.Depends(checkTestStatus_command, BUILD_TARGETS)  # this is why the check runs last
             BUILD_TARGETS.extend(checkTestStatus_command)
@@ -271,7 +301,7 @@ class BasicSConscript:
         libName : `str`
             Name of the shared libray to be built (defaults to
             ``env["packageName"]``).
-        src : `str` or `Glob`
+        src : `str` or `~SCons.Script.Glob`
             Source to compile into the library.  Defaults to a 4-directory
             deep glob of all ``*.cc`` files in ``#src``.
         libs : `str` or `list`
@@ -314,12 +344,12 @@ class BasicSConscript:
 
         Parameters
         ----------
-        src : `str` or `Glob`, optional
+        src : `str` or `~SCons.Script.Glob`, optional
             Glob to use to search for files.
         """
         # check if Python is called on the first line with this expression
         # This comes from distutils copy_scripts
-        FIRST_LINE_RE = re.compile(r'^#!.*python[0-9.]*([ \t].*)?$')
+        FIRST_LINE_RE = re.compile(r"^#!.*python[0-9.]*([ \t].*)?$")
         doRewrite = utils.needShebangRewrite()
 
         def rewrite_shebang(target, source, env):
@@ -327,7 +357,7 @@ class BasicSConscript:
             # Currently just use this python
             usepython = utils.whichPython()
             for targ, src in zip(target, source):
-                with open(str(src), "r") as srcfd:
+                with open(str(src)) as srcfd:
                     with open(str(targ), "w") as outfd:
                         first_line = srcfd.readline()
                         # Always match the first line so we can warn people
@@ -335,14 +365,16 @@ class BasicSConscript:
                         # should not be rewritten
                         match = FIRST_LINE_RE.match(first_line)
                         if match and doRewrite:
-                            post_interp = match.group(1) or ''
+                            post_interp = match.group(1) or ""
                             # Paths can be long so ensure that flake8 won't
                             # complain
-                            outfd.write("#!{}{}  # noqa\n".format(usepython, post_interp))
+                            outfd.write(f"#!{usepython}{post_interp}  # noqa\n")
                         else:
                             if not match:
-                                state.log.warn("Could not rewrite shebang of {}. Please check"
-                                               " file or move it to bin directory.".format(str(src)))
+                                state.log.warn(
+                                    "Could not rewrite shebang of {}. Please check"
+                                    " file or move it to bin directory.".format(str(src))
+                                )
                             outfd.write(first_line)
                         for line in srcfd.readlines():
                             outfd.write(line)
@@ -350,8 +382,7 @@ class BasicSConscript:
                 oldmode = os.stat(str(targ))[ST_MODE] & 0o7777
                 newmode = (oldmode | 0o555) & 0o7777
                 if newmode != oldmode:
-                    state.log.info("changing mode of {} from {} to {}".format(
-                                   str(targ), oldmode, newmode))
+                    state.log.info(f"changing mode of {str(targ)} from {oldmode} to {newmode}")
                     os.chmod(str(targ), newmode)
 
         if src is None:
@@ -360,8 +391,9 @@ class BasicSConscript:
             filename = str(s)
             # Do not try to rewrite files starting with non-letters
             if filename != "SConscript" and re.match("[A-Za-z]", filename):
-                result = state.env.Command(target=os.path.join(Dir("#bin").abspath, filename),
-                                           source=s, action=rewrite_shebang)
+                result = state.env.Command(
+                    target=os.path.join(Dir("#bin").abspath, filename), source=s, action=rewrite_shebang
+                )
                 state.targets["shebang"].extend(result)
 
     @staticmethod
@@ -393,7 +425,7 @@ class BasicSConscript:
 
         Returns
         -------
-        result : `lsst.sconsUtils.env.Pybin11LoadbleModule`
+        result : `lsst.sconsUtils.env.Pybind11LoadableModule`
             A Pybind11LoadableModule instance.
         """
         if module is None:
@@ -441,14 +473,17 @@ class BasicSConscript:
 
         Returns
         -------
-        result : `lsst.sconsUtils.env.Pybin11LoadbleModule`
+        result : `lsst.sconsUtils.env.Pybind11LoadableModule`
             A Pybind11LoadableModule instance.
         """
-        warnings.warn("sconsUtils.scripts.pybind11() is deprecated; please use scripts.python() instead",
-                      DeprecationWarning, stacklevel=2)
+        warnings.warn(
+            "sconsUtils.scripts.pybind11() is deprecated; please use scripts.python() instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         srcList = extraSrc
         if srcList is None:
-            srcList = dict([(name, []) for name in nameList])
+            srcList = {name: [] for name in nameList}
         for name in nameList:
             srcList[name].append(name + ".cc")
         if isinstance(libs, str):
@@ -507,19 +542,28 @@ class BasicSConscript:
         if projectNumber is None:
             projectNumber = state.env["version"]
         result = state.env.Doxygen(
-            config, projectName=projectName, projectNumber=projectNumber,
+            config,
+            projectName=projectName,
+            projectNumber=projectNumber,
             includes=state.env.doxygen["includes"],
             useTags=state.env.doxygen["tags"],
             makeTag=(state.env["packageName"] + ".tag"),
-            **kwargs
+            **kwargs,
         )
         state.targets["doc"].extend(result)
         return result
 
     @staticmethod
-    def tests(pyList=None, ccList=None, swigNameList=None, swigSrc=None,
-              ignoreList=None, noBuildList=None, pySingles=None,
-              args=None):
+    def tests(
+        pyList=None,
+        ccList=None,
+        swigNameList=None,
+        swigSrc=None,
+        ignoreList=None,
+        noBuildList=None,
+        pySingles=None,
+        args=None,
+    ):
         """Convenience function to replace standard tests/SConscript
         boilerplate.
 
@@ -588,30 +632,36 @@ class BasicSConscript:
             allSwigSrc.update(str(element) for element in src)
             src.append(node)
         if pyList is None:
-            pyList = [node for node in Glob("*.py")
-                      if _getFileBase(node) not in swigNameList
-                      and os.path.basename(str(node)) not in noBuildList]
+            pyList = [
+                node
+                for node in Glob("*.py")
+                if _getFileBase(node) not in swigNameList and os.path.basename(str(node)) not in noBuildList
+            ]
             # if we got no matches, reset to None so we do not enabled
             # auto test detection in pytest
             if not pyList:
                 pyList = None
         if ccList is None:
-            ccList = [node for node in Glob("*.cc")
-                      if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc
-                      and os.path.basename(str(node)) not in noBuildList]
+            ccList = [
+                node
+                for node in Glob("*.cc")
+                if (not str(node).endswith("_wrap.cc"))
+                and str(node) not in allSwigSrc
+                and os.path.basename(str(node)) not in noBuildList
+            ]
         if ignoreList is None:
             ignoreList = []
 
         def s(ll):
             if ll is None:
-                return ['None']
+                return ["None"]
             return [str(i) for i in ll]
 
-        state.log.info("SWIG modules for tests: %s" % s(swigFileList))
-        state.log.info("Python tests: %s" % s(pyList))
-        state.log.info("C++ tests: %s" % s(ccList))
-        state.log.info("Files that will not be built: %s" % noBuildList)
-        state.log.info("Ignored tests: %s" % ignoreList)
+        state.log.info(f"SWIG modules for tests: {s(swigFileList)}")
+        state.log.info(f"Python tests: {s(pyList)}")
+        state.log.info(f"C++ tests: {s(ccList)}")
+        state.log.info(f"Files that will not be built: {noBuildList}")
+        state.log.info(f"Ignored tests: {ignoreList}")
         control = tests.Control(state.env, ignoreList=ignoreList, args=args, verbose=True)
         for ccTest in ccList:
             state.env.Program(ccTest, LIBS=state.env.getLibs("main test"))
@@ -626,8 +676,10 @@ class BasicSConscript:
         # should not be discovered automatically.
         for node in pySingles:
             if str(node).startswith("test_"):
-                state.log.warn("Warning: {} should be run independently but"
-                               " can be automatically discovered".format(node))
+                state.log.warn(
+                    "Warning: {} should be run independently but"
+                    " can be automatically discovered".format(node)
+                )
 
         # Ensure that python tests listed in pySingles are not included in
         # pyList.
@@ -643,6 +695,7 @@ class BasicSConscript:
             pyList = [control.runPythonTests(pyList)]
         else:
             pyList = []
+        pyList.extend(control.runPythonLinter())
 
         # Run all pySingles sequentially before other tests.  This ensures
         # that there are no race conditions collecting coverage databases.
@@ -698,10 +751,13 @@ class BasicSConscript:
             allSwigSrc.update(str(element) for element in src)
             src.append(node)
         if ccList is None:
-            ccList = [node for node in Glob("*.cc")
-                      if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc]
-        state.log.info("SWIG modules for examples: %s" % swigFileList)
-        state.log.info("C++ examples: %s" % ccList)
+            ccList = [
+                node
+                for node in Glob("*.cc")
+                if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc
+            ]
+        state.log.info(f"SWIG modules for examples: {swigFileList}")
+        state.log.info(f"C++ examples: {ccList}")
         results = []
         for src in ccList:
             results.extend(state.env.Program(src, LIBS=state.env.getLibs("main")))
