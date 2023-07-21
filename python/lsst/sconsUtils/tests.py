@@ -315,6 +315,9 @@ class Control:
         linter: str | None = None
         root = SCons.Script.Dir("#").abspath
 
+        # Never want linters to look in this directory.
+        exclude_dirs = ["tests/.tests"]
+
         pyproject = os.path.join(root, "pyproject.toml")
         if os.path.exists(pyproject):
             try:
@@ -330,6 +333,10 @@ class Control:
                 else:
                     if "tool" in parsed and "ruff" in parsed["tool"]:
                         linter = "ruff"
+
+                        # Ruff can complain about noqa in shebang line
+                        # added by sconsUtils to bin/ scripts. Need to ignore.
+                        exclude_dirs.append("bin")
 
         if linter is None:
             flake8_cfg = os.path.join(root, "setup.cfg")
@@ -364,9 +371,8 @@ class Control:
         for path in glob.glob(os.path.join(self._tmpDir, "linter-*.log*")):
             os.unlink(path)
 
-        # Always exclude the tests output directory. This should never be
-        # examined.
-        lint_options = "--extend-exclude=tests/.tests"
+        # Specify exclude directories.
+        lint_options = f"--extend-exclude={','.join(exclude_dirs)}"
 
         cmd = f"""
         @printf "%s\\n" 'Running python linter {linter}...';
