@@ -338,23 +338,27 @@ def _initEnvironment():
         env.AppendUnique(XCPPPATH=[f"{_conda_prefix}/include"])
         if "LDFLAGS" in os.environ:
             LDFLAGS = shlex.split(os.environ["LDFLAGS"])  # respects quoting!
-            LDFLAGS = [v for v in LDFLAGS if v[0:2] != "-L"]
+            LDFLAGS, _, _, LIBPATH = _extract_path_options(LDFLAGS)
             # this one breaks some linking in the eups build
             LDFLAGS = [v for v in LDFLAGS if v != "-Wl,-dead_strip_dylibs"]
-            env.Append(LIBPATH=[f"{_conda_prefix}/lib"])
+            env.AppendUnique(LIBPATH=[f"{_conda_prefix}/lib"] + LIBPATH)
             env.Append(LINKFLAGS=LDFLAGS)
             env.Append(SHLINKFLAGS=LDFLAGS)
 
         if "CFLAGS" in os.environ:
             CFLAGS = shlex.split(os.environ["CFLAGS"])  # respects quoting!
-            CFLAGS = [v for v in CFLAGS if v[0:2] != "-I"]
+            CFLAGS, CPPPATH, XCPPPATH, _ = _extract_path_options(CFLAGS)
+            env.AppendUnique(CPPPATH=CPPPATH)
+            env.AppendUnique(XCPPPATH=XCPPPATH)
             env.Append(CCFLAGS=CFLAGS)
 
         if "CXXFLAGS" in os.environ:
             CXXFLAGS = shlex.split(os.environ["CXXFLAGS"])  # respects quoting!
-            CXXFLAGS = [v for v in CXXFLAGS if v[0:2] != "-I"]
+            CXXFLAGS, CPPPATH, XCPPPATH, _ = _extract_path_options(CXXFLAGS)
             CXXFLAGS = [v for v in CXXFLAGS if v[0:5] != "-std="]  # we let LSST set this
             CXXFLAGS = [v for v in CXXFLAGS if v not in CFLAGS]  # conda puts in duplicates
+            env.AppendUnique(CPPPATH=CPPPATH)
+            env.AppendUnique(XCPPPATH=XCPPPATH)
             env.Append(CXXFLAGS=CXXFLAGS)
 
     #
@@ -681,6 +685,50 @@ def _saveState():
             config.write(configfile)
     except Exception as e:
         log.warn(f"Unexpected exception in _saveState: {e}")
+
+
+def _extract_path_options(original):
+    """Process an iterable of compiler/linker arguments to separate ``-I``,
+    ``-isystem``, and ``-L`` options and their arguments.
+
+    Parameters
+    ----------
+    original : `~collections.abc.Iterable` [ `str` ]
+        Original arguments.  Each element is assumed to have no whitespace
+        that was not originally quoted.
+
+    Returns
+    -------
+    remaining : `list` [ `str` ]
+        Elements in ``original`` that were not one of the recognized path
+        options.
+    include_dirs : `list` [ `str` ]
+        Arguments to ``-I`` options that were stripped.
+    system_include_dirs : `list` [ `str` ]
+        Arguments to ``-isystem`` options that were stripped.
+    lib_dirs : `list` [ `str` ]
+        Arguments to ``-L`` options that were stripped.
+    """
+    next_list = None
+    remaining = []
+    include_dirs = []
+    system_include_dirs = []
+    lib_dirs = []
+    for arg in original:
+        if next_list is not None:
+            next_list.append(arg)
+            next_list = None
+            continue
+        match arg:
+            case "-I":
+                next_list = include_dirs
+            case "-isystem":
+                next_list = system_include_dirs
+            case "-L":
+                next_list = system_include_dirs
+            case _:
+                remaining.append(arg)
+    return remaining, include_dirs, system_include_dirs, lib_dirs
 
 
 _initOptions()
