@@ -17,6 +17,7 @@ import os
 import re
 import shlex
 from configparser import ConfigParser
+from sys import platform
 
 import SCons.Conftest
 import SCons.Script
@@ -289,8 +290,52 @@ def _initEnvironment():
         #
         env["LIBDIRSUFFIX"] = "/"
 
+    # Initialize path-like construction variables.
+    _conda_prefix = get_conda_prefix()
+    # _conda_prefix is usually around, even if not using conda compilers
     if use_conda_compilers():
-        _conda_prefix = get_conda_prefix()
+        # if using the conda-force conda compilers, they handle rpath for us
+        _conda_lib = f"{_conda_prefix}/lib"
+        env["LIBPATH"] = [_conda_lib]
+        if platform == "darwin":
+            env["_RPATH"] = f"-rpath {_conda_lib}"
+        else:
+            env.AppendUnique(RPATH=[_conda_lib])
+    else:
+        env["LIBPATH"] = []
+
+    env["CPPPATH"] = []
+
+    # XCPPPATH is a new variable defined by sconsUtils - it's like CPPPATH,
+    # but the headers found there aren't treated as dependencies.  This can
+    # make scons a lot faster.
+    env["XCPPPATH"] = []
+
+    # XCPPPPREFIX is a replacement for SCons' built-in INCPREFIX. It is used
+    # when compiling headers in XCPPPATH directories. Here, we set it to
+    # `-isystem`, so that those are regarded as "system headers" and warnings
+    # are suppressed.
+    env["XCPPPREFIX"] = "-isystem "
+
+    env["_CPPINCFLAGS"] = (
+        "$( ${_concat(INCPREFIX, CPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)}"
+        " ${_concat(XCPPPREFIX, XCPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)} $)"
+    )
+    env["_SWIGINCFLAGS"] = (
+        env["_CPPINCFLAGS"].replace("CPPPATH", "SWIGPATH").replace("XCPPPREFIX", "SWIGINCPREFIX")
+    )
+
+    env.linkFarmDir = env.GetOption("linkFarmDir")
+    if env.linkFarmDir:
+        env.linkFarmDir = os.path.abspath(os.path.expanduser(env.linkFarmDir))
+    if env.linkFarmDir:
+        for d in [env.linkFarmDir, "#"]:
+            env.Append(CPPPATH=os.path.join(d, "include"))
+            env.Append(LIBPATH=os.path.join(d, "lib"))
+        env["SWIGPATH"] = env["CPPPATH"]
+
+    if use_conda_compilers():
+        env.AppendUnique(XCPPPATH=[f"{_conda_prefix}/include"])
         if "LDFLAGS" in os.environ:
             LDFLAGS = shlex.split(os.environ["LDFLAGS"])  # respects quoting!
             LDFLAGS = [v for v in LDFLAGS if v[0:2] != "-L"]

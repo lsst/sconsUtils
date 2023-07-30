@@ -6,13 +6,11 @@ import collections
 import importlib
 import os
 import os.path
-from sys import platform
 
 import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
 
 from . import eupsForScons, installation, state
-from .utils import get_conda_prefix, use_conda_compilers
 
 
 def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath=None, noCfgFile=False):
@@ -60,9 +58,6 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     SCons.Script.Help(state.opts.GenerateHelpText(state.env))
     state.env.installing = [t for t in SCons.Script.BUILD_TARGETS if t == "install"]
     state.env.declaring = [t for t in SCons.Script.BUILD_TARGETS if t == "declare" or t == "current"]
-    state.env.linkFarmDir = state.env.GetOption("linkFarmDir")
-    if state.env.linkFarmDir:
-        state.env.linkFarmDir = os.path.abspath(os.path.expanduser(state.env.linkFarmDir))
     prefix = installation.setPrefix(state.env, versionString, eupsProductPath)
     state.env["prefix"] = prefix
     state.env["libDir"] = f"{prefix}/lib"
@@ -76,48 +71,6 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     state.log.flush()  # if we've already hit a fatal error, die now.
     state.env.libs = {"main": [], "python": [], "test": []}
     state.env.doxygen = {"tags": [], "includes": []}
-    state.env["CPPPATH"] = []
-
-    _conda_prefix = get_conda_prefix()
-    # _conda_prefix is usually around, even if not using conda compilers
-    if use_conda_compilers():
-        # if using the conda-force conda compilers, they handle rpath for us
-        _conda_lib = f"{_conda_prefix}/lib"
-        state.env["LIBPATH"] = [_conda_lib]
-        if platform == "darwin":
-            state.env["_RPATH"] = f"-rpath {_conda_lib}"
-        else:
-            state.env.AppendUnique(RPATH=[_conda_lib])
-    else:
-        state.env["LIBPATH"] = []
-
-    # XCPPPATH is a new variable defined by sconsUtils - it's like CPPPATH,
-    # but the headers found there aren't treated as dependencies.  This can
-    # make scons a lot faster.
-    state.env["XCPPPATH"] = []
-
-    if use_conda_compilers():
-        state.env.Append(XCPPPATH=[f"{_conda_prefix}/include"])
-
-    # XCPPPPREFIX is a replacement for SCons' built-in INCPREFIX. It is used
-    # when compiling headers in XCPPPATH directories. Here, we set it to
-    # `-isystem`, so that those are regarded as "system headers" and warnings
-    # are suppressed.
-    state.env["XCPPPREFIX"] = "-isystem "
-
-    state.env["_CPPINCFLAGS"] = (
-        "$( ${_concat(INCPREFIX, CPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)}"
-        " ${_concat(XCPPPREFIX, XCPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)} $)"
-    )
-    state.env["_SWIGINCFLAGS"] = (
-        state.env["_CPPINCFLAGS"].replace("CPPPATH", "SWIGPATH").replace("XCPPPREFIX", "SWIGINCPREFIX")
-    )
-
-    if state.env.linkFarmDir:
-        for d in [state.env.linkFarmDir, "#"]:
-            state.env.Append(CPPPATH=os.path.join(d, "include"))
-            state.env.Append(LIBPATH=os.path.join(d, "lib"))
-        state.env["SWIGPATH"] = state.env["CPPPATH"]
 
     if not state.env.GetOption("clean") and not state.env.GetOption("help"):
         packages.configure(state.env, check=state.env.GetOption("checkDependencies"))
