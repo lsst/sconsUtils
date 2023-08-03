@@ -731,8 +731,11 @@ def getLibs(env, categories="main"):
             category = "main"
             removeSelf = True
         for lib in env.libs[category]:
-            if lib not in libs:
-                libs.append(lib)
+            if lib in libs:
+                continue
+            if category != 'python' and lib == 'nanobind':
+                continue
+            libs.append(lib)
     if removeSelf:
         try:
             libs.remove(env["packageName"])
