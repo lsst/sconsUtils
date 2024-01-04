@@ -576,7 +576,7 @@ def _configureCommon():
                 env.Append(CCFLAGS=[f"-Wno-{k}"])
     elif env.whichCc == "gcc":
         env.Append(CCFLAGS=["-Wall"])
-        env.Append((CCFLAGS=["-Werror=odr"])
+        env.Append(CCFLAGS=["-Werror=odr"])
         env.Append(CCFLAGS=["-Wno-unknown-pragmas"])  # we don't want complaints about icc/clang pragmas
         env.Append(CCFLAGS=["-Wno-unused-local-typedefs"])  # boost generates a lot of these
     elif env.whichCc == "icc":
