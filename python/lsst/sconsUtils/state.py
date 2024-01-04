@@ -609,9 +609,9 @@ def _configureCommon():
     # binaries
     #
     if env.whichCc == "gcc":
-        env.Append(CCFLAGS=["-flto"])
+        env.Append(CCFLAGS=["-fno-lto"])
         env.Append(CCFLAGS=["-fuse-ld=gold"])
-        env.Append(LINKFLAGS=["-flto"])
+        env.Append(LINKFLAGS=["-fno-lto"])
         env.Append(LINKFLAGS=["-fuse-ld=gold"])
 
 
