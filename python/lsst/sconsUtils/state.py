@@ -611,9 +611,9 @@ def _configureCommon():
     #
     if env.whichCc == "gcc":
         env.Append(CCFLAGS=["-fno-lto"])
-        env.Append(CCFLAGS=["-fuse-ld=gold"])
+        # env.Append(CCFLAGS=["-fuse-ld=gold"])
         env.Append(LINKFLAGS=["-fno-lto"])
-        env.Append(LINKFLAGS=["-fuse-ld=gold"])
+        # env.Append(LINKFLAGS=["-fuse-ld=gold"])
 
 
 def _saveState():
