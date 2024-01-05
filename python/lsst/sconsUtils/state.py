@@ -188,6 +188,7 @@ def _initEnvironment():
 
     ourEnv = {}
     preserveVars = """
+      ASAN_OPTIONS
       DYLD_LIBRARY_PATH
       EUPS_DIR
       EUPS_LOCK_PID
