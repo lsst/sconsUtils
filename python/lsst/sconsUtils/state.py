@@ -215,6 +215,22 @@ def _initEnvironment():
       CC_LOGGER_BIN
     """.split()
 
+    # The list of implicit multithreading environment variables here
+    # is taken from lsst.utils.disable_implicit_threading(), but
+    # has to be put here for dependency ordering reasons, and
+    # to ensure these are set prior to any instantiation of pytest
+    # or any code that may implicitly spawn threads.
+    implicitMultithreadingVars = """
+      OPENBLAS_NUM_THREADS
+      GOTO_NUM_THREADS
+      OMP_NUM_THREADS
+      MKL_NUM_THREADS
+      MKL_DOMAIN_NUM_THREADS
+      MPI_NUM_THREADS
+      NUMEXPR_NUM_THREADS
+      NUMEXPR_MAX_THREADS
+    """.split()
+
     for key in preserveVars:
         if key in os.environ:
             ourEnv[key] = os.environ[key]
@@ -224,6 +240,10 @@ def _initEnvironment():
         for key in codeCheckerVars:
             if key in os.environ:
                 ourEnv[key] = os.environ[key]
+
+    # Turn off implicit multithreading.
+    for key in implicitMultithreadingVars:
+        ourEnv[key] = "1"
 
     # Find and propagate EUPS environment variables.
     cfgPath = []
