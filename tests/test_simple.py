@@ -21,6 +21,22 @@ class SimplestPossibleTestCase(unittest.TestCase):
         self.assertIn(envVar, os.environ)
         self.assertTrue(os.path.exists(os.environ[envVar]), f"Check path {os.environ[envVar]}")
 
+    def testNoImplicitMultithreading(self):
+        """Test that the environment has turned off implicit
+        multithreading.
+        """
+        envVar = "OMP_NUM_THREADS"
+        self.assertIn(envVar, os.environ)
+        self.assertEqual(os.environ[envVar], "1")
+
+        try:
+            import numexpr
+        except ImportError:
+            numexpr = None
+
+        if numexpr:
+            self.assertEqual(numexpr.utils.get_num_threads(), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

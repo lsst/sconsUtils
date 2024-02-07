@@ -187,33 +187,49 @@ def _initEnvironment():
     """Construction and basic setup of the state.env variable."""
 
     ourEnv = {}
-    preserveVars = """
-      DYLD_LIBRARY_PATH
-      EUPS_DIR
-      EUPS_LOCK_PID
-      EUPS_PATH
-      EUPS_SHELL
-      EUPS_USERDATA
-      LD_LIBRARY_PATH
-      PATH
-      SHELL
-      TEMP
-      TERM
-      TMP
-      TMPDIR
-      XPA_PORT
-      CONDA_BUILD_SYSROOT
-      SDKROOT
-    """.split()
+    preserveVars = [
+        "DYLD_LIBRARY_PATH",
+        "EUPS_DIR",
+        "EUPS_LOCK_PID",
+        "EUPS_PATH",
+        "EUPS_SHELL",
+        "EUPS_USERDATA",
+        "LD_LIBRARY_PATH",
+        "PATH",
+        "SHELL",
+        "TEMP",
+        "TERM",
+        "TMP",
+        "TMPDIR",
+        "XPA_PORT",
+        "CONDA_BUILD_SYSROOT",
+        "SDKROOT",
+    ]
 
-    codeCheckerVars = """
-      LD_PRELOAD
-      CC_LOGGER_FILE
-      CC_LOGGER_GCC_LIKE
-      CC_LIB_DIR
-      CC_DATA_FILES_DIR
-      CC_LOGGER_BIN
-    """.split()
+    codeCheckerVars = [
+        "LD_PRELOAD",
+        "CC_LOGGER_FILE",
+        "CC_LOGGER_GCC_LIKE",
+        "CC_LIB_DIR",
+        "CC_DATA_FILES_DIR",
+        "CC_LOGGER_BIN",
+    ]
+
+    # The list of implicit multithreading environment variables here
+    # is taken from lsst.utils.disable_implicit_threading(), but
+    # has to be put here for dependency ordering reasons, and
+    # to ensure these are set prior to any instantiation of pytest
+    # or any code that may implicitly spawn threads.
+    implicitMultithreadingVars = [
+        "OPENBLAS_NUM_THREADS",
+        "GOTO_NUM_THREADS",
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "MKL_DOMAIN_NUM_THREADS",
+        "MPI_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+        "NUMEXPR_MAX_THREADS",
+    ]
 
     for key in preserveVars:
         if key in os.environ:
@@ -224,6 +240,10 @@ def _initEnvironment():
         for key in codeCheckerVars:
             if key in os.environ:
                 ourEnv[key] = os.environ[key]
+
+    # Turn off implicit multithreading.
+    for key in implicitMultithreadingVars:
+        ourEnv[key] = "1"
 
     # Find and propagate EUPS environment variables.
     cfgPath = []
