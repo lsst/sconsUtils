@@ -12,22 +12,21 @@ from .. import state, utils
 
 
 def guessVersionName():
-    """Guess a version name
+    """Guess a version name.
 
     Returns
     -------
     name : `str`
         Descriptive name of the repository version state.
     """
+    name = "unknown"
 
     if not os.path.exists(".git"):
-        state.log.warn("Cannot guess version without .git directory; version will be set to 'unknown'.")
-        return "unknown"
-    status = utils.runExternal("git status --porcelain --untracked-files=no", fatal=True)
-    if status.strip():
-        raise RuntimeError("Error with git version: uncommitted changes")
-    desc = utils.runExternal("git describe --tags --always", fatal=True)
-    return desc.strip()
+        state.log.warn(f"Cannot guess version without .git directory; will be set to '{name}'.")
+    else:
+        name = utils.runExternal("git describe --always --dirty", fatal=False).strip()
+
+    return name
 
 
 def guessFingerprint():
@@ -37,19 +36,14 @@ def guessFingerprint():
     -------
     fingerprint : `str`
         SHA1 of current repository state.
-    modified : `bool`
-        Flag to indicate whether the repository is in a modified state.
     """
-    fingerprint, modified = "0x0", False
+    fingerprint = "0x0"
 
     if not os.path.exists(".git"):
         state.log.warn(f"Cannot guess fingerprint without .git directory; will be set to '{fingerprint}'.")
     else:
-        status = utils.runExternal("git status --porcelain --untracked-files=no", fatal=True)
-        if status.strip():
-            modified = True
-        output = utils.runExternal("git rev-parse HEAD", fatal=False)
+        fingerprint = utils.runExternal(
+            "git describe --match=" " --always --abbrev=0 --dirty", fatal=False
+        ).strip()
 
-        fingerprint = output.strip()
-
-    return fingerprint, modified
+    return fingerprint

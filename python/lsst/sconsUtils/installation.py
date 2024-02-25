@@ -113,14 +113,11 @@ def getFingerprint(versionString):
         Unique fingerprint of this version.  `None` if unavailable.
     """
     if versionString.lower() in ("hg", "mercurial"):
-        fingerprint, modified = hg.guessFingerprint()
+        fingerprint = hg.guessFingerprint()
     elif versionString.lower() in ("git",):
-        fingerprint, modified = git.guessFingerprint()
+        fingerprint = git.guessFingerprint()
     else:
-        fingerprint, modified = None, False
-
-    if fingerprint and modified:
-        fingerprint += " *"
+        fingerprint = None
 
     return fingerprint
 

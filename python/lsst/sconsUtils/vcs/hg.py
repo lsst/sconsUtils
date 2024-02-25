@@ -56,10 +56,8 @@ def guessFingerprint():
     -------
     fingerprint : `str`
         SHA1 of current repository state.
-    modified : `bool`
-        Flag to indicate whether the repository is in a modified state.
     """
-    fingerprint, modified = "0x0", False
+    fingerprint = "0x0"
     if not os.path.exists(".hg"):
         state.log.warn(f"Cannot guess fingerprint without .hg directory; will be set to '{fingerprint}'.")
     else:
@@ -70,6 +68,6 @@ def guessFingerprint():
 
         fingerprint = utils.runExternal("hg ident --id", fatal=True).strip()
         if re.search(r"\+", ident[0]):
-            modified = True
+            fingerprint += " *"
 
-    return fingerprint, modified
+    return fingerprint
