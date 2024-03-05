@@ -451,6 +451,21 @@ class DoxygenBuilder:
 
 
 @memberOf(SConsEnvironment)
+def SphinxDocs(self):
+    """Build the sphinx/numpydoc documentation, including python API docs.
+    """
+    sources = self.Glob("#doc/*.rst") + self.Glob("#doc/*/*.rst") + self.Glob("#doc/*/*/*.rst")
+    sources.extend(self.Glob("#python/*.py") + self.Glob("#python/*/*.py") + self.Glob("#python/*/*/*.py"))
+    targets = [self.Dir("_build"), self.Dir("py-api")]
+    doc = self.Command(target=targets, source=sources, action="package-docs build")
+    self.Clean(doc, "_build")
+    self.Clean(doc, "py-api")
+    self.Depends(doc, "manifest.yaml")
+
+    return doc
+
+
+@memberOf(SConsEnvironment)
 def Doxygen(self, config, **kwargs):
     """Generate a Doxygen config file and run Doxygen on it.
 
