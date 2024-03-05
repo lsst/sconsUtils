@@ -537,6 +537,10 @@ class BasicSConscript:
         if not find_executable("doxygen"):
             state.log.warn("doxygen executable not found; skipping documentation build.")
             return []
+        if not find_executable("package-docs"):
+            state.log.warn("package-docs executable not found; skipping documentation build.")
+            return []
+
         if projectName is None:
             projectName = ".".join(["lsst"] + state.env["packageName"].split("_"))
         if projectNumber is None:
@@ -550,6 +554,10 @@ class BasicSConscript:
             makeTag=(state.env["packageName"] + ".tag"),
             **kwargs,
         )
+        state.targets["doc"].extend(result)
+
+        # Next build the sphinx docs.
+        result = state.env.SphinxDocs()
         state.targets["doc"].extend(result)
         return result
 
