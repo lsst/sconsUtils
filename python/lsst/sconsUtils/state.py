@@ -13,6 +13,8 @@ These are all initialized when the module is imported, but may be modified
 by other code (particularly `lsst.sconsUtils.dependencies.configure`).
 """
 
+__all__ = ["env", "log", "opts", "targets"]
+
 import os
 import re
 import shlex
