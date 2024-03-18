@@ -5,8 +5,8 @@ files.
 import os.path
 import re
 import shlex
+import shutil
 import warnings
-from distutils.spawn import find_executable
 from stat import ST_MODE
 
 from SCons.Script import BUILD_TARGETS, Dir, File, Glob, SConscript
@@ -534,7 +534,7 @@ class BasicSConscript:
         result : ???
             ???
         """
-        if not find_executable("doxygen"):
+        if not shutil.which("doxygen"):
             state.log.warn("doxygen executable not found; skipping documentation build.")
             return []
         if projectName is None:
