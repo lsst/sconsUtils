@@ -9,7 +9,7 @@ import shutil
 import warnings
 from stat import ST_MODE
 
-from SCons.Script import BUILD_TARGETS, Dir, File, Glob, SConscript
+from SCons.Script import BUILD_TARGETS, Dir, File, GetOption, Glob, SConscript
 
 from . import dependencies, state, tests, utils
 
@@ -613,6 +613,8 @@ class BasicSConscript:
         result : ???
             ???
         """
+        if GetOption("no_tests"):
+            return []
         if noBuildList is None:
             noBuildList = []
         if pySingles is None:
