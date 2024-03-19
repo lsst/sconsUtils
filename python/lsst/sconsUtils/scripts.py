@@ -5,8 +5,8 @@ files.
 import os.path
 import re
 import shlex
+import shutil
 import warnings
-from distutils.spawn import find_executable
 from stat import ST_MODE
 
 from SCons.Script import BUILD_TARGETS, Dir, File, Glob, SConscript
@@ -247,12 +247,12 @@ class BasicSConstruct:
             checkTestStatus_command = state.env.Command(
                 "checkTestStatus",
                 [],
-                """
-                @ if [ -d {0} ]; then \
-                      nfail=`find {0} -name "*.failed" | wc -l | sed -e 's/ //g'`; \
+                f"""
+                @ if [ -d {testsDir} ]; then \
+                      nfail=`find {testsDir} -name "*.failed" | wc -l | sed -e 's/ //g'`; \
                       if [ $$nfail -gt 0 ]; then \
                           echo "Failed test output:" >&2; \
-                          for f in `find {0} -name "*.failed"`; do \
+                          for f in `find {testsDir} -name "*.failed"`; do \
                               case "$$f" in \
                               *.xml.failed) \
                                 echo "Global pytest output is in $$f" >&2; \
@@ -263,13 +263,11 @@ class BasicSConstruct:
                               esac; \
                           done; \
                           echo "The following tests failed:" >&2;\
-                          find {0} -name "*.failed" >&2; \
+                          find {testsDir} -name "*.failed" >&2; \
                           echo "$$nfail tests failed" >&2; exit 1; \
                       fi; \
                   fi; \
-            """.format(
-                    testsDir
-                ),
+            """,
             )
 
             state.env.Depends(checkTestStatus_command, BUILD_TARGETS)  # this is why the check runs last
@@ -372,8 +370,8 @@ class BasicSConscript:
                         else:
                             if not match:
                                 state.log.warn(
-                                    "Could not rewrite shebang of {}. Please check"
-                                    " file or move it to bin directory.".format(str(src))
+                                    f"Could not rewrite shebang of {src}. Please check"
+                                    " file or move it to bin directory."
                                 )
                             outfd.write(first_line)
                         for line in srcfd.readlines():
@@ -534,7 +532,7 @@ class BasicSConscript:
         result : ???
             ???
         """
-        if not find_executable("doxygen"):
+        if not shutil.which("doxygen"):
             state.log.warn("doxygen executable not found; skipping documentation build.")
             return []
         if projectName is None:
@@ -677,8 +675,7 @@ class BasicSConscript:
         for node in pySingles:
             if str(node).startswith("test_"):
                 state.log.warn(
-                    "Warning: {} should be run independently but"
-                    " can be automatically discovered".format(node)
+                    f"Warning: {node} should be run independently but can be automatically discovered"
                 )
 
         # Ensure that python tests listed in pySingles are not included in

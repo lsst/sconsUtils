@@ -313,6 +313,7 @@ class Control:
             if no suitable linter configuration was found.
         """
         linter: str | None = None
+        lint_options = ""
         root = SCons.Script.Dir("#").abspath
 
         # Never want linters to look in this directory.
@@ -333,6 +334,7 @@ class Control:
                 else:
                     if "tool" in parsed and "ruff" in parsed["tool"]:
                         linter = "ruff"
+                        lint_options = "check"
 
                         # Ruff can complain about noqa in shebang line
                         # added by sconsUtils to bin/ scripts. Need to ignore.
@@ -371,8 +373,8 @@ class Control:
         for path in glob.glob(os.path.join(self._tmpDir, "linter-*.log*")):
             os.unlink(path)
 
-        # Specify exclude directories.
-        lint_options = f"--extend-exclude={','.join(exclude_dirs)}"
+        # Specify exclude directories. Append to any existing lint options.
+        lint_options += f" --extend-exclude={','.join(exclude_dirs)}"
 
         cmd = f"""
         @printf "%s\\n" 'Running python linter {linter}...';

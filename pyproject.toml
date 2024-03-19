@@ -7,9 +7,13 @@ profile = "black"
 line_length = 110
 
 [tool.ruff]
+line-length = 110
+target-version = "py311"
 exclude = [
     "__init__.py",
 ]
+
+[tool.ruff.lint]
 ignore = [
     "N802",
     "N803",
@@ -19,22 +23,20 @@ ignore = [
     "N816",
     "N999",
 ]
-line-length = 110
 select = [
     "E",  # pycodestyle
     "F",  # pyflakes
     "N",  # pep8-naming
     "W",  # pycodestyle
 ]
-target-version = "py311"
 extend-select = [
     "RUF100", # Warn about unused noqa
 ]
 
-[tool.ruff.pycodestyle]
+[tool.ruff.lint.pycodestyle]
 max-doc-length = 79
 
-[tool.ruff.pydocstyle]
+[tool.ruff.lint.pydocstyle]
 convention = "numpy"
 
 [tool.pytest.ini_options]
