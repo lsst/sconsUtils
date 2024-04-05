@@ -24,7 +24,7 @@ def guessVersionName():
     if not os.path.exists(".git"):
         state.log.warn(f"Cannot guess version without .git directory; will be set to '{name}'.")
     else:
-        name = utils.runExternal("git describe --always --dirty", fatal=False).strip()
+        name = utils.runExternal("git describe --always --dirty --tags", fatal=False).strip()
 
     return name
 
