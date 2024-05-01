@@ -34,11 +34,13 @@ Python API reference
    :no-inheritance-diagram:
 .. automodapi:: lsst.sconsUtils.dependencies
    :no-main-docstr:
+   :no-inheritance-diagram:
 .. automodapi:: lsst.sconsUtils.tests
    :no-main-docstr:
    :no-inheritance-diagram:
 .. automodapi:: lsst.sconsUtils.installation
    :no-main-docstr:
+   :no-inheritance-diagram:
 .. automodapi:: lsst.sconsUtils.builders
    :no-main-docstr:
    :no-inheritance-diagram:
