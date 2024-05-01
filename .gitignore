@@ -6,20 +6,32 @@ config.log
 _build.log
 _build.sh
 _build.tags
+
 *.o
 *.os
 *.so
 *.cfgc
 *.pyc
 pytest_session.txt
+
+# Built by sconsUtils
 bin/
-bin/makeLinkFarm
-bin/sconsOpts
 python/lsst/sconsUtils/version.py
+
+# Built by pip install
+python/lsst_sconsUtils.egg-info/
+
+# docs
 doc/html
 doc/doxygen.conf
 doc/sconsUtils.tag
+
+# Pytest
 tests/.tests
 tests/testFailedTests/python
 tests/testFailedTests/tests/.tests
 .coverage
+
+# IDEs
+.idea
+.vscode
