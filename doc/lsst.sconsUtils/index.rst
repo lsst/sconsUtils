@@ -16,7 +16,7 @@ Contributing
 ============
 
 ``lsst.sconsUtils`` is developed at https://github.com/lsst/sconsUtils.
-You can find Jira issues for this module under the `sconsUtils <https://jira.lsstcorp.org/issues/?jql=project%20%3D%20DM%20AND%20component%20%3D%20sconsUtils>`_ component.
+You can find Jira issues for this module under the `sconsUtils <https://rubinobs.atlassian.net/issues/?jql=project%20%3D%20DM%20AND%20component%20%3D%20sconsUtils>`_ component.
 
 .. _lsst.sconsUtils-pyapi:
 
