@@ -140,6 +140,10 @@ def _get_macosx_deployment_target_default():
     uname = os.uname()
     if uname.sysname == "Darwin" and uname.machine == "arm64":
         return "11.0"
+    elif uname.sysname == "Darwin":
+        release_major_version = int(uname.release.split('.')[0])
+        if release_major_version == 17:
+            return "10.13"
     return "10.9"
 
 
