@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  build_and_test:
+  build_and_test_conda:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -55,3 +55,44 @@ jobs:
         uses: codecov/codecov-action@v2
         with:
           file: tests/.tests/pytest-sconsUtils.xml-cov-sconsUtils.xml
+  build_and_test_pip:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        pyversion: ["3.10", "3.11", "3.12"]
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # Need to clone everything for the git tags.
+          fetch-depth: 0
+
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          channels: conda-forge,defaults
+          miniforge-variant: Mambaforge
+          use-mamba: true
+          channel-priority: strict
+          show-channel-urls: true
+
+      - name: Install dependencies
+        shell: bash -l {0}
+        run: |
+          pip install -r requirements.txt
+
+      # We have two cores so we can speed up the testing with xdist
+      - name: Install pytest packages
+        shell: bash -l {0}
+        run: |
+          mamba install -y -q \
+            pytest pytest-xdist pytest-openfiles
+      
+      - name: Build and install
+        run: |
+          python -m pip install --no-deps -v -e .
+
+      - name: Run tests
+        run: |
+          pytest -r a -v -n 3 --open-files

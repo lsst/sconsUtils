@@ -1,0 +1,6 @@
+flake8
+pytest >= 3.2
+pytest-cov
+pytest-session2file
+ruff
+scons
