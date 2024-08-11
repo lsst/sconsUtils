@@ -119,6 +119,16 @@ def _initOptions():
         default=False,
         help="Do not use EUPS for configuration",
     )
+    SCons.Script.AddOption(
+        "--no-tests",
+        dest="no_tests",
+        action="store_true",
+        default=False,
+        help=(
+            "Do not build or run tests (by clearing the 'tests' target).  "
+            "Library targets in the test directory may still be built."
+        ),
+    )
 
 
 def _initLog():
