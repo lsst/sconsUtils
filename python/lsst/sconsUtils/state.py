@@ -215,6 +215,7 @@ def _initEnvironment():
         "CONDA_BUILD_SYSROOT",
         "SDKROOT",
         "GCC_COLORS",
+        "XLA_FLAGS"
     ]
 
     codeCheckerVars = [
