@@ -307,7 +307,7 @@ class DirectoryInstaller:
         if not os.path.isdir(destpath):
             state.log.info(f"Creating directory {destpath}")
             os.makedirs(destpath)
-        for root, dirnames, filenames in os.walk(source[0].path):
+        for root, dirnames, filenames in os.walk(source[0].path, followlinks=True):
             if not self.recursive:
                 dirnames[:] = []
             else:
