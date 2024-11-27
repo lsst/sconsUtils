@@ -127,7 +127,7 @@ class BasicSConstruct:
         disableCC : `bool`, optional
             Should the C++ compiler check be disabled? Disabling this checks
             allows a faster startup and permits building on systems that don't
-            meet the requirements for the C++ compilter (e.g., for
+            meet the requirements for the C++ compiler (e.g., for
             pure-python packages).
 
         Returns
