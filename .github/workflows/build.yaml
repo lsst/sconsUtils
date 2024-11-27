@@ -49,6 +49,7 @@ jobs:
         run: |
           setup -k -r .
           scons -j2
+          python -c 'import importlib.metadata as M; print(M.version("lsst.sconsUtils"))'
 
       - name: Upload coverage to codecov
         uses: codecov/codecov-action@v4
