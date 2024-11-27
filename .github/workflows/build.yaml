@@ -37,7 +37,7 @@ jobs:
         shell: bash -l {0}
         run: |
           mamba install -y -q \
-            pytest pytest-xdist pytest-openfiles pytest-cov pytest-session2file
+            pytest pytest-xdist pytest-cov pytest-session2file
 
       - name: List installed packages
         shell: bash -l {0}
