@@ -52,6 +52,7 @@ jobs:
           scons -j2
 
       - name: Upload coverage to codecov
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v4
         with:
-          file: tests/.tests/pytest-sconsUtils.xml-cov-sconsUtils.xml
+          files: tests/.tests/pytest-sconsUtils.xml-cov-sconsUtils.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
