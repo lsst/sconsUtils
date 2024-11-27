@@ -55,6 +55,7 @@ class BasicSConstruct:
         noCfgFile=False,
         sconscriptOrder=None,
         disableCc=False,
+        metadataName="python/lsst_%s.egg-info/PKG-INFO",
     ):
         cls.initialize(
             packageName,
@@ -66,6 +67,7 @@ class BasicSConstruct:
             noCfgFile=noCfgFile,
             sconscriptOrder=sconscriptOrder,
             disableCc=disableCc,
+            metadataName=metadataName,
         )
         cls.finish(defaultTargets, subDirList, ignoreRegex)
         return state.env
@@ -82,6 +84,7 @@ class BasicSConstruct:
         noCfgFile=False,
         sconscriptOrder=None,
         disableCc=False,
+        metadataName="python/lsst_%s.egg-info/PKG-INFO",
     ):
         """Convenience function to replace standard SConstruct boilerplate
         (step 1).
@@ -129,6 +132,10 @@ class BasicSConstruct:
             allows a faster startup and permits building on systems that don't
             meet the requirements for the C++ compilter (e.g., for
             pure-python packages).
+        metadataName : `str`, optional
+            If non-None, builds a ``PKG-INFO`` file containing the version
+            information and, potentially, other derived metadata files in the
+            same directory.
 
         Returns
         -------
@@ -152,6 +159,12 @@ class BasicSConstruct:
             except TypeError:
                 pass
             state.targets["version"] = state.env.VersionModule(versionModuleName)
+        if metadataName is not None:
+            try:
+                metadataName = metadataName % packageName
+            except TypeError:
+                pass
+            state.targets["pkginfo"] = state.env.PackageInfo(metadataName)
         scripts = []
         for root, dirs, files in os.walk("."):
             if "SConstruct" in files and root != ".":
@@ -233,6 +246,8 @@ class BasicSConstruct:
         )
         if "version" in state.targets:
             state.env.Default(state.targets["version"])
+        if "pkginfo" in state.targets:
+            state.env.Default(state.targets["pkginfo"])
         state.env.Requires(state.targets["tests"], state.targets["version"])
         state.env.Decider("MD5-timestamp")  # if timestamps haven't changed, don't do MD5 checks
         #

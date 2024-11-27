@@ -544,8 +544,7 @@ def Doxygen(self, config, **kwargs):
     return builder(self, config)
 
 
-@memberOf(SConsEnvironment)
-def VersionModule(self, filename, versionString=None):
+def _get_version_string(versionString):
     if versionString is None:
         for n in ("git", "hg", "svn"):
             if os.path.isdir(f".{n}"):
@@ -553,18 +552,24 @@ def VersionModule(self, filename, versionString=None):
 
         if not versionString:
             versionString = "git"
+    return versionString
 
-    def calcMd5(filename):
-        try:
-            import hashlib
 
-            md5 = hashlib.md5(open(filename, "rb").read()).hexdigest()
-        except OSError:
-            md5 = None
+def _calcMd5(filename):
+    try:
+        import hashlib
 
-        return md5
+        md5 = hashlib.md5(open(filename, "rb").read()).hexdigest()
+    except OSError:
+        md5 = None
 
-    oldMd5 = calcMd5(filename)
+    return md5
+
+
+@memberOf(SConsEnvironment)
+def VersionModule(self, filename, versionString=None):
+    versionString = _get_version_string(versionString)
+    oldMd5 = _calcMd5(filename)
 
     def makeVersionModule(target, source, env):
         try:
@@ -629,10 +634,40 @@ def VersionModule(self, filename, versionString=None):
                 outFile.write(f'    "{n}",\n')
             outFile.write(")\n")
 
-        if calcMd5(target[0].abspath) != oldMd5:  # only print if something's changed
+        if _calcMd5(target[0].abspath) != oldMd5:  # only print if something's changed
             state.log.info(f'makeVersionModule(["{target[0]}"], [])')
 
     result = self.Command(filename, [], self.Action(makeVersionModule, strfunction=lambda *args: None))
+
+    self.AlwaysBuild(result)
+    return result
+
+
+@memberOf(SConsEnvironment)
+def PackageInfo(self, filename, versionString=None):
+    versionString = _get_version_string(versionString)
+    oldMd5 = _calcMd5(filename)
+
+    def makePackageInfo(target, source, env):
+        try:
+            version = determineVersion(state.env, versionString)
+        except RuntimeError:
+            version = "unknown"
+
+        os.makedirs(os.path.dirname(target[0].abspath), exist_ok=True)
+
+        package_name = env["packageName"]
+        if "lsst_" in target[0].abspath:
+            package_name = "lsst_" + package_name
+        with open(target[0].abspath, "w") as outFile:
+            print("Metadata-Version: 1.0", file=outFile)
+            print(f"Name: {package_name}", file=outFile)
+            print(f"Version: {version}", file=outFile)
+
+        if _calcMd5(target[0].abspath) != oldMd5:  # only print if something's changed
+            state.log.info(f'PackageInfo(["{target[0]}"], [])')
+
+    result = self.Command(filename, [], self.Action(makePackageInfo, strfunction=lambda *args: None))
 
     self.AlwaysBuild(result)
     return result
