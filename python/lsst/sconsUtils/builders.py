@@ -654,12 +654,12 @@ def PackageInfo(self, pythonDir, versionString=None):
         pythonPackageName = "lsst_" + state.env["packageName"]
     else:
         pythonPackageName = state.env["packageName"]
-    eggDir = os.path.join(pythonDir, f"{pythonPackageName}.egg-info")
-    filename = os.path.join(eggDir, "PKG-INFO")
+    eggDir = os.path.join(pythonDir, f"{pythonPackageName}.dist-info")
+    filename = os.path.join(eggDir, "METADATA")
     oldMd5 = _calcMd5(filename)
 
-    def makePackageInfo(target, source, env):
-        # Create the PKG-INFo metadata.
+    def makePackageMetadata(target, source, env):
+        # Create the metadata file.
         try:
             version = determineVersion(state.env, versionString)
         except RuntimeError:
@@ -675,7 +675,9 @@ def PackageInfo(self, pythonDir, versionString=None):
             state.log.info(f'PackageInfo(["{target[0]}"], [])')
 
     results = []
-    results.append(self.Command(filename, [], self.Action(makePackageInfo, strfunction=lambda *args: None)))
+    results.append(
+        self.Command(filename, [], self.Action(makePackageMetadata, strfunction=lambda *args: None))
+    )
 
     # Create the entry points file if defined in the pyproject.toml file.
     entryPoints = {}
