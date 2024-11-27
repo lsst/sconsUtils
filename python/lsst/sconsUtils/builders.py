@@ -644,24 +644,31 @@ def VersionModule(self, filename, versionString=None):
 
 
 @memberOf(SConsEnvironment)
-def PackageInfo(self, filename, versionString=None):
+def PackageInfo(self, pythonDir, versionString=None):
     versionString = _get_version_string(versionString)
+
+    if not os.path.exists(pythonDir):
+        return
+
+    if os.path.exists(os.path.join(pythonDir, "lsst")):
+        pythonPackageName = "lsst_" + state.env["packageName"]
+    else:
+        pythonPackageName = state.env["packageName"]
+    eggDir = os.path.join(pythonDir, f"{pythonPackageName}.egg-info")
+    filename = os.path.join(eggDir, "PKG-INFO")
     oldMd5 = _calcMd5(filename)
 
     def makePackageInfo(target, source, env):
+        # Create the PKG-INFo metadata.
         try:
             version = determineVersion(state.env, versionString)
         except RuntimeError:
             version = "unknown"
 
         os.makedirs(os.path.dirname(target[0].abspath), exist_ok=True)
-
-        package_name = env["packageName"]
-        if "lsst_" in target[0].abspath:
-            package_name = "lsst_" + package_name
         with open(target[0].abspath, "w") as outFile:
             print("Metadata-Version: 1.0", file=outFile)
-            print(f"Name: {package_name}", file=outFile)
+            print(f"Name: {pythonPackageName}", file=outFile)
             print(f"Version: {version}", file=outFile)
 
         if _calcMd5(target[0].abspath) != oldMd5:  # only print if something's changed
