@@ -674,7 +674,52 @@ def PackageInfo(self, pythonDir, versionString=None):
         if _calcMd5(target[0].abspath) != oldMd5:  # only print if something's changed
             state.log.info(f'PackageInfo(["{target[0]}"], [])')
 
-    result = self.Command(filename, [], self.Action(makePackageInfo, strfunction=lambda *args: None))
+    results = []
+    results.append(self.Command(filename, [], self.Action(makePackageInfo, strfunction=lambda *args: None)))
 
-    self.AlwaysBuild(result)
-    return result
+    # Create the entry points file if defined in the pyproject.toml file.
+    entryPoints = {}
+    if os.path.exists("pyproject.toml"):
+        import tomllib
+
+        with open("pyproject.toml", "rb") as fd:
+            metadata = tomllib.load(fd)
+
+        if "project" in metadata and "entry-points" in metadata["project"]:
+            entryPoints = metadata["project"]["entry-points"]
+
+    if entryPoints:
+        filename = os.path.join(eggDir, "entry_points.txt")
+        oldMd5 = _calcMd5(filename)
+
+    def makeEntryPoints(target, source, env):
+        # Make the entry points file as necessary.
+        if not entryPoints:
+            return
+        os.makedirs(os.path.dirname(target[0].abspath), exist_ok=True)
+
+        # Structure of entry points dict is something like:
+        # "entry-points": {
+        #   "butler.cli": {
+        #     "pipe_base": "lsst.pipe.base.cli:get_cli_subcommands"
+        #   }
+        # }
+        # Which becomes a file with:
+        # [butler.cli]
+        # pipe_base = lsst.pipe.base.cli:get_cli_subcommands
+        with open(target[0].abspath, "w") as fd:
+            for entryGroup in entryPoints:
+                print(f"[{entryGroup}]", file=fd)
+                for entryPoint, entryValue in entryPoints[entryGroup].items():
+                    print(f"{entryPoint} = {entryValue}", file=fd)
+
+        if _calcMd5(target[0].abspath) != oldMd5:  # only print if something's changed
+            state.log.info(f'PackageInfo(["{target[0]}"], [])')
+
+    if entryPoints:
+        results.append(
+            self.Command(filename, [], self.Action(makeEntryPoints, strfunction=lambda *args: None))
+        )
+
+    self.AlwaysBuild(results)
+    return results
