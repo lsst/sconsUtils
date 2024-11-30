@@ -1,3 +1,57 @@
+[build-system]
+requires = ["setuptools", "lsst-versions >= 1.3.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lsst-sconsUtils"
+description = "Utilities for build LSST packages with SCons."
+license = {text = "BSD 3-Clause License, GPLv3+"}
+readme = "README.md"
+authors = [
+    {name="Rubin Observatory Data Management", email="dm-admin@lists.lsst.org"},
+]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
+keywords = ["lsst"]
+dependencies = [
+    "flake8",
+    "pytest >= 3.2",
+    "pytest-cov",
+    "pytest-session2file",
+    "ruff",
+    "scons",
+]
+dynamic = ["version"]
+requires-python = ">=3.10.0"
+
+[project.urls]
+"Homepage" = "https://github.com/lsst/sconsUtils"
+
+[project.optional-dependencies]
+test = []
+
+[tool.setuptools.packages.find]
+where = ["python"]
+
+[tool.setuptools]
+zip-safe = true
+license-files = ["COPYRIGHT", "LICENSE", "gpl-v3.0.txt", "bsd_license.txt"]
+
+[tool.setuptools.package-data]
+"lsst.pex.config" = ["py.typed", "configs/*.cfg"]
+
+[tool.setuptools.dynamic]
+version = { attr = "lsst_versions.get_lsst_version" }
+
 [tool.black]
 line-length = 110
 target-version = ["py311"]
@@ -41,3 +95,4 @@ convention = "numpy"
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"  # Recommended as best practice
+norecursedirs = ["build"]
