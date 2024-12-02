@@ -650,11 +650,25 @@ def PackageInfo(self, pythonDir, versionString=None):
     if not os.path.exists(pythonDir):
         return
 
-    if os.path.exists(os.path.join(pythonDir, "lsst")):
-        pythonPackageName = "lsst_" + state.env["packageName"]
+    # Some information can come from the pyproject file.
+    toml_metadata = {}
+    if os.path.exists("pyproject.toml"):
+        import tomllib
+
+        with open("pyproject.toml", "rb") as fd:
+            toml_metadata = tomllib.load(fd)
+
+    pythonPackageName = ""
+    if "project" in toml_metadata and "name" in toml_metadata["project"]:
+        pythonPackageName = toml_metadata["project"]["name"]
     else:
-        pythonPackageName = state.env["packageName"]
-    eggDir = os.path.join(pythonDir, f"{pythonPackageName}.dist-info")
+        if os.path.exists(os.path.join(pythonDir, "lsst")):
+            pythonPackageName = "lsst_" + state.env["packageName"]
+        else:
+            pythonPackageName = state.env["packageName"]
+        pythonPackageName = pythonPackageName.replace("_", "-")
+    # The directory name is required to use "_" instead of "-"
+    eggDir = os.path.join(pythonDir, f"{pythonPackageName.replace('-', '_')}.dist-info")
     filename = os.path.join(eggDir, "METADATA")
     oldMd5 = _calcMd5(filename)
 
@@ -681,14 +695,8 @@ def PackageInfo(self, pythonDir, versionString=None):
 
     # Create the entry points file if defined in the pyproject.toml file.
     entryPoints = {}
-    if os.path.exists("pyproject.toml"):
-        import tomllib
-
-        with open("pyproject.toml", "rb") as fd:
-            metadata = tomllib.load(fd)
-
-        if "project" in metadata and "entry-points" in metadata["project"]:
-            entryPoints = metadata["project"]["entry-points"]
+    if "project" in toml_metadata and "entry-points" in toml_metadata["project"]:
+        entryPoints = toml_metadata["project"]["entry-points"]
 
     if entryPoints:
         filename = os.path.join(eggDir, "entry_points.txt")
