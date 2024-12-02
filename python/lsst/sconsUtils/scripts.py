@@ -156,6 +156,9 @@ class BasicSConstruct:
         # directory.
         if os.path.exists("python"):
             state.targets["pkginfo"] = state.env.PackageInfo("python")
+        # Python script generation does no harm since it will only do anything
+        # if there is a scripts entry in pyproject.toml.
+        state.targets["scripts"] = state.env.PythonScripts()
         scripts = []
         for root, dirs, files in os.walk("."):
             if "SConstruct" in files and root != ".":
@@ -237,9 +240,14 @@ class BasicSConstruct:
         )
         if "version" in state.targets:
             state.env.Default(state.targets["version"])
+            state.env.Requires(state.targets["tests"], state.targets["version"])
         if "pkginfo" in state.targets:
             state.env.Default(state.targets["pkginfo"])
-        state.env.Requires(state.targets["tests"], state.targets["version"])
+            state.env.Requires(state.targets["tests"], state.targets["pkginfo"])
+        if "scripts" in state.targets:
+            state.env.Default(state.targets["scripts"])
+            state.env.Requires(state.targets["tests"], state.targets["scripts"])
+
         state.env.Decider("MD5-timestamp")  # if timestamps haven't changed, don't do MD5 checks
         #
         # Check if any of the tests failed by looking for *.failed files.

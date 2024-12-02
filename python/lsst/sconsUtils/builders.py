@@ -7,13 +7,14 @@ import fnmatch
 import os
 import re
 import shlex
+from stat import ST_MODE
 
 import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
 
 from . import state
 from .installation import determineVersion, getFingerprint
-from .utils import memberOf
+from .utils import memberOf, whichPython
 
 
 @memberOf(SConsEnvironment)
@@ -732,4 +733,64 @@ def PackageInfo(self, pythonDir, versionString=None):
         )
 
     self.AlwaysBuild(results)
+    return results
+
+
+@memberOf(SConsEnvironment)
+def PythonScripts(self):
+    # Scripts are defined in the pyproject.toml file.
+    toml_metadata = {}
+    if os.path.exists("pyproject.toml"):
+        import tomllib
+
+        with open("pyproject.toml", "rb") as fd:
+            toml_metadata = tomllib.load(fd)
+
+    if not toml_metadata:
+        return []
+
+    scripts = {}
+    if "project" in toml_metadata and "scripts" in toml_metadata["project"]:
+        scripts = toml_metadata["project"]["scripts"]
+
+    def makePythonScript(target, source, env):
+        cmdfile = target[0].abspath
+        command = os.path.basename(cmdfile)
+        if command not in scripts:
+            return
+        os.makedirs(os.path.dirname(cmdfile), exist_ok=True)
+        package, func = scripts[command].split(":", maxsplit=1)
+        with open(cmdfile, "w") as fd:
+            # Follow setuptools convention and always change the shebang.
+            # Can not add noqa on Linux for long paths so do not add anywhere.
+            print(
+                rf"""#!{whichPython()}
+import sys
+from {package} import {func}
+if __name__ == '__main__':
+    sys.exit({func}())
+""",
+                file=fd,
+            )
+
+        # Ensure the bin/ file is executable
+        oldmode = os.stat(cmdfile)[ST_MODE] & 0o7777
+        newmode = (oldmode | 0o555) & 0o7777
+        if newmode != oldmode:
+            state.log.info(f"Changing mode of {cmdfile} from {oldmode} to {newmode}")
+            os.chmod(cmdfile, newmode)
+
+    results = []
+    for cmd, code in scripts.items():
+        filename = f"bin/{cmd}"
+
+        # Do not do anything if there is an equivalent target in bin.src
+        # that shebang would trigger.
+        if os.path.exists(f"bin.src/{cmd}"):
+            continue
+
+        results.append(
+            self.Command(filename, [], self.Action(makePythonScript, strfunction=lambda *args: None))
+        )
+
     return results
