@@ -127,7 +127,7 @@ class BasicSConstruct:
         disableCC : `bool`, optional
             Should the C++ compiler check be disabled? Disabling this checks
             allows a faster startup and permits building on systems that don't
-            meet the requirements for the C++ compilter (e.g., for
+            meet the requirements for the C++ compiler (e.g., for
             pure-python packages).
 
         Returns
@@ -145,13 +145,20 @@ class BasicSConstruct:
         state.env.BuildETags()
         if cleanExt is None:
             cleanExt = r"*~ core core.[1-9]* *.so *.os *.o *.pyc *.pkgc"
-        state.env.CleanTree(cleanExt, "__pycache__ .pytest_cache")
+        state.env.CleanTree(cleanExt, "__pycache__ .pytest_cache *.dist-info")
         if versionModuleName is not None:
             try:
                 versionModuleName = versionModuleName % "/".join(packageName.split("_"))
             except TypeError:
                 pass
             state.targets["version"] = state.env.VersionModule(versionModuleName)
+        # Always attempt to write python package info into the python
+        # directory.
+        if os.path.exists("python"):
+            state.targets["pkginfo"] = state.env.PackageInfo("python")
+        # Python script generation does no harm since it will only do anything
+        # if there is a scripts entry in pyproject.toml.
+        state.targets["scripts"] = state.env.PythonScripts()
         scripts = []
         for root, dirs, files in os.walk("."):
             if "SConstruct" in files and root != ".":
@@ -233,7 +240,14 @@ class BasicSConstruct:
         )
         if "version" in state.targets:
             state.env.Default(state.targets["version"])
-        state.env.Requires(state.targets["tests"], state.targets["version"])
+            state.env.Requires(state.targets["tests"], state.targets["version"])
+        if "pkginfo" in state.targets:
+            state.env.Default(state.targets["pkginfo"])
+            state.env.Requires(state.targets["tests"], state.targets["pkginfo"])
+        if "scripts" in state.targets:
+            state.env.Default(state.targets["scripts"])
+            state.env.Requires(state.targets["tests"], state.targets["scripts"])
+
         state.env.Decider("MD5-timestamp")  # if timestamps haven't changed, don't do MD5 checks
         #
         # Check if any of the tests failed by looking for *.failed files.

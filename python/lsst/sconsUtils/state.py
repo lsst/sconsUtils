@@ -49,6 +49,8 @@ targets = {
     "include": [],
     "version": [],
     "shebang": [],
+    "pkginfo": [],
+    "scripts": [],
 }
 
 env = None

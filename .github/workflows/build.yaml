@@ -11,16 +11,15 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        pyversion: ["3.10", "3.11", "3.12"]
+        pyversion: ["3.11", "3.12", "3.13"]
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: ${{ matrix.pyversion }}
-          auto-update-conda: true
           channels: conda-forge,defaults
           miniforge-variant: Miniforge3
           use-mamba: true
@@ -37,7 +36,7 @@ jobs:
         shell: bash -l {0}
         run: |
           mamba install -y -q \
-            pytest pytest-xdist pytest-openfiles pytest-cov pytest-session2file
+            pytest pytest-xdist pytest-cov pytest-session2file
 
       - name: List installed packages
         shell: bash -l {0}
@@ -50,8 +49,10 @@ jobs:
         run: |
           setup -k -r .
           scons -j2
+          python -c 'import importlib.metadata as M; print(M.version("lsst.sconsUtils"))'
 
       - name: Upload coverage to codecov
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v4
         with:
-          file: tests/.tests/pytest-sconsUtils.xml-cov-sconsUtils.xml
+          files: tests/.tests/pytest-sconsUtils.xml-cov-sconsUtils.xml
+          token: ${{ secrets.CODECOV_TOKEN }}

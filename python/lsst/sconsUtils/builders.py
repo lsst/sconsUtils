@@ -7,13 +7,14 @@ import fnmatch
 import os
 import re
 import shlex
+from stat import ST_MODE
 
 import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
 
 from . import state
 from .installation import determineVersion, getFingerprint
-from .utils import memberOf
+from .utils import memberOf, whichPython
 
 
 @memberOf(SConsEnvironment)
@@ -544,8 +545,7 @@ def Doxygen(self, config, **kwargs):
     return builder(self, config)
 
 
-@memberOf(SConsEnvironment)
-def VersionModule(self, filename, versionString=None):
+def _get_version_string(versionString):
     if versionString is None:
         for n in ("git", "hg", "svn"):
             if os.path.isdir(f".{n}"):
@@ -553,18 +553,24 @@ def VersionModule(self, filename, versionString=None):
 
         if not versionString:
             versionString = "git"
+    return versionString
 
-    def calcMd5(filename):
-        try:
-            import hashlib
 
-            md5 = hashlib.md5(open(filename, "rb").read()).hexdigest()
-        except OSError:
-            md5 = None
+def _calcMd5(filename):
+    try:
+        import hashlib
 
-        return md5
+        md5 = hashlib.md5(open(filename, "rb").read()).hexdigest()
+    except OSError:
+        md5 = None
 
-    oldMd5 = calcMd5(filename)
+    return md5
+
+
+@memberOf(SConsEnvironment)
+def VersionModule(self, filename, versionString=None):
+    versionString = _get_version_string(versionString)
+    oldMd5 = _calcMd5(filename)
 
     def makeVersionModule(target, source, env):
         try:
@@ -629,10 +635,160 @@ def VersionModule(self, filename, versionString=None):
                 outFile.write(f'    "{n}",\n')
             outFile.write(")\n")
 
-        if calcMd5(target[0].abspath) != oldMd5:  # only print if something's changed
+        if _calcMd5(target[0].abspath) != oldMd5:  # only print if something's changed
             state.log.info(f'makeVersionModule(["{target[0]}"], [])')
 
     result = self.Command(filename, [], self.Action(makeVersionModule, strfunction=lambda *args: None))
 
     self.AlwaysBuild(result)
     return result
+
+
+@memberOf(SConsEnvironment)
+def PackageInfo(self, pythonDir, versionString=None):
+    versionString = _get_version_string(versionString)
+
+    if not os.path.exists(pythonDir):
+        return []
+
+    # Some information can come from the pyproject file.
+    toml_metadata = {}
+    if os.path.exists("pyproject.toml"):
+        import tomllib
+
+        with open("pyproject.toml", "rb") as fd:
+            toml_metadata = tomllib.load(fd)
+
+    toml_project = toml_metadata.get("project", {})
+    pythonPackageName = ""
+    if "name" in toml_project:
+        pythonPackageName = toml_project["name"]
+    else:
+        if os.path.exists(os.path.join(pythonDir, "lsst")):
+            pythonPackageName = "lsst_" + state.env["packageName"]
+        else:
+            pythonPackageName = state.env["packageName"]
+        pythonPackageName = pythonPackageName.replace("_", "-")
+    # The directory name is required to use "_" instead of "-"
+    distDir = os.path.join(pythonDir, f"{pythonPackageName.replace('-', '_')}.dist-info")
+    filename = os.path.join(distDir, "METADATA")
+    oldMd5 = _calcMd5(filename)
+
+    def makePackageMetadata(target, source, env):
+        # Create the metadata file.
+        try:
+            version = determineVersion(state.env, versionString)
+        except RuntimeError:
+            version = "unknown"
+
+        os.makedirs(os.path.dirname(target[0].abspath), exist_ok=True)
+        with open(target[0].abspath, "w") as outFile:
+            print("Metadata-Version: 1.0", file=outFile)
+            print(f"Name: {pythonPackageName}", file=outFile)
+            print(f"Version: {version}", file=outFile)
+
+        if _calcMd5(target[0].abspath) != oldMd5:  # only print if something's changed
+            state.log.info(f'PackageInfo(["{target[0]}"], [])')
+
+    results = []
+    results.append(
+        self.Command(filename, [], self.Action(makePackageMetadata, strfunction=lambda *args: None))
+    )
+
+    # Create the entry points file if defined in the pyproject.toml file.
+    entryPoints = toml_project.get("entry-points", {})
+    if entryPoints:
+        filename = os.path.join(distDir, "entry_points.txt")
+        oldMd5 = _calcMd5(filename)
+
+    def makeEntryPoints(target, source, env):
+        # Make the entry points file as necessary.
+        if not entryPoints:
+            return
+        os.makedirs(os.path.dirname(target[0].abspath), exist_ok=True)
+
+        # Structure of entry points dict is something like:
+        # "entry-points": {
+        #   "butler.cli": {
+        #     "pipe_base": "lsst.pipe.base.cli:get_cli_subcommands"
+        #   }
+        # }
+        # Which becomes a file with:
+        # [butler.cli]
+        # pipe_base = lsst.pipe.base.cli:get_cli_subcommands
+        with open(target[0].abspath, "w") as fd:
+            for entryGroup in entryPoints:
+                print(f"[{entryGroup}]", file=fd)
+                for entryPoint, entryValue in entryPoints[entryGroup].items():
+                    print(f"{entryPoint} = {entryValue}", file=fd)
+
+        if _calcMd5(target[0].abspath) != oldMd5:  # only print if something's changed
+            state.log.info(f'PackageInfo(["{target[0]}"], [])')
+
+    if entryPoints:
+        results.append(
+            self.Command(filename, [], self.Action(makeEntryPoints, strfunction=lambda *args: None))
+        )
+
+    self.AlwaysBuild(results)
+    return results
+
+
+@memberOf(SConsEnvironment)
+def PythonScripts(self):
+    # Scripts are defined in the pyproject.toml file.
+    toml_metadata = {}
+    if os.path.exists("pyproject.toml"):
+        import tomllib
+
+        with open("pyproject.toml", "rb") as fd:
+            toml_metadata = tomllib.load(fd)
+
+    if not toml_metadata:
+        return []
+
+    scripts = {}
+    if "project" in toml_metadata and "scripts" in toml_metadata["project"]:
+        scripts = toml_metadata["project"]["scripts"]
+
+    def makePythonScript(target, source, env):
+        cmdfile = target[0].abspath
+        command = os.path.basename(cmdfile)
+        if command not in scripts:
+            return
+        os.makedirs(os.path.dirname(cmdfile), exist_ok=True)
+        package, func = scripts[command].split(":", maxsplit=1)
+        with open(cmdfile, "w") as fd:
+            # Follow setuptools convention and always change the shebang.
+            # Can not add noqa on Linux for long paths so do not add anywhere.
+            print(
+                rf"""#!{whichPython()}
+import sys
+from {package} import {func}
+if __name__ == '__main__':
+    sys.exit({func}())
+""",
+                file=fd,
+            )
+
+        # Ensure the bin/ file is executable
+        oldmode = os.stat(cmdfile)[ST_MODE] & 0o7777
+        newmode = (oldmode | 0o555) & 0o7777
+        if newmode != oldmode:
+            state.log.info(f"Changing mode of {cmdfile} from {oldmode} to {newmode}")
+            os.chmod(cmdfile, newmode)
+
+    results = []
+    for cmd, code in scripts.items():
+        filename = f"bin/{cmd}"
+
+        # Do not do anything if there is an equivalent target in bin.src
+        # that shebang would trigger.
+        if os.path.exists(f"bin.src/{cmd}"):
+            continue
+
+        results.append(
+            self.Command(filename, [], self.Action(makePythonScript, strfunction=lambda *args: None))
+        )
+
+    return results
