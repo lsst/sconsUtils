@@ -243,6 +243,7 @@ class BasicSConstruct:
             state.env.Requires(state.targets["tests"], state.targets["version"])
         if "pkginfo" in state.targets:
             state.env.Default(state.targets["pkginfo"])
+            state.env.Requires(state.targets["pkginfo"], state.targets["python"])
             state.env.Requires(state.targets["tests"], state.targets["pkginfo"])
         if "scripts" in state.targets:
             state.env.Default(state.targets["scripts"])
