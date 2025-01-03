@@ -3,6 +3,7 @@
 
 __all__ = ("filesToTag", "DoxygenBuilder")
 
+import csv
 import fnmatch
 import os
 import re
@@ -738,6 +739,43 @@ def PackageInfo(self, pythonDir, versionString=None):
         results.append(
             self.Command(filename, [], self.Action(makeEntryPoints, strfunction=lambda *args: None))
         )
+
+    def makeRecordFile(target, source, env):
+        # Write the RECORD file containing every python file in the package.
+        # Do not attempt to write hashes and file sizes since these can
+        # change if the package is not really installed into an EUPS tree.
+        all_files = set()
+        for root, dirs, files in os.walk(pythonDir):
+            root = root.removeprefix(pythonDir)
+            root = root.removeprefix("/")
+            all_files.update({os.path.join(root, f) for f in files})
+        # Ensure that RECORD itself is included in the list.
+        record_path = target[0].abspath
+        record_path = record_path.removeprefix(os.path.abspath(pythonDir)).removeprefix("/")
+        all_files.add(record_path)
+
+        # Also force the other metadata files we are writing into the
+        # file in case the order cannot be guaranteed.
+        meta_files = ["INSTALLER", "METADATA"]
+        if entryPoints:
+            meta_files.append("entry_points.txt")
+        dist_path, _ = os.path.split(record_path)
+        for f in meta_files:
+            all_files.add(os.path.join(dist_path, f))
+
+        # The RECORD file is nominally a CSV file.
+        # Do not record file sizes or hashes.
+        rows = [(f, "", "") for f in sorted(all_files)]
+        with open(target[0].abspath, "w") as outFile:
+            csv_writer = csv.writer(outFile)
+            csv_writer.writerows(rows)
+
+    filename = os.path.join(distDir, "RECORD")
+    # This action really needs to run after the previous pkginfo actions
+    # so that INSTALLER, entry_points.txt and METADATA files are created.
+    # Additionally, the RECORD target needs to run after "python" so that
+    # shared libraries are created -- this is configured elsewhere.
+    results.append(self.Command(filename, [], self.Action(makeRecordFile, strfunction=lambda *args: None)))
 
     self.AlwaysBuild(results)
     return results
