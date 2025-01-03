@@ -695,6 +695,15 @@ def PackageInfo(self, pythonDir, versionString=None):
         self.Command(filename, [], self.Action(makePackageMetadata, strfunction=lambda *args: None))
     )
 
+    def makeInstallerFile(target, source, env):
+        # Write the INSTALLER file. This is purely something to potentially
+        # tell the end user the tooling that was used to install the files.
+        with open(target[0].abspath, "w") as outFile:
+            print("sconsUtils", file=outFile)
+
+    filename = os.path.join(distDir, "INSTALLER")
+    results.append(self.Command(filename, [], self.Action(makeInstallerFile, strfunction=lambda *args: None)))
+
     # Create the entry points file if defined in the pyproject.toml file.
     entryPoints = toml_project.get("entry-points", {})
     if entryPoints:
