@@ -1,4 +1,5 @@
-"""Extra builders and methods to be injected into the SConsEnvironment class.
+"""Extra builders and methods to be injected into the SConsEnvironment
+class.
 """
 
 __all__ = ("filesToTag", "DoxygenBuilder")
@@ -15,7 +16,7 @@ from SCons.Script.SConscript import SConsEnvironment
 
 from . import state
 from .installation import determineVersion, getFingerprint
-from .utils import memberOf, whichPython
+from .utils import memberOf, needShebangRewrite, whichPython
 
 
 @memberOf(SConsEnvironment)
@@ -805,11 +806,17 @@ def PythonScripts(self):
             return
         os.makedirs(os.path.dirname(cmdfile), exist_ok=True)
         package, func = scripts[command].split(":", maxsplit=1)
+        python_exe = whichPython()
+        if needShebangRewrite():
+            shebang = python_exe
+        else:
+            # Linux has very small shebang limit so always use env.
+            shebang = f"/usr/bin/env {os.path.basename(python_exe)}"
         with open(cmdfile, "w") as fd:
             # Follow setuptools convention and always change the shebang.
             # Can not add noqa on Linux for long paths so do not add anywhere.
             print(
-                rf"""#!{whichPython()}
+                rf"""#!{shebang}
 import sys
 from {package} import {func}
 if __name__ == '__main__':

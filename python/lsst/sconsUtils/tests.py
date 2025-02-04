@@ -1,5 +1,4 @@
-"""Control which tests run, and how.
-"""
+"""Control which tests run, and how."""
 
 __all__ = ("Control",)
 
