@@ -1,4 +1,5 @@
-"""Extra builders and methods to be injected into the SConsEnvironment class.
+"""Extra builders and methods to be injected into the SConsEnvironment
+class.
 """
 
 __all__ = ("filesToTag", "DoxygenBuilder")
