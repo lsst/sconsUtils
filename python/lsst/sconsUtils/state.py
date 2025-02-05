@@ -426,6 +426,13 @@ def _initEnvironment():
     #
     env["eupsFlavor"] = eupsForScons.flavor()
 
+    # Forward environment variables that should always be set to allow
+    # our code to run even outside of tests. Executables would normally
+    # pick up the linker environment variables via libraryLoaderEnvironment().
+    for envvar in ["PYTHONPATH", "HTTP_PROXY", "HTTPS_PROXY"]:
+        if envvar in os.environ:
+            env.AppendENVPath(envvar, os.environ[envvar])
+
 
 _configured = False
 
