@@ -2,7 +2,7 @@
 class.
 """
 
-__all__ = ("filesToTag", "DoxygenBuilder")
+__all__ = ("DoxygenBuilder", "filesToTag")
 
 import csv
 import fnmatch

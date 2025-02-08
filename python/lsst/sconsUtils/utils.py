@@ -5,13 +5,13 @@ from __future__ import annotations
 __all__ = (
     "Log",
     "_has_OSX_SIP",
-    "libraryPathPassThrough",
-    "whichPython",
-    "needShebangRewrite",
-    "libraryLoaderEnvironment",
-    "runExternal",
-    "memberOf",
     "get_conda_prefix",
+    "libraryLoaderEnvironment",
+    "libraryPathPassThrough",
+    "memberOf",
+    "needShebangRewrite",
+    "runExternal",
+    "whichPython",
 )
 
 import os

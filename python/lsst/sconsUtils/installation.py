@@ -1,12 +1,12 @@
 """Builders and path setup for installation targets."""
 
 __all__ = (
-    "makeProductPath",
-    "determineVersion",
-    "getFingerprint",
-    "setPrefix",
     "DirectoryInstaller",
     "SConsUtilsEnvironment",
+    "determineVersion",
+    "getFingerprint",
+    "makeProductPath",
+    "setPrefix",
 )
 
 import glob
