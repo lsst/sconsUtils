@@ -292,7 +292,7 @@ def ProductDir(env, product):
 
     global _productDirs
     try:
-        _productDirs
+        _productDirs  # noqa: B018
     except Exception:
         try:
             _productDirs = eupsForScons.productDir(eupsenv=eupsForScons.getEups())
