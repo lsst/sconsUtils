@@ -359,7 +359,7 @@ def InstallDir(self, prefix, dir, ignoreRegex=r"(~$|\.pyc$|\.os?$)", recursive=T
 
 
 @memberOf(SConsEnvironment)
-def InstallEups(env, dest, files=[], presetup=""):
+def InstallEups(env, dest, files=(), presetup=""):
     """Install a ups directory, setting absolute versions as appropriate
     (unless you're installing from the trunk, in which case no versions
     are expanded).
@@ -370,7 +370,7 @@ def InstallEups(env, dest, files=[], presetup=""):
         Environment to use.
     dest : `str`
         Destination directory.
-    files : `list`, optional
+    files : `collections.abc.Sequence`, optional
         List of files to install.  Any build/table files present in ``./ups``
         are automatically added to this list.
     presetup : `dict`, optional

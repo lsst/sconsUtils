@@ -455,7 +455,7 @@ class BasicSConscript:
         return result
 
     @staticmethod
-    def pybind11(nameList=[], libs="main python", extraSrc=None, addUnderscore=True):
+    def pybind11(nameList=(), libs="main python", extraSrc=None, addUnderscore=True):
         """Convenience function to replace standard ``python/*/SConscript``
         boilerplate.
 
@@ -467,7 +467,7 @@ class BasicSConscript:
 
         Parameters
         ----------
-        nameList : `list`, optional
+        nameList : `collections.abc.Sequence`, optional
             Sequence of pybind11 modules to be built (does not include the
             file extensions).
         libs : `str` or `list`, optional
