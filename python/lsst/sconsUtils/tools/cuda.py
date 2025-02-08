@@ -19,7 +19,7 @@ CUDAScanner = SCons.Scanner.C.CScanner()
 # the extra .linkinfo files when calling scons -c
 def CUDANVCCStaticObjectEmitter(target, source, env):
     tgt, src = SCons.Defaults.StaticObjectEmitter(target, source, env)
-    for file in src:
+    for _ in src:
         lifile = os.path.splitext(src[0].rstr())[0] + ".linkinfo"  # noqa F841
         # tgt.append(lifile)
     return tgt, src
@@ -27,7 +27,7 @@ def CUDANVCCStaticObjectEmitter(target, source, env):
 
 def CUDANVCCSharedObjectEmitter(target, source, env):
     tgt, src = SCons.Defaults.SharedObjectEmitter(target, source, env)
-    for file in src:
+    for _ in src:
         lifile = os.path.splitext(src[0].rstr())[0] + ".linkinfo"  # noqa F841
         # tgt.append(lifile)
     return tgt, src
