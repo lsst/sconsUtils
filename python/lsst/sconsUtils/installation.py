@@ -230,7 +230,7 @@ def Declare(self, products=None):
                 product = self["eupsProduct"]
 
             if "EUPS_DIR" in os.environ:
-                self["ENV"]["PATH"] += os.pathsep + f'{os.environ["EUPS_DIR"]}/bin'
+                self["ENV"]["PATH"] += os.pathsep + f"{os.environ['EUPS_DIR']}/bin"
                 self["ENV"]["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", "-1")
                 if "undeclare" in SCons.Script.COMMAND_LINE_TARGETS or self.GetOption("clean"):
                     if version:
@@ -254,7 +254,7 @@ def Declare(self, products=None):
                     )
 
                     if "eupsPath" in self:
-                        command += f' -Z {self["eupsPath"]}'
+                        command += f" -Z {self['eupsPath']}"
 
                     if version:
                         command += f" {product} {version}"
@@ -262,7 +262,7 @@ def Declare(self, products=None):
                     current += [command + " --current"]
 
                     if self.GetOption("tag"):
-                        command += f' --tag={self.GetOption("tag")}'
+                        command += f" --tag={self.GetOption('tag')}"
 
                     declare += [command]
 
@@ -389,8 +389,10 @@ def InstallEups(env, dest, files=[], presetup=""):
 
     .. code-block:: python
 
-        env.InstallEups(os.path.join(env['prefix'], "ups"),
-                        presetup={"sconsUtils" : env['version']})
+        env.InstallEups(
+            os.path.join(env["prefix"], "ups"),
+            presetup={"sconsUtils": env["version"]},
+        )
     """
     acts = []
     if not env.installing:
@@ -449,9 +451,9 @@ def InstallEups(env, dest, files=[], presetup=""):
         for i in build_obj:
             env.AlwaysBuild(i)
 
-            cmd = f'eups expandbuild -i --version {env["version"]} '
+            cmd = f"eups expandbuild -i --version {env['version']} "
             if "baseversion" in env:
-                cmd += f' --repoversion {env["baseversion"]} '
+                cmd += f" --repoversion {env['baseversion']} "
             cmd += str(i)
             eupsTargets.extend(env.AddPostAction(build_obj, env.Action(f"{cmd}", cmd)))
 

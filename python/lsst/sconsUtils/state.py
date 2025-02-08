@@ -72,7 +72,7 @@ def _initOptions():
         action="store_true",
         default=False,
         help="Filter out a class of warnings deemed irrelevant",
-    ),
+    )
     SCons.Script.AddOption(
         "--force",
         dest="force",
@@ -579,13 +579,13 @@ def _configureCommon():
     #
     if re.search(r"^(Linux|Linux64)$", env["eupsFlavor"]) and "LD_LIBRARY_PATH" in os.environ:
         env.Append(LINKFLAGS=["-Wl,-rpath-link"])
-        env.Append(LINKFLAGS=[f'-Wl,{os.environ["LD_LIBRARY_PATH"]}'])
+        env.Append(LINKFLAGS=[f"-Wl,{os.environ['LD_LIBRARY_PATH']}"])
     #
     # Set the optimization level.
     #
     if env["opt"]:
         env["CCFLAGS"] = [o for o in env["CCFLAGS"] if not re.search(r"^-O(\d|s|g|fast)$", o)]
-        env.MergeFlags(f'-O{env["opt"]}')
+        env.MergeFlags(f"-O{env['opt']}")
     #
     # Set compiler-specific warning flags.
     #

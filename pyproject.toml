@@ -47,3 +47,8 @@ convention = "numpy"
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"  # Recommended as best practice
+
+[tool.ruff.format]
+docstring-code-format = true
+# ruff format does not seem to take indenting into account.
+docstring-code-line-length = 69

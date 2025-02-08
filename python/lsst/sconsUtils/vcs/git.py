@@ -43,7 +43,7 @@ def guessFingerprint():
         state.log.warn(f"Cannot guess fingerprint without .git directory; will be set to '{fingerprint}'.")
     else:
         fingerprint = utils.runExternal(
-            "git describe --match=" " --always --abbrev=0 --dirty", fatal=False
+            "git describe --match= --always --abbrev=0 --dirty", fatal=False
         ).strip()
 
     return fingerprint
