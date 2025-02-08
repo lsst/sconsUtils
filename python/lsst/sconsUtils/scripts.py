@@ -369,7 +369,7 @@ class BasicSConscript:
             """Copy source to target, rewriting the shebang"""
             # Currently just use this python
             usepython = utils.whichPython()
-            for targ, src in zip(target, source):
+            for targ, src in zip(target, source, strict=True):
                 with open(str(src)) as srcfd:
                     with open(str(targ), "w") as outfd:
                         first_line = srcfd.readline()
@@ -642,7 +642,7 @@ class BasicSConscript:
         if swigSrc is None:
             swigSrc = {}
         allSwigSrc = set()
-        for name, node in zip(swigNameList, swigFileList):
+        for name, node in zip(swigNameList, swigFileList, strict=True):
             src = swigSrc.setdefault(name, [])
             allSwigSrc.update(str(element) for element in src)
             src.append(node)
@@ -760,7 +760,7 @@ class BasicSConscript:
         if swigSrc is None:
             swigSrc = {}
         allSwigSrc = set()
-        for name, node in zip(swigNameList, swigFileList):
+        for name, node in zip(swigNameList, swigFileList, strict=True):
             src = swigSrc.setdefault(name, [])
             allSwigSrc.update(str(element) for element in src)
             src.append(node)
