@@ -2,7 +2,7 @@
 class.
 """
 
-__all__ = ("filesToTag", "DoxygenBuilder")
+__all__ = ("DoxygenBuilder", "filesToTag")
 
 import csv
 import fnmatch
@@ -292,7 +292,7 @@ def ProductDir(env, product):
 
     global _productDirs
     try:
-        _productDirs
+        _productDirs  # noqa: B018
     except Exception:
         try:
             _productDirs = eupsForScons.productDir(eupsenv=eupsForScons.getEups())
@@ -431,7 +431,7 @@ class DoxygenBuilder:
         outConfigFile.write(f"FILE_PATTERNS = {' '.join(self.patterns)}\n")
         outConfigFile.write("RECURSIVE = YES\n" if self.recursive else "RECURSIVE = NO\n")
         allOutputs = {"html", "latex", "man", "rtf", "xml"}
-        for output, path in zip(self.outputs, self.outputPaths):
+        for output, path in zip(self.outputs, self.outputPaths, strict=True):
             try:
                 allOutputs.remove(output.lower())
             except Exception:
@@ -746,7 +746,7 @@ def PackageInfo(self, pythonDir, versionString=None):
         # Do not attempt to write hashes and file sizes since these can
         # change if the package is not really installed into an EUPS tree.
         all_files = set()
-        for root, dirs, files in os.walk(pythonDir):
+        for root, _, files in os.walk(pythonDir):
             root = root.removeprefix(pythonDir)
             root = root.removeprefix("/")
             all_files.update({os.path.join(root, f) for f in files})
@@ -833,7 +833,7 @@ if __name__ == '__main__':
             os.chmod(cmdfile, newmode)
 
     results = []
-    for cmd, code in scripts.items():
+    for cmd in scripts:
         filename = f"bin/{cmd}"
 
         # Do not do anything if there is an equivalent target in bin.src

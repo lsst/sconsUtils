@@ -1,12 +1,12 @@
 """Builders and path setup for installation targets."""
 
 __all__ = (
-    "makeProductPath",
-    "determineVersion",
-    "getFingerprint",
-    "setPrefix",
     "DirectoryInstaller",
     "SConsUtilsEnvironment",
+    "determineVersion",
+    "getFingerprint",
+    "makeProductPath",
+    "setPrefix",
 )
 
 import glob
@@ -230,7 +230,7 @@ def Declare(self, products=None):
                 product = self["eupsProduct"]
 
             if "EUPS_DIR" in os.environ:
-                self["ENV"]["PATH"] += os.pathsep + f'{os.environ["EUPS_DIR"]}/bin'
+                self["ENV"]["PATH"] += os.pathsep + f"{os.environ['EUPS_DIR']}/bin"
                 self["ENV"]["EUPS_LOCK_PID"] = os.environ.get("EUPS_LOCK_PID", "-1")
                 if "undeclare" in SCons.Script.COMMAND_LINE_TARGETS or self.GetOption("clean"):
                     if version:
@@ -254,7 +254,7 @@ def Declare(self, products=None):
                     )
 
                     if "eupsPath" in self:
-                        command += f' -Z {self["eupsPath"]}'
+                        command += f" -Z {self['eupsPath']}"
 
                     if version:
                         command += f" {product} {version}"
@@ -262,7 +262,7 @@ def Declare(self, products=None):
                     current += [command + " --current"]
 
                     if self.GetOption("tag"):
-                        command += f' --tag={self.GetOption("tag")}'
+                        command += f" --tag={self.GetOption('tag')}"
 
                     declare += [command]
 
@@ -359,7 +359,7 @@ def InstallDir(self, prefix, dir, ignoreRegex=r"(~$|\.pyc$|\.os?$)", recursive=T
 
 
 @memberOf(SConsEnvironment)
-def InstallEups(env, dest, files=[], presetup=""):
+def InstallEups(env, dest, files=(), presetup=""):
     """Install a ups directory, setting absolute versions as appropriate
     (unless you're installing from the trunk, in which case no versions
     are expanded).
@@ -370,7 +370,7 @@ def InstallEups(env, dest, files=[], presetup=""):
         Environment to use.
     dest : `str`
         Destination directory.
-    files : `list`, optional
+    files : `collections.abc.Sequence`, optional
         List of files to install.  Any build/table files present in ``./ups``
         are automatically added to this list.
     presetup : `dict`, optional
@@ -389,8 +389,10 @@ def InstallEups(env, dest, files=[], presetup=""):
 
     .. code-block:: python
 
-        env.InstallEups(os.path.join(env['prefix'], "ups"),
-                        presetup={"sconsUtils" : env['version']})
+        env.InstallEups(
+            os.path.join(env["prefix"], "ups"),
+            presetup={"sconsUtils": env["version"]},
+        )
     """
     acts = []
     if not env.installing:
@@ -449,9 +451,9 @@ def InstallEups(env, dest, files=[], presetup=""):
         for i in build_obj:
             env.AlwaysBuild(i)
 
-            cmd = f'eups expandbuild -i --version {env["version"]} '
+            cmd = f"eups expandbuild -i --version {env['version']} "
             if "baseversion" in env:
-                cmd += f' --repoversion {env["baseversion"]} '
+                cmd += f" --repoversion {env['baseversion']} "
             cmd += str(i)
             eupsTargets.extend(env.AddPostAction(build_obj, env.Action(f"{cmd}", cmd)))
 

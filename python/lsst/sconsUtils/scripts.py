@@ -369,7 +369,7 @@ class BasicSConscript:
             """Copy source to target, rewriting the shebang"""
             # Currently just use this python
             usepython = utils.whichPython()
-            for targ, src in zip(target, source):
+            for targ, src in zip(target, source, strict=True):
                 with open(str(src)) as srcfd:
                     with open(str(targ), "w") as outfd:
                         first_line = srcfd.readline()
@@ -455,7 +455,7 @@ class BasicSConscript:
         return result
 
     @staticmethod
-    def pybind11(nameList=[], libs="main python", extraSrc=None, addUnderscore=True):
+    def pybind11(nameList=(), libs="main python", extraSrc=None, addUnderscore=True):
         """Convenience function to replace standard ``python/*/SConscript``
         boilerplate.
 
@@ -467,7 +467,7 @@ class BasicSConscript:
 
         Parameters
         ----------
-        nameList : `list`, optional
+        nameList : `collections.abc.Sequence`, optional
             Sequence of pybind11 modules to be built (does not include the
             file extensions).
         libs : `str` or `list`, optional
@@ -642,7 +642,7 @@ class BasicSConscript:
         if swigSrc is None:
             swigSrc = {}
         allSwigSrc = set()
-        for name, node in zip(swigNameList, swigFileList):
+        for name, node in zip(swigNameList, swigFileList, strict=True):
             src = swigSrc.setdefault(name, [])
             allSwigSrc.update(str(element) for element in src)
             src.append(node)
@@ -760,7 +760,7 @@ class BasicSConscript:
         if swigSrc is None:
             swigSrc = {}
         allSwigSrc = set()
-        for name, node in zip(swigNameList, swigFileList):
+        for name, node in zip(swigNameList, swigFileList, strict=True):
             src = swigSrc.setdefault(name, [])
             allSwigSrc.update(str(element) for element in src)
             src.append(node)

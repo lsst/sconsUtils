@@ -167,9 +167,9 @@ class Configuration:
         name ``<root>/doc/<name>.inc``.
     hasDoxygenTag : `bool`, optional
         If True, the package generates a Doxygen TAG file.
-    includeFileDirs : `list`, optional
+    includeFileDirs : `collections.abc.Sequence`, optional
         List of directories that should be searched for include files.
-    libFileDirs : `list`, optional
+    libFileDirs : `collections.abs.Sequence`, optional
         List of directories that should be searched for libraries.
     eupsProduct : `str`
         Name of the EUPS product for the package, if different from the name
@@ -223,8 +223,8 @@ class Configuration:
         headers=(),
         libs=None,
         hasSwigFiles=True,
-        includeFileDirs=["include"],
-        libFileDirs=["lib"],
+        includeFileDirs=("include",),
+        libFileDirs=("lib",),
         hasDoxygenInclude=False,
         hasDoxygenTag=True,
         eupsProduct=None,
