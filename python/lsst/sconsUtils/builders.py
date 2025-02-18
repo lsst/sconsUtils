@@ -633,7 +633,7 @@ def VersionModule(self, filename, versionString=None):
 
             # Write out an entry per line as there can be many names
             outFile.write("__all__ = (\n")
-            for n in names:
+            for n in sorted(names):
                 outFile.write(f'    "{n}",\n')
             outFile.write(")\n")
 
