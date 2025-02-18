@@ -19,29 +19,27 @@ jobs:
 
       - uses: conda-incubator/setup-miniconda@v3
         with:
-          python-version: ${{ matrix.pyversion }}
+          python-version: ${{ matrix.python-version }}
           channels: conda-forge,defaults
-          miniforge-variant: Miniforge3
-          use-mamba: true
           channel-priority: strict
           show-channel-urls: true
 
       - name: Install conda packages used by this package
         shell: bash -l {0}
         run: |
-          mamba install -y -q scons eups compilers ruff flake8
+          conda install -y -q scons eups compilers ruff flake8
 
       # We have two cores so we can speed up the testing with xdist
       - name: Install pytest packages
         shell: bash -l {0}
         run: |
-          mamba install -y -q \
+          conda install -y -q \
             pytest pytest-xdist pytest-cov pytest-session2file
 
       - name: List installed packages
         shell: bash -l {0}
         run: |
-          mamba list
+          conda list
           pip list -v
 
       - name: Build and test
