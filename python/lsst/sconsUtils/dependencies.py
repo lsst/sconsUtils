@@ -735,7 +735,8 @@ def getLibs(env, categories="main"):
                 continue
 #            if category != 'python' and lib == 'nanobind':
 #                continue
-            print(env["packageName", category, lib)
+            print(env["packageName"], category, lib)
+
             libs.append(lib)
     if removeSelf:
         try:
