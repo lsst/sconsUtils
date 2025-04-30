@@ -563,7 +563,7 @@ def _configureCommon():
                     log.info(f"C++20 supported with {cpp20Arg!r}")
                 break
         else:
-            log.fail(f"C++17 extensions could not be enabled for compiler {env.whichCc!r}")
+            log.fail(f"C++20 extensions could not be enabled for compiler {env.whichCc!r}")
         conf.Finish()
 
     #
