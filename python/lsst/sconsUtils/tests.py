@@ -248,7 +248,12 @@ class Control:
             if f.endswith(".cc"):  # look for executable
                 f = os.path.splitext(f)[0]
             else:
-                interpreter = "pytest -Wd --durations=5 --junit-xml=${TARGET}.xml"
+                interpreter = "pytest"
+                interpreter += (
+                    ' -Wd -W "ignore:unclosed database in <sqlite3.Connection object at:ResourceWarning"'
+                )
+                interpreter += " -p no:unraisableexception"
+                interpreter += " --durations=5 --junit-xml=${TARGET}.xml"
                 interpreter += f" --junit-prefix={self.junitPrefix()}"
                 interpreter += " --log-level=DEBUG"
                 interpreter += self._getPytestCoverageCommand()
@@ -433,7 +438,9 @@ class Control:
         # We have decided to use pytest caching so that on reruns we only
         # run failed tests.
         lfnfOpt = "none" if "install" in SCons.Script.COMMAND_LINE_TARGETS else "all"
-        interpreter = f"pytest -Wd --lf --lfnf={lfnfOpt}"
+        interpreter = f"pytest --lf --lfnf={lfnfOpt}"
+        interpreter += ' -Wd -W "ignore:unclosed database in <sqlite3.Connection object at:ResourceWarning"'
+        interpreter += " -p no:unraisableexception"
         interpreter += " --durations=5 --junit-xml=${TARGET} --session2file=${TARGET}.out"
         interpreter += f" --junit-prefix={self.junitPrefix()}"
         interpreter += " --log-level=DEBUG"
