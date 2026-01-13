@@ -755,7 +755,7 @@ def PackageInfo(self, pythonDir, versionString=None):
         # Do not attempt to write hashes and file sizes since these can
         # change if the package is not really installed into an EUPS tree.
         all_files = set()
-        for root, _, files in os.walk(pythonDir):
+        for root, _, files in os.walk(pythonDir, followlinks=True):
             root = root.removeprefix(pythonDir)
             root = root.removeprefix("/")
             all_files.update({os.path.join(root, f) for f in files})
