@@ -671,6 +671,13 @@ def PackageInfo(self, pythonDir, versionString=None):
         else:
             pythonPackageName = state.env["packageName"]
         pythonPackageName = pythonPackageName.replace("_", "-")
+
+    # Documenteer would like to know the project URLs so put them in
+    # metadata if present.
+    urls = []
+    if "urls" in toml_project:
+        urls = [f"{label}, {url}" for label, url in toml_project["urls"].items()]
+
     # The directory name is required to use "_" instead of "-"
     distDir = os.path.join(pythonDir, f"{pythonPackageName.replace('-', '_')}.dist-info")
     filename = os.path.join(distDir, "METADATA")
@@ -688,6 +695,8 @@ def PackageInfo(self, pythonDir, versionString=None):
             print("Metadata-Version: 1.0", file=outFile)
             print(f"Name: {pythonPackageName}", file=outFile)
             print(f"Version: {version}", file=outFile)
+            for url_string in urls:
+                print(f"Project-URL: {url_string}", file=outFile)
 
         if _calcMd5(target[0].abspath) != oldMd5:  # only print if something's changed
             state.log.info(f'PackageInfo(["{target[0]}"], [])')
