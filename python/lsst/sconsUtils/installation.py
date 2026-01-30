@@ -18,7 +18,7 @@ import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
 
 from . import state
-from .utils import memberOf
+from .utils import is_within_tree, memberOf
 from .vcs import git, hg, svn
 
 
@@ -307,12 +307,27 @@ class DirectoryInstaller:
         if not os.path.isdir(destpath):
             state.log.info(f"Creating directory {destpath}")
             os.makedirs(destpath)
+        # Store the real path to the product root for comparison with sub
+        # directories to check soft links. This is the parent directory of
+        # the source target since this installer is called for the python,
+        # doc, tests directories and not globally.
+        source_root = os.path.realpath(os.path.join(source[0].path, ".."))
         for root, dirnames, filenames in os.walk(source[0].path, followlinks=True):
             if not self.recursive:
                 dirnames[:] = []
             else:
                 dirnames[:] = [d for d in dirnames if d != ".svn"]  # ignore .svn tree
             for dirname in dirnames:
+                # Ensure that this directory isn't a symlink taking us outside
+                # the package.
+                source_path = os.path.join(root, dirname)
+                if not is_within_tree(source_path, source_root):
+                    state.log.warn(
+                        f"Skipping install of directory {os.path.realpath(source_path)} which links outside "
+                        f"of product tree at {source_root}."
+                    )
+                    continue
+
                 destpath = os.path.join(prefix, root, dirname)
                 if not os.path.isdir(destpath):
                     state.log.info(f"Creating directory {destpath}")
@@ -322,6 +337,8 @@ class DirectoryInstaller:
                     continue
                 destpath = os.path.join(prefix, root)
                 srcpath = os.path.join(root, filename)
+                if not is_within_tree(srcpath, source_root):
+                    continue
                 state.log.info(f"Copying {srcpath} to {destpath}")
                 shutil.copy(srcpath, destpath)
         return 0
