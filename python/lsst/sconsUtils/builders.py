@@ -16,7 +16,7 @@ from SCons.Script.SConscript import SConsEnvironment
 
 from . import state
 from .installation import determineVersion, getFingerprint
-from .utils import memberOf, needShebangRewrite, whichPython
+from .utils import is_within_tree, memberOf, needShebangRewrite, whichPython
 
 
 @memberOf(SConsEnvironment)
@@ -653,6 +653,7 @@ def PackageInfo(self, pythonDir, versionString=None):
     if not os.path.exists(pythonDir):
         return []
 
+    root_path = os.path.realpath(".")
     # Some information can come from the pyproject file.
     toml_metadata = {}
     if os.path.exists("pyproject.toml"):
@@ -755,7 +756,14 @@ def PackageInfo(self, pythonDir, versionString=None):
         # Do not attempt to write hashes and file sizes since these can
         # change if the package is not really installed into an EUPS tree.
         all_files = set()
-        for root, _, files in os.walk(pythonDir):
+        for root, _, files in os.walk(pythonDir, followlinks=True):
+            if not is_within_tree(root, root_path):
+                # Soft link outside of tree.
+                state.log.warn(
+                    f"Found directory in python tree ({root}), that lives outside of this product. "
+                    f"Not adding to Python package metadata."
+                )
+                continue
             root = root.removeprefix(pythonDir)
             root = root.removeprefix("/")
             all_files.update({os.path.join(root, f) for f in files})

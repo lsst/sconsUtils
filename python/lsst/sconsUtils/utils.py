@@ -6,6 +6,7 @@ __all__ = (
     "Log",
     "_has_OSX_SIP",
     "get_conda_prefix",
+    "is_within_tree",
     "libraryLoaderEnvironment",
     "libraryPathPassThrough",
     "memberOf",
@@ -275,3 +276,26 @@ def use_conda_compilers():
     if os.environ.get("CONDA_BUILD", "0") == "1":
         return True
     return False
+
+
+def is_within_tree(path: str, root: str) -> bool:
+    """Check that a given path is within the root directory.
+
+    Parameters
+    ----------
+    path : `str`
+        Path to check.
+    root : `str`
+        Root of the directory structure.
+
+    Returns
+    -------
+    `True` if the *resolved* path is inside the resolved root directory.
+    """
+    root_real = os.path.realpath(root)
+    path_real = os.path.realpath(path)
+    try:
+        return os.path.commonpath([path_real, root_real]) == root_real
+    except ValueError:
+        # Can happen on Windows if drives differ, etc.
+        return False
