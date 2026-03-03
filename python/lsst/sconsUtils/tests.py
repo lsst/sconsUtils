@@ -580,8 +580,9 @@ class Control:
         # If --cov is used full coverage will be reported for all installed
         # code as well, but that is probably a distraction as for this
         # test run we are only interested in coverage of this package.
-        # Use "python" instead of "." to remove test files from coverage.
-        options += " --cov=."
+        # Specify explicit subdirectories to prevent coverage from getting
+        # confused by URIs ending in .py that look like relative paths.
+        options += " --cov=python --cov=tests"
 
         # Always enabled branch coverage and terminal summary
         options += " --cov-branch --cov-report=term "
