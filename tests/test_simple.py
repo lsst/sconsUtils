@@ -22,7 +22,9 @@
 """
 Very simple tests to show that the test running
 infrastructure can run more than one test file.
-There is nothing scons-specific about these tests.
+There is nothing scons-specific about these tests
+but they must be run with scons running pytest and
+not by simply running pytest.
 """
 
 import os
