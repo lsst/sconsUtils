@@ -1,0 +1,19 @@
+[project]
+title = "lsst-sconsUtils"
+
+[project.python]
+package = "lsst-sconsUtils"
+
+[build]
+clean = true
+
+[sphinx]
+
+nitpick_ignore = [
+]
+nitpick_ignore_regex = [
+]
+
+[sphinx.intersphinx.projects]
+python = "https://docs.python.org/3"
+scons = "https://scons.org/doc/4.10.0/HTML/scons-api/"
