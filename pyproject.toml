@@ -45,10 +45,6 @@ where = ["python"]
 
 [tool.setuptools]
 zip-safe = true
-license-files = ["COPYRIGHT", "LICENSE", "gpl-v3.0.txt", "bsd_license.txt"]
-
-[tool.setuptools.package-data]
-"lsst.pex.config" = ["py.typed", "configs/*.cfg"]
 
 [tool.setuptools.dynamic]
 version = { attr = "lsst_versions.get_lsst_version" }
