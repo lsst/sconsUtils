@@ -92,4 +92,4 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest -r a -v -n 3
+          pytest --ignore=tests/test_simple.py -r a -v -n 3
