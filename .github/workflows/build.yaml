@@ -93,3 +93,4 @@ jobs:
       - name: Run tests
         run: |
           pytest --ignore=tests/test_simple.py -r a -v -n 3
+          scons -j2
