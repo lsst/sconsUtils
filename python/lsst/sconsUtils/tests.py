@@ -223,7 +223,7 @@ class Control:
 
         Parameters
         ----------
-        fileGlob : `str` or `SCons.Environment.Glob`
+        fileGlob : `str` or `SCons.Environment.Base.Glob`
             File matching glob.
 
         Returns

@@ -169,7 +169,7 @@ class Configuration:
         If True, the package generates a Doxygen TAG file.
     includeFileDirs : `collections.abc.Sequence`, optional
         List of directories that should be searched for include files.
-    libFileDirs : `collections.abs.Sequence`, optional
+    libFileDirs : `collections.abc.Sequence`, optional
         List of directories that should be searched for libraries.
     eupsProduct : `str`
         Name of the EUPS product for the package, if different from the name
