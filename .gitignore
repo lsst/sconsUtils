@@ -33,6 +33,8 @@ tests/testFailedTests/tests/.tests
 .coverage
 python/*.dist-info/
 
+dist/
+
 # IDEs
 .idea
 .vscode
