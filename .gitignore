@@ -22,6 +22,7 @@ python/lsst/sconsUtils/version.py
 python/lsst_sconsUtils.egg-info/
 
 # docs
+doc/api
 doc/html
 doc/doxygen.conf
 doc/sconsUtils.tag
