@@ -530,7 +530,7 @@ class BasicSConscript:
         respectively.
 
         This essentially just forwards all arguments (which should be passed as
-        keyword arguments) to `lsst.sconsUtils.env.Doxygen()``.
+        keyword arguments) to `lsst.sconsUtils.env.Doxygen`.
 
         Parameters
         ----------
