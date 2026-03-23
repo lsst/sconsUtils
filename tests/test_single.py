@@ -20,39 +20,19 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """
-Tests for sconsUtils
-
-Run with:
-   python test_all.py
-or by typing
-   pytest
+Very simple tests to show that the test running infrastructure can run tests
+standalone in a separate pytest process when required. There is nothing
+scons-specific about these tests.
 """
 
-import os
-import subprocess
 import unittest
 
 
-class SconsUtilsTestCase(unittest.TestCase):
-    """A test case for sconsUtils"""
+class SimplestPossibleSingleTestCase(unittest.TestCase):
+    """Tests that don't rely on any external code."""
 
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
-
-    def testCheckErrorCode(self):
-        self.assertTrue(
-            subprocess.call(
-                f"""
-                cd "{os.path.dirname(__file__)}/testFailedTests"
-                scons > /dev/null 2>&1
-            """,
-                shell=True,
-            ),
-            "Failed to detect failed tests",
-        )
+    def testSimple(self):
+        self.assertEqual(2 + 2, 4)
 
 
 if __name__ == "__main__":
