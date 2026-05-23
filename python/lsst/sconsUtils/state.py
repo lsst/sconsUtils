@@ -43,7 +43,7 @@ import SCons.Conftest
 import SCons.Script
 
 from . import eupsForScons
-from .utils import get_conda_prefix, use_conda_compilers
+from .utils import get_conda_prefix
 
 SCons.Script.EnsureSConsVersion(2, 1, 0)
 
@@ -343,28 +343,27 @@ def _initEnvironment():
         #
         env["LIBDIRSUFFIX"] = "/"
 
-    if use_conda_compilers():
-        _conda_prefix = get_conda_prefix()
-        if "LDFLAGS" in os.environ:
-            LDFLAGS = shlex.split(os.environ["LDFLAGS"])  # respects quoting!
-            LDFLAGS = [v for v in LDFLAGS if v[0:2] != "-L"]
-            # this one breaks some linking in the eups build
-            LDFLAGS = [v for v in LDFLAGS if v != "-Wl,-dead_strip_dylibs"]
-            env.Append(LIBPATH=[f"{_conda_prefix}/lib"])
-            env.Append(LINKFLAGS=LDFLAGS)
-            env.Append(SHLINKFLAGS=LDFLAGS)
+    _conda_prefix = get_conda_prefix()
+    if "LDFLAGS" in os.environ:
+        LDFLAGS = shlex.split(os.environ["LDFLAGS"])  # respects quoting!
+        LDFLAGS = [v for v in LDFLAGS if v[0:2] != "-L"]
+        # this one breaks some linking in the eups build
+        LDFLAGS = [v for v in LDFLAGS if v != "-Wl,-dead_strip_dylibs"]
+        env.Append(LIBPATH=[f"{_conda_prefix}/lib"])
+        env.Append(LINKFLAGS=LDFLAGS)
+        env.Append(SHLINKFLAGS=LDFLAGS)
 
-        if "CFLAGS" in os.environ:
-            CFLAGS = shlex.split(os.environ["CFLAGS"])  # respects quoting!
-            CFLAGS = [v for v in CFLAGS if v[0:2] != "-I"]
-            env.Append(CCFLAGS=CFLAGS)
+    if "CFLAGS" in os.environ:
+        CFLAGS = shlex.split(os.environ["CFLAGS"])  # respects quoting!
+        CFLAGS = [v for v in CFLAGS if v[0:2] != "-I"]
+        env.Append(CCFLAGS=CFLAGS)
 
-        if "CXXFLAGS" in os.environ:
-            CXXFLAGS = shlex.split(os.environ["CXXFLAGS"])  # respects quoting!
-            CXXFLAGS = [v for v in CXXFLAGS if v[0:2] != "-I"]
-            CXXFLAGS = [v for v in CXXFLAGS if v[0:5] != "-std="]  # we let LSST set this
-            CXXFLAGS = [v for v in CXXFLAGS if v not in CFLAGS]  # conda puts in duplicates
-            env.Append(CXXFLAGS=CXXFLAGS)
+    if "CXXFLAGS" in os.environ:
+        CXXFLAGS = shlex.split(os.environ["CXXFLAGS"])  # respects quoting!
+        CXXFLAGS = [v for v in CXXFLAGS if v[0:2] != "-I"]
+        CXXFLAGS = [v for v in CXXFLAGS if v[0:5] != "-std="]  # we let LSST set this
+        CXXFLAGS = [v for v in CXXFLAGS if v not in CFLAGS]  # conda puts in duplicates
+        env.Append(CXXFLAGS=CXXFLAGS)
 
     #
     # Remove valid options from the arguments
@@ -507,51 +506,15 @@ def _configureCommon():
     if env.GetOption("clean") or env.GetOption("no_exec") or env.GetOption("help"):
         env.whichCc = "unknown"  # who cares? We're cleaning/not execing, not building
     else:
-        if use_conda_compilers():
-            # conda-build expects you to use the compilers as-is
-            env["CC"] = os.environ["CC"]
-            env["CXX"] = os.environ["CXX"]
+        # conda-build expects you to use the compilers as-is
+        env["CC"] = os.environ["CC"]
+        env["CXX"] = os.environ["CXX"]
 
-            conf = env.Configure(custom_tests={"ClassifyCc": ClassifyCc})
-            env.whichCc, env.ccVersion = conf.ClassifyCc()
-            if not env.GetOption("no_progress"):
-                log.info(f"CC is **CONDA** {env.whichCc} version {env.ccVersion}")
-            conf.Finish()
-        else:
-            if env["cc"] != "":
-                CC = CXX = None
-                if re.search(r"^gcc(-\d+(\.\d+)*)?( |$)", env["cc"]):
-                    CC = env["cc"]
-                    CXX = re.sub(r"^gcc", "g++", CC)
-                elif re.search(r"^icc( |$)", env["cc"]):
-                    CC = env["cc"]
-                    CXX = re.sub(r"^icc", "icpc", CC)
-                elif re.search(r"^clang( |$)", env["cc"]):
-                    CC = env["cc"]
-                    CXX = re.sub(r"^clang", "clang++", CC)
-                elif re.search(r"^cc( |$)", env["cc"]):
-                    CC = env["cc"]
-                    CXX = re.sub(r"^cc", "c++", CC)
-                else:
-                    log.fail(f"Unrecognised compiler: {env['cc']}")
-                env0 = SCons.Script.Environment()
-                if CC and env["CC"] == env0["CC"]:
-                    env["CC"] = CC
-                if CC and env["CXX"] == env0["CXX"]:
-                    env["CXX"] = CXX
-            conf = env.Configure(custom_tests={"ClassifyCc": ClassifyCc})
-            env.whichCc, env.ccVersion = conf.ClassifyCc()
-
-            # If we have picked up a default compiler called gcc that is really
-            # clang, we call it clang to avoid confusion (gcc on macOS has
-            # subtly different options)
-            if not env["cc"] and env.whichCc == "clang" and env["CC"] == "gcc":
-                env["CC"] = "clang"
-                env["CXX"] = "clang++"
-
-            if not env.GetOption("no_progress"):
-                log.info(f"CC is {env.whichCc} version {env.ccVersion}")
-            conf.Finish()
+        conf = env.Configure(custom_tests={"ClassifyCc": ClassifyCc})
+        env.whichCc, env.ccVersion = conf.ClassifyCc()
+        if not env.GetOption("no_progress"):
+            log.info(f"CC is **CONDA** {env.whichCc} version {env.ccVersion}")
+        conf.Finish()
 
     #
     # Compiler flags, including CCFLAGS for C and C++ and CXXFLAGS for C++ only

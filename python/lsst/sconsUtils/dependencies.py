@@ -33,7 +33,7 @@ import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
 
 from . import eupsForScons, installation, state
-from .utils import get_conda_prefix, use_conda_compilers
+from .utils import get_conda_prefix
 
 
 def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath=None, noCfgFile=False):
@@ -101,24 +101,20 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
 
     _conda_prefix = get_conda_prefix()
     # _conda_prefix is usually around, even if not using conda compilers
-    if use_conda_compilers():
-        # if using the conda-force conda compilers, they handle rpath for us
-        _conda_lib = f"{_conda_prefix}/lib"
-        state.env["LIBPATH"] = [_conda_lib]
-        if platform == "darwin":
-            state.env["_RPATH"] = f"-rpath {_conda_lib}"
-        else:
-            state.env.AppendUnique(RPATH=[_conda_lib])
+    # if using the conda-force conda compilers, they handle rpath for us
+    _conda_lib = f"{_conda_prefix}/lib"
+    state.env["LIBPATH"] = [_conda_lib]
+    if platform == "darwin":
+        state.env["_RPATH"] = f"-rpath {_conda_lib}"
     else:
-        state.env["LIBPATH"] = []
+        state.env.AppendUnique(RPATH=[_conda_lib])
 
     # XCPPPATH is a new variable defined by sconsUtils - it's like CPPPATH,
     # but the headers found there aren't treated as dependencies.  This can
     # make scons a lot faster.
     state.env["XCPPPATH"] = []
 
-    if use_conda_compilers():
-        state.env.Append(XCPPPATH=[f"{_conda_prefix}/include"])
+    state.env.Append(XCPPPATH=[f"{_conda_prefix}/include"])
 
     # XCPPPPREFIX is a replacement for SCons' built-in INCPREFIX. It is used
     # when compiling headers in XCPPPATH directories. Here, we set it to
