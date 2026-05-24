@@ -1,0 +1,1397 @@
+#!/usr/bin/env python
+import argparse
+import json
+import logging
+import os
+import platform
+import shutil
+import subprocess
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+import eups
+
+class TargetExistsError(RuntimeError):
+    """Raised when an install target already exists (strict install)."""
+
+
+CXX_SUFFIXES = {
+    ".c",
+    ".cc",
+    ".cpp",
+    ".cxx",
+    ".h",
+    ".hh",
+    ".hpp",
+    ".hxx",
+    ".o",
+    ".d",
+    ".a",
+}
+BUILD_SUFFIXES = {".cmake", ".table", ".log"}
+BUILD_NAMES = {
+    "SConscript",
+    "SConstruct",
+    "CMakeCache.txt",
+    "CMakeLists.txt",
+    "Makefile",
+    "makefile",
+    "GNUmakefile",
+}
+
+PATH_VARS = {
+    "PATH",
+    "PYTHONPATH",
+    "LD_LIBRARY_PATH",
+    "DYLD_LIBRARY_PATH",
+    "DYLD_FALLBACK_LIBRARY_PATH",
+    "MANPATH",
+    "PKG_CONFIG_PATH",
+    "CMAKE_PREFIX_PATH",
+    "LSST_LIBRARY_PATH",
+}
+
+DEFAULT_IGNORE_PATTERNS = shutil.ignore_patterns(
+    *("*" + s for s in CXX_SUFFIXES),
+    *("*" + s for s in BUILD_SUFFIXES),
+    *BUILD_NAMES,
+)
+
+
+def make_ignore_patterns(include_source: bool):
+    """Return the shutil ignore callable appropriate for the source-inclusion setting.
+
+    Parameters
+    ----------
+    include_source : bool
+        When True, no files are excluded and ``None`` is returned so that
+        ``shutil.copytree`` copies everything.
+
+    Returns
+    -------
+    callable or None
+        A ``shutil.ignore_patterns`` callable that filters out C/C++ source,
+        build artifacts, and build-system files, or ``None`` if
+        ``include_source`` is True.
+    """
+    return None if include_source else DEFAULT_IGNORE_PATTERNS
+
+
+def skip_file(path: Path, *, include_source: bool) -> bool:
+    """Return True if the file should be excluded from the install.
+
+    Parameters
+    ----------
+    path : Path
+        The file to test.
+    include_source : bool
+        When True, no files are skipped regardless of extension or name.
+
+    Returns
+    -------
+    bool
+        True if the file matches a C/C++ source, object, build artifact, or
+        build-system name and ``include_source`` is False.
+    """
+    if include_source:
+        return False
+    return (
+        path.suffix.lower() in CXX_SUFFIXES
+        or path.suffix.lower() in BUILD_SUFFIXES
+        or path.name in BUILD_NAMES
+    )
+
+
+def guess_conda_prefix() -> Path | None:
+    """Try to determine the active conda environment prefix.
+
+    Checks ``CONDA_PREFIX``.
+
+    Returns
+    -------
+    Path or None
+        The conda prefix, or ``None`` if it cannot be determined.
+    """
+    p = os.environ.get("CONDA_PREFIX")
+    if p:
+        return Path(p)
+    return None
+
+
+def conda_site_packages(conda_prefix: Path) -> Path:
+    """Return the site-packages directory inside a conda prefix.
+
+    Parameters
+    ----------
+    conda_prefix : Path
+        Root of the conda environment.
+
+    Returns
+    -------
+    Path
+        Platform-appropriate site-packages path (``Lib/site-packages`` on
+        Windows, ``lib/pythonX.Y/site-packages`` elsewhere).
+    """
+    major, minor = sys.version_info[:2]
+    if platform.system() == "Windows":
+        return conda_prefix / "Lib" / "site-packages"
+    return conda_prefix / "lib" / f"python{major}.{minor}" / "site-packages"
+
+
+def resolve_install_locations(
+    *, rootdir: Path | None, conda: bool, prefix: Path | None
+):
+    """Resolve the installation prefix and the three destination directories.
+
+    Exactly one of ``prefix``, ``rootdir``, or ``conda`` should be active;
+    if none are provided the default ``output/`` directory is used.
+
+    Parameters
+    ----------
+    rootdir : Path or None
+        Explicit root directory; layout is ``<rootdir>/{bin,lib,python}``.
+    conda : bool
+        Install into the active conda environment discovered via
+        :func:`guess_conda_prefix`.
+    prefix : Path or None
+        Explicit install prefix; layout is ``<prefix>/{bin,lib,python}``.
+
+    Returns
+    -------
+    prefix_root : Path
+        Root prefix where the manifest will be written.
+    lib_dest : Path
+        Destination for shared libraries.
+    bin_dest : Path
+        Destination for executables.
+    python_dest : Path
+        Destination for Python packages / modules.
+
+    Raises
+    ------
+    RuntimeError
+        If ``conda`` is True, but the conda prefix cannot be determined.
+    """
+    if prefix is not None:
+        pr = prefix
+        return pr, pr / "lib", pr / "bin", pr / "python"
+
+    if conda:
+        conda_prefix = guess_conda_prefix()
+        if conda_prefix is None:
+            raise RuntimeError(
+                "Could not guess conda environment. Activate conda env or set CONDA_PREFIX."
+            )
+        pr = conda_prefix
+        return pr, pr / "lib", pr / "bin", conda_site_packages(pr)
+
+    if rootdir is not None:
+        pr = rootdir
+        return pr, pr / "lib", pr / "bin", pr / "python"
+
+    pr = Path("output")
+    return pr, pr / "lib", pr / "bin", pr / "python"
+
+
+def manifest_path(prefix_root: Path) -> Path:
+    """Return the path to the bundle manifest file.
+
+    Parameters
+    ----------
+    prefix_root : Path
+        Root of the installation prefix.
+
+    Returns
+    -------
+    Path
+        Absolute path to ``.bundle_manifest.json`` inside ``prefix_root``.
+    """
+    return prefix_root / ".bundle_manifest.json"
+
+
+def load_manifest(prefix_root: Path, log: logging.Logger) -> dict:
+    """Load the bundle manifest from disk, returning a blank manifest if absent or unreadable.
+
+    Parameters
+    ----------
+    prefix_root : Path
+        Root of the installation prefix.
+    log : logging.Logger
+        Logger used to emit a warning when the manifest cannot be parsed.
+
+    Returns
+    -------
+    dict
+        Manifest dictionary with keys ``version``, ``products``, ``files``,
+        ``dirs``, and ``layout``.
+    """
+    mp = manifest_path(prefix_root)
+    if not mp.exists():
+        return {"version": 2, "products": [], "files": [], "dirs": [], "layout": {}}
+    try:
+        return json.loads(mp.read_text())
+    except Exception:
+        log.warning("Could not read manifest %s; starting fresh", mp)
+        return {"version": 2, "products": [], "files": [], "dirs": [], "layout": {}}
+
+
+def save_manifest(
+    prefix_root: Path, manifest: dict, *, dry_run: bool, log: logging.Logger
+) -> None:
+    """Serialize the manifest dict to disk as indented JSON.
+
+    Parameters
+    ----------
+    prefix_root : Path
+        Root of the installation prefix; the manifest is written to
+        ``<prefix_root>/.bundle_manifest.json``.
+    manifest : dict
+        The manifest to serialise.
+    dry_run : bool
+        When True, only log the action without writing anything.
+    log : logging.Logger
+        Logger used to report the dry-run action.
+    """
+    mp = manifest_path(prefix_root)
+    if dry_run:
+        log.info("[dry-run] would write manifest: %s", mp)
+        return
+    mp.write_text(json.dumps(manifest, indent=2, sort_keys=True))
+
+
+def add_copied(manifest: dict, dest: Path, prefix_root: Path, *, was_dir: bool) -> None:
+    """Record a copied path in the manifest, avoiding duplicates.
+
+    Paths inside ``prefix_root`` are stored as relative POSIX strings;
+    external paths are stored as absolute POSIX strings.
+
+    Parameters
+    ----------
+    manifest : dict
+        Manifest dict whose ``"files"`` or ``"dirs"`` list is updated in-place.
+    dest : Path
+        The destination path that was (or will be) created.
+    prefix_root : Path
+        Root of the installation prefix, used to compute a relative path.
+    was_dir : bool
+        True if ``dest`` is a directory; False if it is a file or symlink.
+    """
+    key = "dirs" if was_dir else "files"
+    try:
+        rel = dest.resolve().relative_to(prefix_root.resolve()).as_posix()
+        store = rel
+    except Exception:
+        store = dest.as_posix()
+
+    if store not in manifest[key]:
+        manifest[key].append(store)
+
+
+def uninstall(prefix_root: Path, log: logging.Logger, *, dry_run: bool = False) -> int:
+    """Remove files and directories recorded in the manifest, then delete the manifest.
+
+    Files are removed in reverse order; directories are removed deepest-first
+    and only if empty.
+
+    Parameters
+    ----------
+    prefix_root : Path
+        Root of the installation prefix where the manifest lives.
+    log : logging.Logger
+        Logger for progress and error messages.
+    dry_run : bool, optional
+        When True, log actions without removing anything.  Default False.
+
+    Returns
+    -------
+    int
+        0 on success, 2 if no manifest was found.
+    """
+    mp = manifest_path(prefix_root)
+    if not mp.exists():
+        log.error("No manifest found at %s; nothing to uninstall", mp)
+        return 2
+
+    manifest = load_manifest(prefix_root, log)
+
+    def to_abs(p: str) -> Path:
+        pp = Path(p)
+        return pp if pp.is_absolute() else (prefix_root / pp)
+
+    files = [to_abs(p) for p in manifest.get("files", [])]
+    dirs = [to_abs(p) for p in manifest.get("dirs", [])]
+
+    for p in reversed(files):
+        if p.is_symlink() or p.is_file():
+            log.info("%sremove file: %s", "[dry-run] " if dry_run else "", p)
+            if not dry_run:
+                try:
+                    p.unlink()
+                except FileNotFoundError:
+                    pass
+
+    for d in sorted(dirs, key=lambda x: len(str(x)), reverse=True):
+        log.info("%srmdir (if empty): %s", "[dry-run] " if dry_run else "", d)
+        if not dry_run:
+            try:
+                d.rmdir()
+            except OSError:
+                pass
+
+    log.info("%sremove manifest: %s", "[dry-run] " if dry_run else "", mp)
+    if not dry_run:
+        try:
+            mp.unlink()
+        except FileNotFoundError:
+            pass
+    return 0
+
+
+def copy_entry(
+    src: Path,
+    dest: Path,
+    log: logging.Logger,
+    manifest: dict,
+    prefix_root: Path,
+    *,
+    dry_run: bool,
+    on_conflict: str = "error",
+) -> None:
+    """Copy a single file or symlink to ``dest``, recording it in the manifest.
+
+    Parameters
+    ----------
+    src : Path
+        Source file or symlink to copy.
+    dest : Path
+        Destination path (parent directories are created as needed).
+    log : logging.Logger
+        Logger for progress messages.
+    manifest : dict
+        Manifest dict updated in-place with the destination path.
+    prefix_root : Path
+        Root of the installation prefix, passed to :func:`add_copied`.
+    dry_run : bool
+        When True, log the action without copying.
+    on_conflict : {"error", "skip", "overwrite"}, optional
+        Action when ``dest`` already exists.  Default ``"error"``.
+
+    Raises
+    ------
+    TargetExistsError
+        When ``on_conflict`` is ``"error"`` and ``dest`` already exists.
+    """
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    if dest.exists() or dest.is_symlink():
+        if on_conflict == "error":
+            raise TargetExistsError(f"Target already exists: {dest}")
+        elif on_conflict == "skip":
+            log.info("skip (exists): %s", dest)
+            return
+        # overwrite: remove existing before copying
+
+    log.info("%scopy: %s -> %s", "[dry-run] " if dry_run else "", src, dest)
+    add_copied(manifest, dest, prefix_root, was_dir=False)
+    add_copied(manifest, dest.parent, prefix_root, was_dir=True)
+
+    if dry_run:
+        return
+
+    if dest.is_symlink() or dest.exists():
+        dest.unlink()
+
+    if src.is_symlink():
+        os.symlink(os.readlink(src), dest)
+    else:
+        shutil.copy2(src, dest)
+
+
+def copytree_record(
+    src: Path,
+    dest: Path,
+    log: logging.Logger,
+    manifest: dict,
+    prefix_root: Path,
+    *,
+    dry_run: bool,
+    ignore,
+    on_conflict: str = "error",
+) -> None:
+    """Recursively copy a directory tree to ``dest``, recording all paths in the manifest.
+
+    Parameters
+    ----------
+    src : Path
+        Source directory to copy.  No-op if ``src`` is not a directory.
+    dest : Path
+        Destination directory.
+    log : logging.Logger
+        Logger for progress messages.
+    manifest : dict
+        Manifest dict updated in-place with all destination paths.
+    prefix_root : Path
+        Root of the installation prefix, passed to :func:`add_copied`.
+    dry_run : bool
+        When True, log the action without copying.
+    ignore : callable or None
+        ``shutil.ignore_patterns`` callable passed to ``shutil.copytree``,
+        or ``None`` to copy everything.
+    on_conflict : {"error", "skip", "overwrite"}, optional
+        Action when ``dest`` already exists.  Default ``"error"``.
+
+    Raises
+    ------
+    TargetExistsError
+        When ``on_conflict`` is ``"error"`` and ``dest`` already exists.
+    """
+    if not src.is_dir():
+        return
+
+    if dest.exists():
+        if on_conflict == "error":
+            raise TargetExistsError(f"Target already exists: {dest}")
+        # skip and overwrite both merge directories; only files are skipped/overwritten
+
+    dirs_exist_ok = on_conflict in ("overwrite", "skip")
+    log.info("%scopytree: %s -> %s", "[dry-run] " if dry_run else "", src, dest)
+    add_copied(manifest, dest, prefix_root, was_dir=True)
+
+    if dry_run:
+        return
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        src,
+        dest,
+        symlinks=True,
+        dirs_exist_ok=dirs_exist_ok,
+        ignore=ignore,
+    )
+
+    for p in dest.rglob("*"):
+        if p.is_file() or p.is_symlink():
+            add_copied(manifest, p, prefix_root, was_dir=False)
+        elif p.is_dir():
+            add_copied(manifest, p, prefix_root, was_dir=True)
+
+
+def collect_setup_paths(
+    e: eups.Eups, product_name: str, flavor: str, log: logging.Logger, visited=None
+):
+    """Yield ``(env_var, path)`` pairs from the EUPS table of a product and its dependencies.
+
+    Performs a depth-first recursive walk through ``setupRequired`` /
+    ``setupOptional`` directives, emitting every ``envPrepend``,
+    ``envAppend``, and ``envSet`` entry encountered.
+
+    Parameters
+    ----------
+    e : eups.Eups
+        Active EUPS instance used for product lookup.
+    product_name : str
+        Name of the top-level EUPS product to process.
+    flavor : str
+        EUPS flavor string (typically the OS name from ``platform.system()``).
+    log : logging.Logger
+        Logger for warnings about missing products and exceptions.
+    visited : set or None, optional
+        Set of already-visited product names used to break cycles.  A new set
+        is created automatically when ``None``.
+
+    Yields
+    ------
+    tuple[str, str]
+        ``(env_var, path)`` pairs, e.g. ``("PYTHONPATH", "/opt/lsst/python")``.
+    """
+    if visited is None:
+        visited = set()
+    if product_name in visited:
+        return
+    visited.add(product_name)
+
+    product = e.findProduct(product_name)
+    if product is None:
+        log.warning("Product not found: %s", product_name)
+        return
+
+    try:
+        table = product.getTable()
+        if not table:
+            return
+
+        for action in table.actions(flavor):
+            if action.cmd in ("envPrepend", "envAppend", "envSet"):
+                yield action.args[0], action.args[1]
+            elif action.cmd in ("setupRequired", "setupOptional"):
+                yield from collect_setup_paths(e, action.args[0], flavor, log, visited)
+    except Exception:
+        log.exception("Failed processing product: %s", product_name)
+
+
+def collect_env_actions(
+    e: eups.Eups, product_name: str, flavor: str, log: logging.Logger, visited=None
+):
+    """Yield ``(cmd, env_var, value)`` for all env actions in a product and its dependencies.
+
+    Like :func:`collect_setup_paths` but yields the action command so callers
+    can distinguish ``envSet`` from ``envPrepend``/``envAppend``.
+
+    Parameters
+    ----------
+    e : eups.Eups
+        Active EUPS instance.
+    product_name : str
+        Name of the top-level EUPS product.
+    flavor : str
+        EUPS flavor string.
+    log : logging.Logger
+        Logger for warnings.
+    visited : set or None, optional
+        Set of already-visited product names.
+
+    Yields
+    ------
+    tuple[str, str, str]
+        ``(cmd, env_var, value)`` triples, e.g.
+        ``("envSet", "AFW_DIR", "/opt/lsst/afw")``.
+    """
+    if visited is None:
+        visited = set()
+    if product_name in visited:
+        return
+    visited.add(product_name)
+
+    product = e.findProduct(product_name)
+    if product is None:
+        log.warning("Product not found: %s", product_name)
+        return
+
+    dir_var = product.envarDirName()
+    if dir_var and product.dir:
+        yield "envSet", dir_var, product.dir
+
+    try:
+        table = product.getTable()
+        if not table:
+            return
+        for action in table.actions(flavor):
+            if action.cmd in ("envPrepend", "envAppend", "envSet"):
+                yield action.cmd, action.args[0], action.args[1]
+            elif action.cmd in ("setupRequired", "setupOptional"):
+                yield from collect_env_actions(e, action.args[0], flavor, log, visited)
+    except Exception:
+        log.exception("Failed processing product: %s", product_name)
+
+
+def build_paths_map(
+    e: eups.Eups, products: list[str], flavor: str, log: logging.Logger
+):
+    """Build a mapping of environment variable to ordered, deduplicated path list.
+
+    Calls :func:`collect_setup_paths` for each top-level product and merges
+    the results, preserving first-seen order per variable.
+
+    Parameters
+    ----------
+    e : eups.Eups
+        Active EUPS instance.
+    products : list[str]
+        Names of top-level EUPS products to traverse.
+    flavor : str
+        EUPS flavour string passed to :func:`collect_setup_paths`.
+    log : logging.Logger
+        Logger forwarded to :func:`collect_setup_paths`.
+
+    Returns
+    -------
+    defaultdict[str, list[str]]
+        Mapping from environment variable name (e.g. ``"PYTHONPATH"``) to
+        the list of paths that should be added to that variable.
+    """
+    paths = defaultdict(list)
+    seen_per_var = defaultdict(set)
+
+    for prod in products:
+        for var, path in collect_setup_paths(e, prod, flavor, log):
+            if path not in seen_per_var[var]:
+                seen_per_var[var].add(path)
+                paths[var].append(path)
+
+    return paths
+
+
+def build_non_path_env(
+    e: eups.Eups, products: list[str], flavor: str, log: logging.Logger
+) -> dict[str, str]:
+    """Return a mapping of non-path environment variable names to their values.
+
+    Variables in :data:`PATH_VARS` are skipped.  ``envSet`` actions are
+    recorded with last-seen value winning.  ``envPrepend`` / ``envAppend``
+    actions accumulate into a colon-separated list in encounter order.
+
+    Parameters
+    ----------
+    e : eups.Eups
+        Active EUPS instance.
+    products : list[str]
+        Top-level EUPS product names to traverse.
+    flavor : str
+        EUPS flavor string.
+    log : logging.Logger
+        Logger forwarded to :func:`collect_env_actions`.
+
+    Returns
+    -------
+    dict[str, str]
+        Mapping from variable name to its resolved value string.
+    """
+    set_vars: dict[str, str] = {}
+    list_vars: dict[str, list[str]] = defaultdict(list)
+    seen_list: dict[str, set[str]] = defaultdict(set)
+
+    for prod in products:
+        for cmd, var, value in collect_env_actions(e, prod, flavor, log):
+            if var in PATH_VARS:
+                continue
+            if cmd == "envSet":
+                set_vars[var] = value
+            else:
+                if value not in seen_list[var]:
+                    seen_list[var].add(value)
+                    list_vars[var].append(value)
+
+    result = dict(set_vars)
+    for var, values in list_vars.items():
+        result[var] = ":".join(values)
+    return result
+
+
+def fix_rpath_linux(so_file: Path, lib_dir: Path, log: logging.Logger):
+    """Set the RPATH of a shared library on Linux to a ``$ORIGIN``-relative value.
+
+    Uses ``patchelf --set-rpath`` to make the library self-contained
+    regardless of where the prefix is installed.
+
+    Parameters
+    ----------
+    so_file : Path
+        Shared library (``.so``) file to patch.
+    lib_dir : Path
+        Directory containing the bundle's shared libraries; used as the RPATH
+        target.
+    log : logging.Logger
+        Logger for the post-patch info message.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``patchelf`` is not on ``PATH``.
+    subprocess.CalledProcessError
+        If ``patchelf`` exits with a non-zero status.
+    """
+    rel_path = os.path.relpath(lib_dir, so_file.parent)
+    rpath = f"$ORIGIN/{rel_path}"
+    log.info("Fixing RPATH: %s -> %s", so_file, rpath)
+    subprocess.run(
+        ["patchelf", "--set-rpath", rpath, str(so_file)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    log.debug("Fixed RPATH: %s", so_file.name)
+
+
+def fix_install_name_macos(so_file: Path, lib_dir: Path, log: logging.Logger):
+    """Rewrite dylib dependencies and the install name of a Mach-O binary on macOS.
+
+    For each absolute dependency whose filename exists in ``lib_dir``, the
+    reference is rewritten to ``@loader_path/<rel>/<name>``.  The binary's own
+    install name is updated to ``@rpath/<name>`` if it is currently absolute.
+
+    Parameters
+    ----------
+    so_file : Path
+        Mach-O shared library or extension to patch.
+    lib_dir : Path
+        Directory containing the bundle's shared libraries.
+    log : logging.Logger
+        Logger for per-dependency info messages.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``otool`` or ``install_name_tool`` is not on ``PATH``.
+    subprocess.CalledProcessError
+        If either tool exits with a non-zero status.
+    """
+    log.debug("Checking install names: %s", so_file)
+    result = subprocess.run(
+        ["otool", "-L", str(so_file)], check=True, capture_output=True, text=True
+    )
+    lines = result.stdout.strip().split("\n")[1:]
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        dep_path = line.split("(")[0].strip()
+        dep_name = Path(dep_path).name
+        new_dep = lib_dir / dep_name
+        if new_dep.exists() and not dep_path.startswith("@"):
+            rel_path = os.path.relpath(lib_dir, so_file.parent)
+            new_path = f"@loader_path/{rel_path}/{dep_name}"
+            subprocess.run(
+                ["install_name_tool", "-change", dep_path, new_path, str(so_file)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            log.info("Fixed dependency: %s: %s -> %s", so_file.name, dep_name, new_path)
+
+    result = subprocess.run(
+        ["otool", "-D", str(so_file)], check=True, capture_output=True, text=True
+    )
+    lines = result.stdout.strip().split("\n")
+    if len(lines) > 1:
+        install_name = lines[1].strip()
+        if install_name and not install_name.startswith("@"):
+            new_install_name = f"@rpath/{so_file.name}"
+            subprocess.run(
+                ["install_name_tool", "-id", new_install_name, str(so_file)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            log.info("Fixed install_name: %s -> %s", so_file.name, new_install_name)
+
+
+def is_macho_or_elf(path: Path) -> bool:
+    """Return True if the file begins with a known Mach-O or ELF magic number.
+
+    Parameters
+    ----------
+    path : Path
+        File to inspect.
+
+    Returns
+    -------
+    bool
+        True for ELF (``\x7fELF``) and all Mach-O variants (32/64-bit,
+        fat binary); False on any read error or unrecognized magic.
+    """
+    try:
+        with open(path, "rb") as f:
+            magic = f.read(4)
+        return magic[:4] in (
+            b"\x7fELF",
+            b"\xfe\xed\xfa\xce",
+            b"\xfe\xed\xfa\xcf",
+            b"\xca\xfe\xba\xbe",
+            b"\xcf\xfa\xed\xfe",
+        )
+    except Exception:
+        return False
+
+
+def fix_binary_paths(
+    lib_dir: Path,
+    python_dir: Path,
+    bin_dir: Path,
+    log: logging.Logger,
+    *,
+    dry_run: bool,
+    installed_files: list[Path],
+):
+    """Apply platform RPATH / install-name fixes to the installed binaries.
+
+    Only files recorded in ``installed_files`` are processed; pre-existing
+    files in the destination directories are left untouched.  Symlinks are
+    always skipped.
+
+    Parameters
+    ----------
+    lib_dir : Path
+        Directory containing the bundle's shared libraries; used as the RPATH
+        target for all patched files.
+    python_dir : Path
+        Root of the Python package tree; ``.so`` files anywhere beneath it
+        are patched.
+    bin_dir : Path
+        Directory containing executables; files here are patched if they are
+        executable and contain a Mach-O or ELF header.
+    log : logging.Logger
+        Logger for progress and skip messages.
+    dry_run : bool
+        When True, skip all patching and log a single notice.
+    installed_files : list[Path]
+        Absolute paths of files copied during this install run.
+
+    Raises
+    ------
+    FileNotFoundError
+        If a required system tool (``patchelf``, ``otool``,
+        ``install_name_tool``) is not on ``PATH``.
+    subprocess.CalledProcessError
+        If a patching tool exits with a non-zero status.
+    """
+    if dry_run:
+        log.info("[dry-run] skipping RPATH/install_name fixing")
+        return
+
+    is_macos = platform.system() == "Darwin"
+    so_ext = ".dylib" if is_macos else ".so"
+    lib_res = lib_dir.resolve()
+    python_res = python_dir.resolve()
+    bin_res = bin_dir.resolve()
+
+    n_patched = 0
+    for path in installed_files:
+        if path.is_symlink() or not path.is_file():
+            log.debug("Skip (symlink/non-file): %s", path)
+            continue
+
+        res = path.resolve()
+        if res.is_relative_to(lib_res) and so_ext in path.name:
+            kind = "library"
+        elif res.is_relative_to(python_res) and path.suffix == ".so":
+            kind = "python extension"
+        elif res.parent == bin_res and os.access(path, os.X_OK) and is_macho_or_elf(path):
+            kind = "binary"
+        else:
+            log.debug("Skip (not patchable): %s", path)
+            continue
+
+        log.info("Patching %s (%s)", path, kind)
+        if is_macos:
+            fix_install_name_macos(path, lib_dir, log)
+        else:
+            fix_rpath_linux(path, lib_dir, log)
+        n_patched += 1
+
+    log.info("Patched %d file(s)", n_patched)
+
+
+# ----------------------------
+# Copy operations
+# ----------------------------
+def copy_from_path_list(
+    src_dirs,
+    dest_dir: Path,
+    log: logging.Logger,
+    manifest: dict,
+    prefix_root: Path,
+    *,
+    label: str,
+    dry_run: bool,
+    include_source: bool,
+    on_conflict: str = "error",
+):
+    """Copy flat files from each source directory in ``src_dirs`` into ``dest_dir``.
+
+    Only immediate children that are files or symlinks are copied
+    (subdirectories are ignored).  Files matched by :func:`skip_file` are
+    excluded unless ``include_source`` is True.
+
+    Parameters
+    ----------
+    src_dirs : iterable[str | Path]
+        Ordered list of source directories to scan.
+    dest_dir : Path
+        Destination flat directory (e.g. the bundle's ``lib/`` or ``bin/``).
+    log : logging.Logger
+        Logger for debug and progress messages.
+    manifest : dict
+        Manifest dict updated in-place via :func:`add_copied`.
+    prefix_root : Path
+        Root of the installation prefix, passed to :func:`add_copied`.
+    label : str
+        Short label used in debug messages (e.g. ``"lib"`` or ``"bin"``).
+    dry_run : bool
+        When True, log actions without copying.
+    include_source : bool
+        When True, source and build files are not excluded.
+    on_conflict : {"error", "skip", "overwrite"}, optional
+        Action when a destination file already exists.  Default ``"error"``.
+
+    Raises
+    ------
+    TargetExistsError
+        When ``on_conflict`` is ``"error"`` and a destination file already
+        exists.
+    """
+    add_copied(manifest, dest_dir, prefix_root, was_dir=True)
+    for src_dir in src_dirs:
+        src = Path(src_dir)
+        if not src.is_dir():
+            log.debug("%s: skip non-dir %s", label, src)
+            continue
+        log.info("%s: scanning %s", label, src)
+        for f in src.iterdir():
+            if (f.is_file() or f.is_symlink()) and not skip_file(
+                f, include_source=include_source
+            ):
+                dest = dest_dir / f.name
+                copy_entry(
+                    f,
+                    dest,
+                    log,
+                    manifest,
+                    prefix_root,
+                    dry_run=dry_run,
+                    on_conflict=on_conflict,
+                )
+
+
+def copy_pythonpath(
+    src_dirs,
+    python_dest: Path,
+    log: logging.Logger,
+    manifest: dict,
+    prefix_root: Path,
+    *,
+    dry_run: bool,
+    include_source: bool,
+    on_conflict: str = "error",
+):
+    """Copy PYTHONPATH entries (packages and top-level modules) into ``python_dest``.
+
+    Directories are copied recursively via :func:`copytree_record`; plain
+    files are copied via :func:`copy_entry`.  Files matched by
+    :func:`skip_file` are excluded unless ``include_source`` is True.
+
+    Parameters
+    ----------
+    src_dirs : iterable[str | Path]
+        Ordered list of directories from the ``PYTHONPATH`` env variable.
+    python_dest : Path
+        Destination Python directory (e.g. ``site-packages`` in a conda env).
+    log : logging.Logger
+        Logger for debug and progress messages.
+    manifest : dict
+        Manifest dict updated in-place via :func:`add_copied`.
+    prefix_root : Path
+        Root of the installation prefix, passed to :func:`add_copied`.
+    dry_run : bool
+        When True, log actions without copying.
+    include_source : bool
+        When True, source and build files are not excluded.
+    on_conflict : {"error", "skip", "overwrite"}, optional
+        Action when a destination path already exists.  Default ``"error"``.
+
+    Raises
+    ------
+    TargetExistsError
+        When ``on_conflict`` is ``"error"`` and a destination path already
+        exists.
+    """
+    add_copied(manifest, python_dest, prefix_root, was_dir=True)
+    ignore = make_ignore_patterns(include_source)
+
+    for src_dir in src_dirs:
+        src = Path(src_dir)
+        if not src.is_dir():
+            log.debug("python: skip non-dir %s", src)
+            continue
+        log.info("python: scanning %s", src)
+
+        for f in src.iterdir():
+            dest = python_dest / f.name
+            if f.is_dir():
+                copytree_record(
+                    f,
+                    dest,
+                    log,
+                    manifest,
+                    prefix_root,
+                    dry_run=dry_run,
+                    ignore=ignore,
+                    on_conflict=on_conflict,
+                )
+            else:
+                if not skip_file(f, include_source=include_source):
+                    copy_entry(
+                        f,
+                        dest,
+                        log,
+                        manifest,
+                        prefix_root,
+                        dry_run=dry_run,
+                        on_conflict=on_conflict,
+                    )
+
+
+# ----------------------------
+# CLI / logging
+# ----------------------------
+def parse_args(argv=None):
+    """Parse command-line arguments for the install / uninstall tool.
+
+    Parameters
+    ----------
+    argv : list[str] or None, optional
+        Argument list to parse.  When ``None``, ``sys.argv[1:]`` is used.
+
+    Returns
+    -------
+    argparse.Namespace
+        Parsed arguments with subcommand-specific attributes.
+    """
+    p = argparse.ArgumentParser(
+        description="Install/uninstall a relocatable bundle (bin/lib/python) built from EUPS setup paths."
+    )
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    p_install = sub.add_parser(
+        "install", help="Copy files and write a manifest (strict on existing targets)"
+    )
+    p_install.add_argument(
+        "--prefix",
+        help="Install root prefix. Layout: <prefix>/{bin,lib,python}. Mutually exclusive with --conda/--rootdir.",
+    )
+    p_install.add_argument(
+        "--rootdir",
+        help="Install into ROOTDIR/{bin,lib,python}. Mutually exclusive with --prefix/--conda.",
+    )
+    p_install.add_argument(
+        "--conda",
+        action="store_true",
+        help="Install into the active (or inferred) conda env: <conda>/{bin,lib,site-packages}.",
+    )
+    p_install.add_argument(
+        "--product",
+        action="append",
+        dest="products",
+        default=[],
+        help="Top-level EUPS product to include (repeatable). Default: lsst_distrib.",
+    )
+    p_install.add_argument(
+        "--include-source",
+        action="store_true",
+        help="Include source/build files (disables the default filters/ignore patterns).",
+    )
+    p_install.add_argument(
+        "--no-fix", action="store_true", help="Do not fix RPATH/install_name"
+    )
+    p_install.add_argument(
+        "--force", action="store_true", help="If a manifest exists, uninstall first"
+    )
+    p_install.add_argument(
+        "--on-conflict",
+        choices=["error", "skip", "overwrite"],
+        default="error",
+        help="Action when a destination file/dir already exists: error (default), skip, or overwrite.",
+    )
+    p_install.add_argument(
+        "--dry-run", action="store_true", help="Log actions without copying/writing"
+    )
+
+    p_dump = sub.add_parser(
+        "dump-env",
+        help="Print a bash script exporting non-PATH env vars from the active EUPS setup",
+    )
+    p_dump.add_argument(
+        "--product",
+        action="append",
+        dest="products",
+        default=[],
+        help="Top-level EUPS product to include (repeatable). Default: lsst_distrib.",
+    )
+    p_dump.add_argument(
+        "--output",
+        "-o",
+        help="Write the bash script to this file instead of stdout.",
+    )
+
+    p_uninstall = sub.add_parser(
+        "uninstall", help="Remove files listed in the manifest"
+    )
+    p_uninstall.add_argument(
+        "--prefix",
+        required=True,
+        help="Install root prefix (same root used during install; where the manifest lives).",
+    )
+    p_uninstall.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Log what would be removed without removing",
+    )
+
+    p.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Increase verbosity (-v=INFO, -vv=DEBUG)",
+    )
+    return p.parse_args(argv)
+
+
+def setup_logging(verbose: int, dry_run: bool = False):
+    """Configure the root logger and return the named bundle logger.
+
+    Parameters
+    ----------
+    verbose : int
+        Verbosity count: 0 → WARNING, 1 → INFO, 2+ → DEBUG.
+    dry_run : bool, optional
+        When True, force level to at least INFO so dry-run output is always
+        visible regardless of ``verbose``.
+
+    Returns
+    -------
+    logging.Logger
+        Logger named ``"bundle-eups"``.
+    """
+    level = logging.WARNING
+    if verbose >= 2:
+        level = logging.DEBUG
+    elif verbose == 1 or dry_run:
+        level = logging.INFO
+    logging.basicConfig(level=level, format="%(levelname)s: %(message)s")
+    return logging.getLogger("bundle-eups")
+
+
+def do_install(args, log: logging.Logger) -> int:
+    """Execute the ``install`` subcommand.
+
+    Resolves install locations, optionally uninstalls a previous bundle,
+    copies libraries / binaries / Python packages from active EUPS setup
+    paths, patches binary RPATHs / install names, and writes the manifest.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed CLI arguments from :func:`parse_args`.
+    log : logging.Logger
+        Logger for progress and error messages.
+
+    Returns
+    -------
+    int
+        0 on success, 2 on any error (conflict, missing tool, etc.).
+    """
+    products = args.products or ["lsst_distrib"]
+    flavor = platform.system()
+    selected = sum(x is not None for x in [args.prefix, args.rootdir]) + (
+        1 if args.conda else 0
+    )
+    if selected > 1:
+        log.error("Use only one of --prefix, --rootdir, or --conda")
+        return 2
+
+    prefix_arg = Path(args.prefix) if args.prefix else None
+    rootdir_arg = Path(args.rootdir) if args.rootdir else None
+
+    try:
+        prefix_root, lib_dest, bin_dest, python_dest = resolve_install_locations(
+            rootdir=rootdir_arg,
+            conda=bool(args.conda),
+            prefix=prefix_arg,
+        )
+    except RuntimeError as ex:
+        log.error(str(ex))
+        return 2
+    mp = manifest_path(prefix_root)
+    if mp.exists() and args.force:
+        log.info("Existing manifest found; uninstalling first (--force)")
+        rc = uninstall(prefix_root, log, dry_run=args.dry_run)
+        if rc != 0:
+            return rc
+    elif mp.exists() and not args.force:
+        log.error("Manifest already exists at %s (use --force or uninstall first)", mp)
+        return 2
+
+    if not args.dry_run:
+        prefix_root.mkdir(parents=True, exist_ok=True)
+        lib_dest.mkdir(parents=True, exist_ok=True)
+        bin_dest.mkdir(parents=True, exist_ok=True)
+        python_dest.mkdir(parents=True, exist_ok=True)
+
+    e = eups.Eups()
+    paths = build_paths_map(e, products, flavor, log)
+
+    manifest = {
+        "version": 1,
+        "products": products,
+        "include_source": bool(args.include_source),
+        "layout": {
+            "prefix_root": str(prefix_root),
+            "bin": str(bin_dest),
+            "lib": str(lib_dest),
+            "python": str(python_dest),
+            "mode": "conda"
+            if args.conda
+            else (
+                "rootdir" if args.rootdir else ("prefix" if args.prefix else "default")
+            ),
+        },
+        "files": [],
+        "dirs": [],
+    }
+
+    try:
+        lib_vars = {
+            "LD_LIBRARY_PATH",
+            "DYLD_LIBRARY_PATH",
+        }
+        libs = []
+        for v in lib_vars:
+            for p in paths.get(v, []):
+                if p not in libs:
+                    libs.append(p)
+        copy_from_path_list(
+            libs,
+            lib_dest,
+            log,
+            manifest,
+            prefix_root,
+            label="lib",
+            dry_run=args.dry_run,
+            include_source=args.include_source,
+            on_conflict=args.on_conflict,
+        )
+
+        copy_from_path_list(
+            paths.get("PATH", []),
+            bin_dest,
+            log,
+            manifest,
+            prefix_root,
+            label="bin",
+            dry_run=args.dry_run,
+            include_source=args.include_source,
+            on_conflict=args.on_conflict,
+        )
+
+        copy_pythonpath(
+            paths.get("PYTHONPATH", []),
+            python_dest,
+            log,
+            manifest,
+            prefix_root,
+            dry_run=args.dry_run,
+            include_source=args.include_source,
+            on_conflict=args.on_conflict,
+        )
+    except TargetExistsError as ex:
+        log.error(str(ex))
+        save_manifest(prefix_root, manifest, dry_run=args.dry_run, log=log)
+        return 2
+
+    if not args.no_fix:
+        try:
+
+            def _to_abs(p: str) -> Path:
+                pp = Path(p)
+                return pp if pp.is_absolute() else (prefix_root / pp)
+
+            fix_binary_paths(
+                lib_dest,
+                python_dest,
+                bin_dest,
+                log,
+                dry_run=args.dry_run,
+                installed_files=[_to_abs(f) for f in manifest["files"]],
+            )
+        except FileNotFoundError as ex:
+            log.error("Required tool not found: %s", ex.filename)
+            save_manifest(prefix_root, manifest, dry_run=args.dry_run, log=log)
+            return 2
+        except subprocess.CalledProcessError as ex:
+            log.error("Binary patch tool failed: %s", ex)
+            save_manifest(prefix_root, manifest, dry_run=args.dry_run, log=log)
+            return 2
+
+    manifest["files"] = sorted(set(manifest["files"]))
+    manifest["dirs"] = sorted(set(manifest["dirs"]), key=len, reverse=True)
+    save_manifest(prefix_root, manifest, dry_run=args.dry_run, log=log)
+
+    if not args.dry_run:
+        print("\n" + "=" * 60)
+        print("Installed bundle.")
+        print(f"  root:   {prefix_root}")
+        print(f"  bin:    {bin_dest}")
+        print(f"  lib:    {lib_dest}")
+        print(f"  python: {python_dest}")
+        print(
+            f"\nUninstall with:\n  {Path(__file__).name} uninstall --prefix {prefix_root}"
+        )
+        print("=" * 60)
+
+    return 0
+
+
+def do_dump_env(args, log: logging.Logger) -> int:
+    """Execute the ``dump-env`` subcommand.
+
+    Collects non-path environment variables from the active EUPS setup and
+    writes a bash script of ``export VAR=value`` lines.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed CLI arguments.
+    log : logging.Logger
+        Logger for progress messages.
+
+    Returns
+    -------
+    int
+        0 on success.
+    """
+    products = args.products or ["lsst_distrib"]
+    flavor = platform.system()
+
+    e = eups.Eups()
+    env_vars = build_non_path_env(e, products, flavor, log)
+
+    lines = [
+        "#!/usr/bin/env bash",
+        "# Auto-generated: non-PATH environment variables from EUPS setup",
+        "",
+    ]
+    for var, value in sorted(env_vars.items()):
+        escaped = value.replace("'", "'\\''")
+        lines.append(f"export {var}='{escaped}'")
+    lines.append("")
+
+    output = "\n".join(lines)
+    if args.output:
+        Path(args.output).write_text(output)
+        log.info("Written to %s", args.output)
+    else:
+        print(output, end="")
+
+    return 0
+
+
+def main(argv=None):
+    """Entry point: parse arguments, dispatch to install or uninstall.
+
+    Parameters
+    ----------
+    argv : list[str] or None, optional
+        Argument list.  When ``None``, ``sys.argv[1:]`` is used.
+
+    Returns
+    -------
+    int
+        Exit code (0 success, 2 error).
+    """
+    args = parse_args(argv)
+    log = setup_logging(args.verbose, dry_run=getattr(args, "dry_run", False))
+
+    if args.cmd == "uninstall":
+        return uninstall(Path(args.prefix), log, dry_run=args.dry_run)
+    if args.cmd == "install":
+        return do_install(args, log)
+    if args.cmd == "dump-env":
+        return do_dump_env(args, log)
+
+    log.error("Unknown command")
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
