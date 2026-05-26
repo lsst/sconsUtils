@@ -45,10 +45,6 @@ PATH_VARS = {
     "PYTHONPATH",
     "LD_LIBRARY_PATH",
     "DYLD_LIBRARY_PATH",
-    "DYLD_FALLBACK_LIBRARY_PATH",
-    "MANPATH",
-    "PKG_CONFIG_PATH",
-    "CMAKE_PREFIX_PATH",
     "LSST_LIBRARY_PATH",
 }
 
@@ -167,6 +163,8 @@ def resolve_install_locations(
         Destination for executables.
     python_dest : Path
         Destination for Python packages / modules.
+    include_dest : Path
+        Destination for C/C++ header files.
 
     Raises
     ------
@@ -175,7 +173,7 @@ def resolve_install_locations(
     """
     if prefix is not None:
         pr = prefix
-        return pr, pr / "lib", pr / "bin", pr / "python"
+        return pr, pr / "lib", pr / "bin", pr / "python", pr / "include"
 
     if conda:
         conda_prefix = guess_conda_prefix()
@@ -184,14 +182,14 @@ def resolve_install_locations(
                 "Could not guess conda environment. Activate conda env or set CONDA_PREFIX."
             )
         pr = conda_prefix
-        return pr, pr / "lib", pr / "bin", conda_site_packages(pr)
+        return pr, pr / "lib", pr / "bin", conda_site_packages(pr), pr / "include"
 
     if rootdir is not None:
         pr = rootdir
-        return pr, pr / "lib", pr / "bin", pr / "python"
+        return pr, pr / "lib", pr / "bin", pr / "python", pr / "include"
 
     pr = Path("output")
-    return pr, pr / "lib", pr / "bin", pr / "python"
+    return pr, pr / "lib", pr / "bin", pr / "python", pr / "include"
 
 
 def manifest_path(prefix_root: Path) -> Path:
@@ -475,6 +473,54 @@ def copytree_record(
             add_copied(manifest, p, prefix_root, was_dir=False)
         elif p.is_dir():
             add_copied(manifest, p, prefix_root, was_dir=True)
+
+
+def collect_product_dirs(
+    e: eups.Eups, product_name: str, flavor: str, log: logging.Logger, visited=None
+):
+    """Yield the directory of each product in the dependency tree.
+
+    Parameters
+    ----------
+    e : eups.Eups
+        Active EUPS instance.
+    product_name : str
+        Name of the top-level EUPS product.
+    flavor : str
+        EUPS flavor string.
+    log : logging.Logger
+        Logger for warnings.
+    visited : set or None, optional
+        Already-visited product names (cycle guard).
+
+    Yields
+    ------
+    str
+        ``product.dir`` for each product that has one.
+    """
+    if visited is None:
+        visited = set()
+    if product_name in visited:
+        return
+    visited.add(product_name)
+
+    product = e.findProduct(product_name)
+    if product is None:
+        log.warning("Product not found: %s", product_name)
+        return
+
+    if product.dir:
+        yield product.dir
+
+    try:
+        table = product.getTable()
+        if not table:
+            return
+        for action in table.actions(flavor):
+            if action.cmd in ("setupRequired", "setupOptional"):
+                yield from collect_product_dirs(e, action.args[0], flavor, log, visited)
+    except Exception:
+        log.exception("Failed processing product: %s", product_name)
 
 
 def collect_setup_paths(
@@ -1021,6 +1067,79 @@ def copy_pythonpath(
                     )
 
 
+def copy_include_paths(
+    src_dirs,
+    include_dest: Path,
+    log: logging.Logger,
+    manifest: dict,
+    prefix_root: Path,
+    *,
+    dry_run: bool,
+    on_conflict: str = "error",
+):
+    """Copy C/C++ header trees from ``CPATH`` entries into ``include_dest``.
+
+    Header files are always included regardless of ``include_source`` — that
+    filter targets build artefacts, not installed headers.  Subdirectory
+    structure is preserved so e.g. ``include/lsst/afw/image.h`` is retained.
+
+    Parameters
+    ----------
+    src_dirs : iterable[str | Path]
+        Ordered list of directories from the ``CPATH`` env variable.
+    include_dest : Path
+        Destination include directory (e.g. ``<prefix>/include``).
+    log : logging.Logger
+        Logger for debug and progress messages.
+    manifest : dict
+        Manifest dict updated in-place via :func:`add_copied`.
+    prefix_root : Path
+        Root of the installation prefix, passed to :func:`add_copied`.
+    dry_run : bool
+        When True, log actions without copying.
+    on_conflict : {"error", "skip", "overwrite"}, optional
+        Action when a destination path already exists.  Default ``"error"``.
+
+    Raises
+    ------
+    TargetExistsError
+        When ``on_conflict`` is ``"error"`` and a destination path already
+        exists.
+    """
+    add_copied(manifest, include_dest, prefix_root, was_dir=True)
+
+    for src_dir in src_dirs:
+        src = Path(src_dir)
+        if not src.is_dir():
+            log.debug("include: skip non-dir %s", src)
+            continue
+        log.info("include: scanning %s", src)
+
+        for f in src.iterdir():
+            dest = include_dest / f.name
+            if f.is_dir():
+                copytree_record(
+                    f,
+                    dest,
+                    log,
+                    manifest,
+                    prefix_root,
+                    dry_run=dry_run,
+                    ignore=None,
+                    on_conflict=on_conflict,
+                )
+            elif f.is_file() or f.is_symlink():
+                copy_entry(
+                    f,
+                    dest,
+                    log,
+                    manifest,
+                    prefix_root,
+                    dry_run=dry_run,
+                    on_conflict=on_conflict,
+                )
+
+
 # ----------------------------
 # CLI / logging
 # ----------------------------
@@ -1184,7 +1303,7 @@ def do_install(args, log: logging.Logger) -> int:
     rootdir_arg = Path(args.rootdir) if args.rootdir else None
 
     try:
-        prefix_root, lib_dest, bin_dest, python_dest = resolve_install_locations(
+        prefix_root, lib_dest, bin_dest, python_dest, include_dest = resolve_install_locations(
             rootdir=rootdir_arg,
             conda=bool(args.conda),
             prefix=prefix_arg,
@@ -1207,6 +1326,7 @@ def do_install(args, log: logging.Logger) -> int:
         lib_dest.mkdir(parents=True, exist_ok=True)
         bin_dest.mkdir(parents=True, exist_ok=True)
         python_dest.mkdir(parents=True, exist_ok=True)
+        include_dest.mkdir(parents=True, exist_ok=True)
 
     e = eups.Eups()
     paths = build_paths_map(e, products, flavor, log)
@@ -1220,6 +1340,7 @@ def do_install(args, log: logging.Logger) -> int:
             "bin": str(bin_dest),
             "lib": str(lib_dest),
             "python": str(python_dest),
+            "include": str(include_dest),
             "mode": "conda"
             if args.conda
             else (
@@ -1274,6 +1395,24 @@ def do_install(args, log: logging.Logger) -> int:
             include_source=args.include_source,
             on_conflict=args.on_conflict,
         )
+
+        include_dirs = []
+        seen_inc = set()
+        for prod in products:
+            for prod_dir in collect_product_dirs(e, prod, flavor, log):
+                inc = str(Path(prod_dir) / "include")
+                if inc not in seen_inc and Path(inc).is_dir():
+                    seen_inc.add(inc)
+                    include_dirs.append(inc)
+        copy_include_paths(
+            include_dirs,
+            include_dest,
+            log,
+            manifest,
+            prefix_root,
+            dry_run=args.dry_run,
+            on_conflict=args.on_conflict,
+        )
     except TargetExistsError as ex:
         log.error(str(ex))
         save_manifest(prefix_root, manifest, dry_run=args.dry_run, log=log)
@@ -1310,10 +1449,11 @@ def do_install(args, log: logging.Logger) -> int:
     if not args.dry_run:
         print("\n" + "=" * 60)
         print("Installed bundle.")
-        print(f"  root:   {prefix_root}")
-        print(f"  bin:    {bin_dest}")
-        print(f"  lib:    {lib_dest}")
-        print(f"  python: {python_dest}")
+        print(f"  root:    {prefix_root}")
+        print(f"  bin:     {bin_dest}")
+        print(f"  lib:     {lib_dest}")
+        print(f"  python:  {python_dest}")
+        print(f"  include: {include_dest}")
         print(
             f"\nUninstall with:\n  {Path(__file__).name} uninstall --prefix {prefix_root}"
         )
