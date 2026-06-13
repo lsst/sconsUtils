@@ -466,6 +466,8 @@ class Control:
         interpreter += f" --junit-prefix={self.junitPrefix()}"
         interpreter += " --log-level=DEBUG"
         interpreter += self._getPytestCoverageCommand()
+        if lfnfOpt == "none":
+            interpreter += " --no-cov"
 
         # Ignore doxygen build directories since they can confuse pytest
         # test collection
