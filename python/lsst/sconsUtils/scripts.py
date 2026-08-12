@@ -23,6 +23,7 @@
 files.
 """
 
+import glob
 import os.path
 import re
 import shlex
@@ -420,9 +421,13 @@ class BasicSConscript:
                     os.chmod(str(targ), newmode)
 
         if src is None:
-            src = Glob("#bin.src/*")
+            # Ask the file system rather than SCons.  Glob() reports every
+            # entry SCons knows about in a directory, including nodes that no
+            # file corresponds to, and only a file can be rewritten.  Sort
+            # for a deterministic build.
+            src = sorted(glob.glob(os.path.join(Dir("#bin.src").abspath, "*")))
         for s in src:
-            filename = str(s)
+            filename = os.path.basename(str(s))
             # Do not try to rewrite files starting with non-letters
             if filename != "SConscript" and re.match("[A-Za-z]", filename):
                 result = state.env.Command(
