@@ -11,13 +11,19 @@ into a conda environment (:func:`bake`):
 
 * ``python`` trees are merged into ``site-packages`` (so no ``PYTHONPATH``),
 * ``lib``/``bin`` are copied into the env, dereferencing symlinks,
+* a product's top-level ``include`` tree is copied into ``<prefix>/include``
+  (:func:`build_include_copy_ops`) so C++ headers are available without
+  ``<PKG>_DIR``,
 * copied binaries have their RPATH rewritten to ``<prefix>/lib`` via
   ``patchelf`` (Linux) or ``install_name_tool`` (macOS) so nothing needs
   ``LD_LIBRARY_PATH``/``DYLD_LIBRARY_PATH``,
 * files that already exist are skipped (duplicates), with a warning only when
   the existing file differs from the source (``.py`` files that differ only in
   blank lines, trailing whitespace or comments count as the same and are
-  silent), and
+  silent),
+* non-build resource dirs (``config``/``policy``/``data`` ...) that no
+  ``python/.../resources`` link exposes are reported
+  (:func:`check_resource_dirs`) since they will not reach the baked env, and
 * a :class:`Manifest` is written so a bake can be undone (:func:`uninstall`).
 
 Re-baking into an environment that already holds a bake first uninstalls that
@@ -25,7 +31,7 @@ previous bake (using its manifest) so the environment starts clean; without
 this a second bake would record the first bake's files as duplicates and orphan
 them.  Pass ``--no-clean`` to opt out.
 
-Run ``python eups_bake.py --help`` for the command-line interface.
+Run with ``--help`` for the command-line interface.
 
 Caveat: a few products put their package *root* (not a ``python`` subdir) on
 ``PYTHONPATH``; for those the whole product tree (docs/tests/build logs) is
@@ -500,6 +506,106 @@ def build_data_copy_ops(product: "Product", share_dir: str) -> List[CopyOp]:
     return _tree_ops(src_data, dst_root, "data", _default_ignore)
 
 
+def build_include_copy_ops(product: "Product", include_dir: str) -> List[CopyOp]:
+    """Plan copies of ``product``'s ``include`` tree into ``<prefix>/include``.
+
+    C++ headers live in a product's top-level ``include`` dir, which EUPS puts
+    on no environment variable :func:`classify` tracks, so they are handled by
+    convention like :func:`build_data_copy_ops`: every product that ships an
+    ``include`` tree has its headers copied into ``include_dir`` (the conda
+    env's ``include``), preserving their relative path exactly as ``lib_dirs``
+    map into ``lib``.  Build inputs (``.c``/``.cc``/``.o`` ...) are dropped by
+    :func:`_default_ignore`; headers pass through.  Since headers are not ELF /
+    Mach-O binaries, :func:`fix_rpaths` skips them.  Returns an empty list when
+    the product has no ``include`` dir.
+    """
+    src_inc = os.path.join(product.dir, "include")
+    if not os.path.isdir(src_inc):
+        return []
+    return _tree_ops(src_inc, include_dir, "include", _default_ignore)
+
+
+# Top-level product dirs that are build inputs/outputs, developer-facing, or
+# already handled by python/lib/bin/include copies -- everything else counts as
+# a "resource" dir (config, policy, data, schemas, pipelines, corrections, ...).
+_BUILD_DIRS = frozenset(
+    {
+        "bin", "bin.src", "doc", "docs", "examples", "lib", "python", "src",
+        "tests", "ups", "include", "__pycache__",
+    }
+)
+
+
+def find_resource_dirs(product_dir: str) -> List[str]:
+    """Return ``product_dir``'s top-level non-build dirs (sorted).
+
+    Auto-discovers resource dirs -- any top-level directory not in
+    :data:`_BUILD_DIRS` and not hidden (name starting with ``.``, e.g. ``.git``
+    / ``.github``), so ``config``, ``policy``, ``data``, ``schemas``,
+    ``pipelines``, ``corrections``, ... are found without a hardcoded list.
+    """
+    out: List[str] = []
+    try:
+        entries = sorted(os.listdir(product_dir))
+    except OSError:
+        return out
+    for entry in entries:
+        if entry in _BUILD_DIRS or entry.startswith("."):
+            continue
+        if os.path.isdir(os.path.join(product_dir, entry)):
+            out.append(entry)
+    return out
+
+
+def baked_resource_names(python_ops: List[CopyOp]) -> set:
+    """Return the resource-dir names that these python copies actually bake.
+
+    A resource dir reaches the baked env only if its contents are copied
+    through the python tree under a ``.../resources/<name>/...`` path (via the
+    ``python/lsst/<dotted>/resources/<name>`` symlink, or a real copy shipped
+    there).  This reads those names straight off the planned copy destinations,
+    so both the symlink and real-copy layouts are counted.
+    """
+    names = set()
+    for op in python_ops:
+        parts = op.dst.split(os.sep)
+        try:
+            i = parts.index("resources")
+        except ValueError:
+            continue
+        if i + 1 < len(parts):
+            names.add(parts[i + 1])
+    return names
+
+
+def check_resource_dirs(
+    product: "Product",
+    python_ops: List[CopyOp],
+    warn: Optional[Callable[[str], None]] = None,
+) -> List[str]:
+    """Warn about ``product``'s resource dirs that the bake will not install.
+
+    A top-level resource dir (see :func:`find_resource_dirs`) reaches the baked
+    env only when it is exposed under the python tree as
+    ``python/lsst/<dotted>/resources/<dir>`` (so its contents land in
+    ``site-packages/.../resources/<dir>`` where ``resource://`` resolves).  Any
+    resource dir with no such link is not reachable EUPS-lessly; this reports
+    each one through ``warn`` and returns their names (sorted).  Nothing is
+    modified -- the fix (adding the symlink) is a per-package change.
+    """
+    if warn is None:
+        warn = lambda _msg: None  # noqa: E731
+
+    baked = baked_resource_names(python_ops)
+    unlinked = [d for d in find_resource_dirs(product.dir) if d not in baked]
+    for d in unlinked:
+        warn(
+            f"{product.name}: '{d}/' not installed (no python/.../resources/{d} "
+            f"link; not reachable via resource:// in the baked env)"
+        )
+    return unlinked
+
+
 def _library_path_var(system: str) -> str:
     """Return the dynamic-library search-path variable for ``system``."""
     return "DYLD_LIBRARY_PATH" if system == "Darwin" else "LD_LIBRARY_PATH"
@@ -681,9 +787,13 @@ def bake(
     ``PYTHONPATH`` or ``LD_LIBRARY_PATH``.  For each product named in
     ``data_packages`` (default :data:`DEFAULT_DATA_PACKAGES`), the product's
     ``data`` tree is also copied into ``<prefix>/share/<name>/data`` so its
-    runtime data is found without ``<PKG>_DIR``.  A :class:`Manifest` recording
-    what was created is written to ``<prefix>/share/eups_bake/manifest.json``
-    (unless ``dry_run``) and returned.
+    runtime data is found without ``<PKG>_DIR``.  Each product's ``include``
+    tree is copied into ``<prefix>/include`` (:func:`build_include_copy_ops`),
+    and any non-build resource dir with no ``python/.../resources`` link is
+    reported (:func:`check_resource_dirs`) as unreachable in the baked env.  A
+    :class:`Manifest` recording what was created is written to
+    ``<prefix>/share/eups_bake/manifest.json`` (unless ``dry_run``) and
+    returned.
 
     When ``clean_existing`` (the default) and a manifest from a previous bake
     already lives at that path, that bake is uninstalled first so a re-bake
@@ -707,6 +817,7 @@ def bake(
     lib_dir = os.path.join(prefix, "lib")
     bin_dir = os.path.join(prefix, "bin")
     share_dir = os.path.join(prefix, "share")
+    include_dir = os.path.join(prefix, "include")
 
     if clean_existing:
         prior_path = _default_manifest_path(prefix)
@@ -719,10 +830,23 @@ def bake(
             uninstall(prior, dry_run=dry_run, warn=warn)
 
     ops: List[CopyOp] = []
+    unlinked_resources: List[str] = []
     for product in products:
-        ops.extend(build_copy_ops(product, site, lib_dir, bin_dir))
+        product_ops = build_copy_ops(product, site, lib_dir, bin_dir)
+        ops.extend(product_ops)
         if product.name in data_packages:
             ops.extend(build_data_copy_ops(product, share_dir))
+        ops.extend(build_include_copy_ops(product, include_dir))
+        # Report resource dirs (config/policy/data/...) that no resources link
+        # exposes, so they will not reach the baked env.
+        python_ops = [o for o in product_ops if o.kind == "python"]
+        unlinked_resources.extend(check_resource_dirs(product, python_ops, warn=warn))
+
+    if unlinked_resources:
+        warn(
+            f"{len(unlinked_resources)} resource dirs not installed in the baked "
+            f"env (no python/.../resources link)"
+        )
 
     created, skipped = execute_copies(ops, dry_run=dry_run, warn=warn)
 
