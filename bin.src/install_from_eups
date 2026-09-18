@@ -16,7 +16,12 @@ into a conda environment (:func:`bake`):
   ``<PKG>_DIR``,
 * copied binaries have their RPATH rewritten to ``<prefix>/lib`` via
   ``patchelf`` (Linux) or ``install_name_tool`` (macOS) so nothing needs
-  ``LD_LIBRARY_PATH``/``DYLD_LIBRARY_PATH``,
+  ``LD_LIBRARY_PATH``/``DYLD_LIBRARY_PATH``; on macOS, dependency load commands
+  that name a co-baked library are additionally rewritten to ``@rpath/<name>``
+  (LSST dylibs use bare-name install ids that dyld will not resolve through an
+  rpath otherwise) and each patched binary is ad-hoc re-signed (``codesign``)
+  since ``install_name_tool`` invalidates the signature and arm64 macOS refuses
+  to load an invalidly-signed Mach-O,
 * files that already exist are skipped (duplicates), with a warning only when
   the existing file differs from the source (``.py`` files that differ only in
   blank lines, trailing whitespace or comments count as the same and are
@@ -648,16 +653,89 @@ def _is_patchable(path: str, system: str) -> bool:
     return is_macho(path) if system == "Darwin" else is_elf(path)
 
 
-def _rpath_command(path: str, lib_dir: str, system: str) -> List[str]:
-    """Build the command that points ``path``'s runtime search at ``lib_dir``.
+def _macho_deps(path: str, reader: Callable[[List[str]], str]) -> List[str]:
+    """Return the dependency install names recorded in Mach-O ``path``.
 
-    Linux uses ``patchelf --set-rpath`` (absolute ``lib_dir``, replacing any
-    existing RPATH); macOS adds ``lib_dir`` as an ``@rpath`` search directory
-    via ``install_name_tool -add_rpath``.
+    Parses ``otool -L`` output: the first line is the file itself (dropped) and
+    each remaining line is ``<install-name> (compatibility version ...)`` — the
+    trailing parenthesised versions are stripped, leaving the install name
+    exactly as the load command records it (``@rpath/...``, an absolute path, or
+    a bare ``lib*.dylib``).  ``reader`` runs the command and returns its stdout.
+    """
+    out = reader(["otool", "-L", path])
+    deps: List[str] = []
+    for line in out.splitlines()[1:]:
+        line = line.strip()
+        if not line:
+            continue
+        # Drop the trailing "(compatibility version ..., current version ...)".
+        idx = line.rfind(" (compatibility version ")
+        deps.append(line[:idx] if idx != -1 else line)
+    return deps
+
+
+def _macho_commands(
+    path: str, lib_dir: str, baked: set, deps: List[str]
+) -> List[List[str]]:
+    """Plan the ``install_name_tool`` commands that make ``path`` self-contained.
+
+    LSST dylibs are linked with bare-name install ids (``libfoo.dylib`` rather
+    than ``@rpath/libfoo.dylib``), so their dependents record those deps by bare
+    name.  dyld does *not* consult ``LC_RPATH`` for a bare-name (or absolute)
+    dependency, so merely adding ``lib_dir`` as an ``@rpath`` search directory
+    (as Linux's RPATH suffices for) leaves the co-baked LSST libraries
+    unresolvable on macOS.  For every dependency whose basename we also baked
+    into ``lib_dir`` (``baked``), rewrite the load command to
+    ``@rpath/<basename>`` with ``-change``; rewrite the library's own id the
+    same way; and add ``lib_dir`` as an ``@rpath`` dir so those references
+    resolve.
+
+    Every ``install_name_tool`` edit invalidates the binary's code signature.
+    On Apple Silicon dyld refuses to load a Mach-O whose signature no longer
+    matches its contents (the process is killed with SIGKILL), so the binary is
+    ad-hoc re-signed with ``codesign -f -s -`` as the final step.  This is
+    harmless on Intel macOS, where the same ad-hoc signing scheme is used.
+    """
+    cmds: List[List[str]] = []
+    basename = os.path.basename(path)
+    if basename in baked:
+        cmds.append(["install_name_tool", "-id", f"@rpath/{basename}", path])
+    for dep in deps:
+        dep_base = os.path.basename(dep)
+        new = f"@rpath/{dep_base}"
+        # The binary's own install id appears in ``otool -L`` output; it is
+        # rewritten via ``-id`` above, not as a dependency load command.
+        if dep_base == basename:
+            continue
+        if dep_base in baked and dep != new:
+            cmds.append(["install_name_tool", "-change", dep, new, path])
+    cmds.append(["install_name_tool", "-add_rpath", lib_dir, path])
+    # Re-sign last: install_name_tool invalidated the signature, and macOS
+    # (notably arm64) will SIGKILL any process that loads an invalidly-signed
+    # dylib.  "-s -" is an ad-hoc signature, matching how conda ships these.
+    cmds.append(["codesign", "--force", "--sign", "-", path])
+    return cmds
+
+
+def _rpath_commands(
+    path: str,
+    lib_dir: str,
+    system: str,
+    baked: set,
+    deps_of: Callable[[str], List[str]],
+) -> List[List[str]]:
+    """Build the commands that point ``path``'s runtime search at ``lib_dir``.
+
+    Linux uses a single ``patchelf --set-rpath`` (absolute ``lib_dir``,
+    replacing any existing RPATH); its bare-SONAME ``DT_NEEDED`` entries resolve
+    through RPATH, so nothing else is needed.  macOS additionally rewrites
+    bare-name/absolute dependency load commands to ``@rpath/...`` (see
+    :func:`_macho_commands`) because dyld will not resolve those through the
+    added rpath.
     """
     if system == "Darwin":
-        return ["install_name_tool", "-add_rpath", lib_dir, path]
-    return ["patchelf", "--set-rpath", lib_dir, path]
+        return _macho_commands(path, lib_dir, baked, deps_of(path))
+    return [["patchelf", "--set-rpath", lib_dir, path]]
 
 
 def _run(cmd: List[str]) -> None:
@@ -666,21 +744,34 @@ def _run(cmd: List[str]) -> None:
     subprocess.run(cmd, check=True)
 
 
+def _check_output(cmd: List[str]) -> str:
+    import subprocess
+
+    return subprocess.run(
+        cmd, check=True, capture_output=True, text=True
+    ).stdout
+
+
 def fix_rpaths(
     paths: List[str],
     lib_dir: str,
     system: Optional[str] = None,
     runner: Optional[Callable[[List[str]], None]] = None,
     warn: Optional[Callable[[str], None]] = None,
+    deps_of: Optional[Callable[[str], List[str]]] = None,
 ) -> List[str]:
     """Rewrite the RPATH of each binary in ``paths`` to point at ``lib_dir``.
 
     After this, the copied libraries and extension modules find their
     dependencies from the co-located ``lib_dir`` without ``LD_LIBRARY_PATH``
-    (or ``DYLD_LIBRARY_PATH``).  Non-binary files (scripts, data) are skipped.
-    ``system`` defaults to :func:`platform.system`; ``runner`` runs each
-    command (defaults to a checked ``subprocess.run``).  Returns the list of
-    binaries whose RPATH was patched.
+    (or ``DYLD_LIBRARY_PATH``).  On macOS, dependency load commands that name a
+    co-baked library are also rewritten to ``@rpath/<name>`` so dyld resolves
+    them through the added rpath (bare-name/absolute deps are otherwise not
+    searched via ``LC_RPATH``).  Non-binary files (scripts, data) are skipped.
+    ``system`` defaults to :func:`platform.system`; ``runner`` runs each command
+    (defaults to a checked ``subprocess.run``); ``deps_of`` reads a Mach-O
+    binary's dependency install names (defaults to ``otool -L``).  Returns the
+    list of binaries whose RPATH was patched.
     """
     if system is None:
         system = platform.system()
@@ -688,13 +779,25 @@ def fix_rpaths(
         runner = _run
     if warn is None:
         warn = lambda _msg: None  # noqa: E731
+    if deps_of is None:
+        deps_of = lambda p: _macho_deps(p, _check_output)  # noqa: E731
+
+    # Basenames of every library we baked into lib_dir, so we only rewrite
+    # dependencies that actually resolve to a co-located library.
+    baked: set = set()
+    if system == "Darwin":
+        try:
+            baked = set(os.listdir(lib_dir))
+        except OSError:
+            baked = set()
 
     patched: List[str] = []
     for path in paths:
         if not _is_patchable(path, system):
             continue
         try:
-            runner(_rpath_command(path, lib_dir, system))
+            for cmd in _rpath_commands(path, lib_dir, system, baked, deps_of):
+                runner(cmd)
         except Exception as exc:  # noqa: BLE001 - report and continue
             warn(f"rpath patch failed for {path}: {exc}")
             continue
