@@ -1,0 +1,1071 @@
+#!/usr/bin/env python
+
+"""Bake an EUPS stack into a conda environment.
+
+EUPS describes each product's environment as a sequence of table actions
+(``envPrepend``/``envAppend``/``envSet``) that mutate variables like
+``PYTHONPATH``, ``LD_LIBRARY_PATH`` and ``PATH``.  This module walks the
+dependency tree (:func:`collect_product_nodes`), sorts each product's actions
+into python/lib/bin directory lists (:func:`classify`), then materializes them
+into a conda environment (:func:`bake`):
+
+* ``python`` trees are merged into ``site-packages`` (so no ``PYTHONPATH``),
+* ``lib``/``bin`` are copied into the env, dereferencing symlinks,
+* a product's top-level ``include`` tree is copied into ``<prefix>/include``
+  (:func:`build_include_copy_ops`) so C++ headers are available without
+  ``<PKG>_DIR``,
+* copied binaries have their RPATH rewritten to ``<prefix>/lib`` via
+  ``patchelf`` (Linux) or ``install_name_tool`` (macOS) so nothing needs
+  ``LD_LIBRARY_PATH``/``DYLD_LIBRARY_PATH``; on macOS, dependency load commands
+  that name a co-baked library are additionally rewritten to ``@rpath/<name>``
+  (LSST dylibs use bare-name install ids that dyld will not resolve through an
+  rpath otherwise) and each patched binary is ad-hoc re-signed (``codesign``)
+  since ``install_name_tool`` invalidates the signature and arm64 macOS refuses
+  to load an invalidly-signed Mach-O,
+* files that already exist are skipped (duplicates), with a warning only when
+  the existing file differs from the source (``.py`` files that differ only in
+  blank lines, trailing whitespace or comments count as the same and are
+  silent),
+* non-build resource dirs (``config``/``policy``/``data`` ...) that no
+  ``python/.../resources`` link exposes are reported
+  (:func:`check_resource_dirs`) since they will not reach the baked env, and
+* a :class:`Manifest` is written so a bake can be undone (:func:`uninstall`).
+
+Re-baking into an environment that already holds a bake first uninstalls that
+previous bake (using its manifest) so the environment starts clean; without
+this a second bake would record the first bake's files as duplicates and orphan
+them.  Pass ``--no-clean`` to opt out.
+
+Run with ``--help`` for the command-line interface.
+
+Caveat: a few products put their package *root* (not a ``python`` subdir) on
+``PYTHONPATH``; for those the whole product tree (docs/tests/build logs) is
+copied into ``site-packages``, exactly as EUPS also exposes it on ``sys.path``.
+"""
+
+import ast
+import filecmp
+import json
+import os
+import platform
+import shutil
+from dataclasses import asdict, dataclass, field
+from typing import Callable, Dict, List, Optional, Tuple
+
+MANIFEST_VERSION = 1
+
+# Environment variables that are EUPS bookkeeping rather than something a
+# baked environment needs.  ``SETUP_<PRODUCT>`` records how a product was set
+# up; the ``EUPS_*`` family points back at the EUPS installation itself.
+_BOOKKEEPING_PREFIXES = ("SETUP_", "EUPS_")
+
+
+@dataclass
+class ProductNode:
+    """A product's raw setup information as collected from EUPS.
+
+    ``env_actions`` is an ordered list of ``(variable, value)`` pairs, one per
+    ``env*`` table action, in the order EUPS emits them.
+    """
+
+    name: str
+    version: str
+    dir: str
+    env_actions: List[Tuple[str, str]] = field(default_factory=list)
+    required: List[str] = field(default_factory=list)
+    optional: List[str] = field(default_factory=list)
+
+
+@dataclass
+class Product:
+    """A product with its setup actions sorted into their roles."""
+
+    name: str
+    version: str
+    dir: str
+    python_dirs: List[str] = field(default_factory=list)
+    lib_dirs: List[str] = field(default_factory=list)
+    bin_dirs: List[str] = field(default_factory=list)
+    env_vars: Dict[str, str] = field(default_factory=dict)
+    required: List[str] = field(default_factory=list)
+    optional: List[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class CopyOp:
+    """A single file to materialize into the target environment.
+
+    ``src`` is the file in the EUPS product tree, ``dst`` its destination in
+    the conda environment, and ``kind`` one of ``"python"``, ``"lib"`` or
+    ``"bin"`` (used to decide RPATH handling and for reporting).
+    """
+
+    src: str
+    dst: str
+    kind: str
+
+
+def _default_ignore(relpath: str) -> bool:
+    """Return True for tree entries a baked environment should not carry.
+
+    Besides ``__pycache__``/``docs``/``ups`` directories (and any directory
+    whose name starts with ``.tests``), this drops build
+    leftovers a baked environment never loads: ``.pyc``, compiled object files
+    (``.o`` and SCons's shared-object ``.os``), C/C++ sources
+    (``.c``/``.cc``/``.cpp``/``.cxx`` — build inputs, not runtime artifacts),
+    build logs (``.log``), SCons build scripts (``SConscript``) and CMake/Make
+    build files (``Makefile``, ``CMakeLists.txt`` and ``*.cmake``).  It also
+    drops CMake-generated build output that a baked environment never loads:
+    the ``CMakeFiles`` directory and ``CMakeCache.txt``.  Skipping the copy also
+    keeps them out of the RPATH-patch pass (which only touches files that were
+    actually copied).
+    """
+    parts = relpath.split(os.sep)
+    basename = os.path.basename(relpath)
+    return (
+        "__pycache__" in parts
+        or "docs" in parts
+        or "ups" in parts
+        or "CMakeFiles" in parts
+        or any(p.startswith(".tests") for p in parts)
+        or basename in ("SConscript", "Makefile", "CMakeLists.txt", "CMakeCache.txt")
+        or relpath.endswith(
+            (".pyc", ".o", ".os", ".c", ".cc", ".cpp", ".cxx", ".log", ".cmake")
+        )
+    )
+
+
+def _tree_ops(src_dir: str, dst_root: str, kind: str, ignore) -> List[CopyOp]:
+    """Yield a :class:`CopyOp` for every file under ``src_dir``.
+
+    Each file maps to ``dst_root`` preserving its path relative to
+    ``src_dir``; symlinked directories are followed so nothing is missed.
+    """
+    ops: List[CopyOp] = []
+    for dirpath, _dirnames, filenames in os.walk(src_dir, followlinks=True):
+        for filename in filenames:
+            src = os.path.join(dirpath, filename)
+            rel = os.path.relpath(src, src_dir)
+            if ignore(rel):
+                continue
+            ops.append(CopyOp(src=src, dst=os.path.join(dst_root, rel), kind=kind))
+    return ops
+
+
+def build_copy_ops(
+    product: "Product",
+    site_packages: str,
+    lib_dir: str,
+    bin_dir: str,
+    ignore: Optional[Callable[[str], bool]] = None,
+) -> List[CopyOp]:
+    """Plan the file copies that materialize ``product`` into an environment.
+
+    ``python_dirs`` map their *contents* into ``site_packages`` (so the
+    ``lsst`` namespace merges with what is already installed), while
+    ``lib_dirs`` and ``bin_dirs`` map into ``lib_dir`` and ``bin_dir``.
+    ``ignore(relpath)`` drops entries (default: ``__pycache__``, ``docs``,
+    ``.pyc`` and compiled object files ``.o``/``.os``).
+    """
+    if ignore is None:
+        ignore = _default_ignore
+
+    ops: List[CopyOp] = []
+    for d in product.python_dirs:
+        ops.extend(_tree_ops(d, site_packages, "python", ignore))
+    for d in product.lib_dirs:
+        ops.extend(_tree_ops(d, lib_dir, "lib", ignore))
+    for d in product.bin_dirs:
+        ops.extend(_tree_ops(d, bin_dir, "bin", ignore))
+    return ops
+
+
+@dataclass
+class Manifest:
+    """Record of what a bake did, so it can be undone.
+
+    ``created`` lists files the bake actually wrote (the only files uninstall
+    removes).  ``skipped_duplicates`` records targets that already existed and
+    were left alone.  ``rpath_patched`` records binaries whose RPATH was edited
+    in place.
+    """
+
+    prefix: str
+    root: str
+    tag: str
+    created: List[str] = field(default_factory=list)
+    skipped_duplicates: List[str] = field(default_factory=list)
+    rpath_patched: List[str] = field(default_factory=list)
+
+    def save(self, path: str) -> None:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        data = asdict(self)
+        data["manifest_version"] = MANIFEST_VERSION
+        with open(path, "w") as fh:
+            json.dump(data, fh, indent=2, sort_keys=True)
+
+    @classmethod
+    def load(cls, path: str) -> "Manifest":
+        with open(path) as fh:
+            data = json.load(fh)
+        data.pop("manifest_version", None)
+        return cls(**data)
+
+
+def uninstall(
+    manifest: Manifest,
+    dry_run: bool = False,
+    warn: Optional[Callable[[str], None]] = None,
+) -> List[str]:
+    """Remove every file the bake created, then prune directories it emptied.
+
+    Only ``manifest.created`` files are removed, so pre-existing conda files
+    (including skipped duplicates) are never touched.  Missing files are
+    tolerated.  Returns the list of files actually removed.
+    """
+    if warn is None:
+        warn = lambda _msg: None  # noqa: E731
+
+    removed: List[str] = []
+    dirs_to_check = set()
+    for path in manifest.created:
+        if not os.path.lexists(path):
+            continue
+        removed.append(path)
+        dirs_to_check.add(os.path.dirname(path))
+        if not dry_run:
+            os.remove(path)
+
+    if not dry_run:
+        prefix = os.path.abspath(manifest.prefix)
+        # Prune now-empty directories, walking upward, but never above prefix.
+        for d in sorted(dirs_to_check, key=len, reverse=True):
+            cur = d
+            while os.path.abspath(cur).startswith(prefix) and os.path.abspath(cur) != prefix:
+                if not _try_rmdir(cur):
+                    break  # not empty (or gone) -> stop climbing this branch
+                cur = os.path.dirname(cur)
+    return removed
+
+
+def _only_bytecode(pycache_dir: str) -> bool:
+    """True if ``pycache_dir`` holds nothing but compiled bytecode files."""
+    return all(
+        os.path.isfile(os.path.join(pycache_dir, e)) and e.endswith((".pyc", ".pyo"))
+        for e in os.listdir(pycache_dir)
+    )
+
+
+def _try_rmdir(path: str) -> bool:
+    """Remove ``path`` if empty, or if its only content is generated bytecode.
+
+    Directories the bake populated often keep a ``__pycache__`` of bytecode
+    that Python wrote at import time and that the manifest never recorded.
+    When that cache is all that remains, it is safe to clear so the (now
+    truly empty) directory can be pruned; a directory with any real sibling is
+    left untouched.  Returns True if the directory was removed.
+    """
+    try:
+        os.rmdir(path)
+        return True
+    except FileNotFoundError:
+        return True  # already pruned via another branch; keep climbing
+    except OSError:
+        pass
+    try:
+        entries = os.listdir(path)
+    except FileNotFoundError:
+        return True
+    pycache = os.path.join(path, "__pycache__")
+    if entries == ["__pycache__"] and os.path.isdir(pycache) \
+            and _only_bytecode(pycache):
+        shutil.rmtree(pycache)
+        try:
+            os.rmdir(path)
+            return True
+        except OSError:
+            return False
+    return False
+
+
+def _normalized_python(path: str) -> str:
+    """Return ``path``'s source with blank lines, trailing whitespace and
+    full-line comments stripped.
+
+    Used to compare two ``.py`` files ignoring cosmetic-only differences (extra
+    blank lines, trailing whitespace, differing comments such as license
+    headers) so a duplicate that is the same code is not reported as differing.
+    Only whole-line comments (whose first non-blank character is ``#``) are
+    dropped; a ``#`` inside code or a string literal is left untouched.
+
+    This is the fallback comparison for files :func:`_python_ast_key` cannot
+    parse; docstrings, being string literals rather than comments, survive it.
+    """
+    with open(path, "r", encoding="utf-8", errors="surrogateescape") as fh:
+        lines = (line.rstrip() for line in fh)
+        return "\n".join(
+            line for line in lines if line and not line.lstrip().startswith("#")
+        )
+
+
+def _strip_docstrings(tree: "ast.AST") -> "ast.AST":
+    """Drop the leading docstring from every module/class/function in ``tree``.
+
+    A docstring is a bare string-literal statement at the start of a body; it
+    is inert (Python only exposes it as ``__doc__``), so two files that differ
+    only in docstrings run identically.  Mutates ``tree`` in place and returns
+    it.
+    """
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            body = node.body
+            if (
+                body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
+                node.body = body[1:]
+    return tree
+
+
+def _python_ast_key(path: str) -> str:
+    """Return a structural key for ``path``'s code, ignoring cosmetic diffs.
+
+    Parsing to an AST and dumping it discards comments, blank lines and
+    whitespace; :func:`_strip_docstrings` additionally removes docstrings.  Two
+    ``.py`` files with the same key are the same code (they execute the same),
+    differing only in license headers, formatting or docstrings.  Raises
+    :class:`SyntaxError` / :class:`ValueError` if the source will not parse.
+    """
+    with open(path, "r", encoding="utf-8", errors="surrogateescape") as fh:
+        tree = ast.parse(fh.read())
+    return ast.dump(_strip_docstrings(tree))
+
+
+def _same_python(src: str, dst: str) -> bool:
+    """Return whether two ``.py`` files are the same code up to cosmetics.
+
+    Compares structural ASTs (ignoring comments, whitespace and docstrings);
+    if either file will not parse, falls back to the whitespace/comment-
+    insensitive text comparison.  Read errors count as differing.
+    """
+    try:
+        return _python_ast_key(src) == _python_ast_key(dst)
+    except (SyntaxError, ValueError):
+        pass
+    except OSError:
+        return False
+    try:
+        return _normalized_python(src) == _normalized_python(dst)
+    except OSError:
+        return False
+
+
+def _same_contents(src: str, dst: str) -> bool:
+    """Return whether ``src`` and ``dst`` have identical file contents.
+
+    Symlinks are followed (``execute_copies`` dereferences sources), so a
+    destination that already holds a byte-for-byte copy of the source counts
+    as identical.  For ``.py`` files that differ byte-for-byte, a second,
+    code-only comparison is made (:func:`_same_python`): if their ASTs match
+    once comments, whitespace and docstrings are ignored, the files count as
+    identical.
+    Anything that cannot be read as a regular file (broken symlink, directory,
+    permission error) is treated as differing so the caller warns rather than
+    silently masking it.
+    """
+    try:
+        if filecmp.cmp(src, dst, shallow=False):
+            return True
+    except OSError:
+        return False
+    if src.endswith(".py") and dst.endswith(".py"):
+        return _same_python(src, dst)
+    return False
+
+
+def execute_copies(
+    ops: List[CopyOp],
+    dry_run: bool = False,
+    warn: Optional[Callable[[str], None]] = None,
+) -> Tuple[List[str], List[str]]:
+    """Copy each op's file into place, skipping targets that already exist.
+
+    Returns ``(created, skipped)`` lists of destination paths.  A destination
+    that already exists is a duplicate: it is left untouched and returned in
+    ``skipped`` so it is never recorded for uninstall.  Duplicates whose
+    contents match the source are skipped silently; only ones that differ are
+    reported through ``warn``.  Symlinked sources are dereferenced (the
+    target's contents are compared/copied), so the baked environment never
+    points back into the stack.  With ``dry_run`` no filesystem changes are
+    made but the same lists are returned.
+    """
+    if warn is None:
+        warn = lambda _msg: None  # noqa: E731
+
+    created: List[str] = []
+    skipped: List[str] = []
+    for op in ops:
+        if os.path.lexists(op.dst):
+            if not _same_contents(op.src, op.dst):
+                warn(
+                    f"duplicate differs, keeping existing file: {op.dst} "
+                    f"(from {op.src})"
+                )
+            skipped.append(op.dst)
+            continue
+        created.append(op.dst)
+        if dry_run:
+            continue
+        os.makedirs(os.path.dirname(op.dst), exist_ok=True)
+        # copy2 follows symlinks, so a symlinked source is cloned as a real file.
+        shutil.copy2(op.src, op.dst, follow_symlinks=True)
+    return created, skipped
+
+
+_ENV_CMDS = ("envPrepend", "envAppend", "envSet")
+_DEP_CMDS = ("setupRequired", "setupOptional")
+
+
+def collect_product_nodes(
+    root: str,
+    flavor: Optional[str] = None,
+    eups_obj=None,
+    _visited: Optional[set] = None,
+    _nodes: Optional["Dict[str, ProductNode]"] = None,
+) -> List["ProductNode"]:
+    """Walk the EUPS dependency tree from ``root`` into :class:`ProductNode`\\ s.
+
+    For each product reached, the table's ``env*`` actions become
+    ``env_actions`` (EUPS has already resolved ``${PRODUCT_DIR}`` to absolute
+    paths) and ``setupRequired``/``setupOptional`` names become ``required`` /
+    ``optional``.  Each product is visited once; the returned list is in
+    discovery order.  ``flavor`` defaults to :func:`platform.system`.
+    """
+    import eups
+
+    if eups_obj is None:
+        eups_obj = eups.Eups()
+    if flavor is None:
+        flavor = platform.system()
+    if _visited is None:
+        _visited = set()
+    if _nodes is None:
+        _nodes = {}
+
+    if root in _visited:
+        return list(_nodes.values())
+    _visited.add(root)
+
+    product = eups_obj.findProduct(root)
+    if product is None:
+        return list(_nodes.values())
+
+    node = ProductNode(name=product.name, version=product.version, dir=product.dir)
+    children: List[str] = []
+    try:
+        table = product.getTable()
+        if table:
+            for action in table.actions(flavor):
+                if action.cmd in _ENV_CMDS:
+                    node.env_actions.append((action.args[0], action.args[1]))
+                elif action.cmd in _DEP_CMDS:
+                    dep = action.args[0]
+                    if action.cmd == "setupRequired":
+                        node.required.append(dep)
+                    else:
+                        node.optional.append(dep)
+                    children.append(dep)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  [warn] {root}: {exc}")
+
+    _nodes[root] = node
+    for dep in children:
+        collect_product_nodes(dep, flavor, eups_obj, _visited, _nodes)
+
+    return list(_nodes.values())
+
+
+# Products whose data is loaded at runtime from the product directory (via the
+# <PKG>_DIR environment variable or dladdr) rather than from PYTHONPATH.  For
+# these the ``data`` tree is copied into ``share/<pkg>`` so the baked stack can
+# find it without any environment variable.  See build_data_copy_ops.
+DEFAULT_DATA_PACKAGES = ("meas_modelfit",)
+
+
+def build_data_copy_ops(product: "Product", share_dir: str) -> List[CopyOp]:
+    """Plan copies of ``product``'s ``data`` tree into ``share/<name>``.
+
+    Some products ship data (e.g. ``meas_modelfit``'s prior FITS files) that is
+    loaded at runtime relative to the product directory.  A baked, environment-
+    variable-free install cannot rely on ``<PKG>_DIR``, so the contents of the
+    product's ``data`` dir are placed directly under ``<share_dir>/<name>``
+    (the conda ``share/<pkg>`` convention) where the product's own code looks
+    for it.  Returns an empty list when the product has no ``data`` dir.
+    """
+    src_data = os.path.join(product.dir, "data")
+    if not os.path.isdir(src_data):
+        return []
+    dst_root = os.path.join(share_dir, product.name)
+    return _tree_ops(src_data, dst_root, "data", _default_ignore)
+
+
+def build_include_copy_ops(product: "Product", include_dir: str) -> List[CopyOp]:
+    """Plan copies of ``product``'s ``include`` tree into ``<prefix>/include``.
+
+    C++ headers live in a product's top-level ``include`` dir, which EUPS puts
+    on no environment variable :func:`classify` tracks, so they are handled by
+    convention like :func:`build_data_copy_ops`: every product that ships an
+    ``include`` tree has its headers copied into ``include_dir`` (the conda
+    env's ``include``), preserving their relative path exactly as ``lib_dirs``
+    map into ``lib``.  Build inputs (``.c``/``.cc``/``.o`` ...) are dropped by
+    :func:`_default_ignore`; headers pass through.  Since headers are not ELF /
+    Mach-O binaries, :func:`fix_rpaths` skips them.  Returns an empty list when
+    the product has no ``include`` dir.
+    """
+    src_inc = os.path.join(product.dir, "include")
+    if not os.path.isdir(src_inc):
+        return []
+    return _tree_ops(src_inc, include_dir, "include", _default_ignore)
+
+
+# Top-level product dirs that are build inputs/outputs, developer-facing, or
+# already handled by python/lib/bin/include copies -- everything else counts as
+# a "resource" dir (config, policy, data, schemas, pipelines, corrections, ...).
+_BUILD_DIRS = frozenset(
+    {
+        "bin", "bin.src", "doc", "docs", "examples", "lib", "python", "src",
+        "tests", "ups", "include", "__pycache__",
+    }
+)
+
+
+def find_resource_dirs(product_dir: str) -> List[str]:
+    """Return ``product_dir``'s top-level non-build dirs (sorted).
+
+    Auto-discovers resource dirs -- any top-level directory not in
+    :data:`_BUILD_DIRS` and not hidden (name starting with ``.``, e.g. ``.git``
+    / ``.github``), so ``config``, ``policy``, ``data``, ``schemas``,
+    ``pipelines``, ``corrections``, ... are found without a hardcoded list.
+    """
+    out: List[str] = []
+    try:
+        entries = sorted(os.listdir(product_dir))
+    except OSError:
+        return out
+    for entry in entries:
+        if entry in _BUILD_DIRS or entry.startswith("."):
+            continue
+        if os.path.isdir(os.path.join(product_dir, entry)):
+            out.append(entry)
+    return out
+
+
+def baked_resource_names(python_ops: List[CopyOp]) -> set:
+    """Return the resource-dir names that these python copies actually bake.
+
+    A resource dir reaches the baked env only if its contents are copied
+    through the python tree under a ``.../resources/<name>/...`` path (via the
+    ``python/lsst/<dotted>/resources/<name>`` symlink, or a real copy shipped
+    there).  This reads those names straight off the planned copy destinations,
+    so both the symlink and real-copy layouts are counted.
+    """
+    names = set()
+    for op in python_ops:
+        parts = op.dst.split(os.sep)
+        try:
+            i = parts.index("resources")
+        except ValueError:
+            continue
+        if i + 1 < len(parts):
+            names.add(parts[i + 1])
+    return names
+
+
+def check_resource_dirs(
+    product: "Product",
+    python_ops: List[CopyOp],
+    warn: Optional[Callable[[str], None]] = None,
+) -> List[str]:
+    """Warn about ``product``'s resource dirs that the bake will not install.
+
+    A top-level resource dir (see :func:`find_resource_dirs`) reaches the baked
+    env only when it is exposed under the python tree as
+    ``python/lsst/<dotted>/resources/<dir>`` (so its contents land in
+    ``site-packages/.../resources/<dir>`` where ``resource://`` resolves).  Any
+    resource dir with no such link is not reachable EUPS-lessly; this reports
+    each one through ``warn`` and returns their names (sorted).  Nothing is
+    modified -- the fix (adding the symlink) is a per-package change.
+    """
+    if warn is None:
+        warn = lambda _msg: None  # noqa: E731
+
+    baked = baked_resource_names(python_ops)
+    unlinked = [d for d in find_resource_dirs(product.dir) if d not in baked]
+    for d in unlinked:
+        warn(
+            f"{product.name}: '{d}/' not installed (no python/.../resources/{d} "
+            f"link; not reachable via resource:// in the baked env)"
+        )
+    return unlinked
+
+
+def _library_path_var(system: str) -> str:
+    """Return the dynamic-library search-path variable for ``system``."""
+    return "DYLD_LIBRARY_PATH" if system == "Darwin" else "LD_LIBRARY_PATH"
+
+
+# Mach-O magic numbers (thin + fat, both endiannesses).
+_MACHO_MAGICS = {
+    0xFEEDFACE, 0xFEEDFACF,  # 32/64-bit thin
+    0xCEFAEDFE, 0xCFFAEDFE,  # 32/64-bit thin, byte-swapped
+    0xCAFEBABE, 0xBEBAFECA,  # fat
+}
+
+
+def _magic(path: str) -> bytes:
+    with open(path, "rb") as fh:
+        return fh.read(4)
+
+
+def is_elf(path: str) -> bool:
+    """True if ``path`` is an ELF binary (Linux shared lib / executable)."""
+    try:
+        return _magic(path) == b"\x7fELF"
+    except OSError:
+        return False
+
+
+def is_macho(path: str) -> bool:
+    """True if ``path`` is a Mach-O binary (macOS shared lib / executable)."""
+    try:
+        head = _magic(path)
+    except OSError:
+        return False
+    if len(head) < 4:
+        return False
+    return int.from_bytes(head, "little") in _MACHO_MAGICS or \
+        int.from_bytes(head, "big") in _MACHO_MAGICS
+
+
+def _is_patchable(path: str, system: str) -> bool:
+    return is_macho(path) if system == "Darwin" else is_elf(path)
+
+
+def _macho_deps(path: str, reader: Callable[[List[str]], str]) -> List[str]:
+    """Return the dependency install names recorded in Mach-O ``path``.
+
+    Parses ``otool -L`` output: the first line is the file itself (dropped) and
+    each remaining line is ``<install-name> (compatibility version ...)`` — the
+    trailing parenthesised versions are stripped, leaving the install name
+    exactly as the load command records it (``@rpath/...``, an absolute path, or
+    a bare ``lib*.dylib``).  ``reader`` runs the command and returns its stdout.
+    """
+    out = reader(["otool", "-L", path])
+    deps: List[str] = []
+    for line in out.splitlines()[1:]:
+        line = line.strip()
+        if not line:
+            continue
+        # Drop the trailing "(compatibility version ..., current version ...)".
+        idx = line.rfind(" (compatibility version ")
+        deps.append(line[:idx] if idx != -1 else line)
+    return deps
+
+
+def _macho_commands(
+    path: str, lib_dir: str, baked: set, deps: List[str]
+) -> List[List[str]]:
+    """Plan the ``install_name_tool`` commands that make ``path`` self-contained.
+
+    LSST dylibs are linked with bare-name install ids (``libfoo.dylib`` rather
+    than ``@rpath/libfoo.dylib``), so their dependents record those deps by bare
+    name.  dyld does *not* consult ``LC_RPATH`` for a bare-name (or absolute)
+    dependency, so merely adding ``lib_dir`` as an ``@rpath`` search directory
+    (as Linux's RPATH suffices for) leaves the co-baked LSST libraries
+    unresolvable on macOS.  For every dependency whose basename we also baked
+    into ``lib_dir`` (``baked``), rewrite the load command to
+    ``@rpath/<basename>`` with ``-change``; rewrite the library's own id the
+    same way; and add ``lib_dir`` as an ``@rpath`` dir so those references
+    resolve.
+
+    Every ``install_name_tool`` edit invalidates the binary's code signature.
+    On Apple Silicon dyld refuses to load a Mach-O whose signature no longer
+    matches its contents (the process is killed with SIGKILL), so the binary is
+    ad-hoc re-signed with ``codesign -f -s -`` as the final step.  This is
+    harmless on Intel macOS, where the same ad-hoc signing scheme is used.
+    """
+    cmds: List[List[str]] = []
+    basename = os.path.basename(path)
+    if basename in baked:
+        cmds.append(["install_name_tool", "-id", f"@rpath/{basename}", path])
+    for dep in deps:
+        dep_base = os.path.basename(dep)
+        new = f"@rpath/{dep_base}"
+        # The binary's own install id appears in ``otool -L`` output; it is
+        # rewritten via ``-id`` above, not as a dependency load command.
+        if dep_base == basename:
+            continue
+        if dep_base in baked and dep != new:
+            cmds.append(["install_name_tool", "-change", dep, new, path])
+    cmds.append(["install_name_tool", "-add_rpath", lib_dir, path])
+    # Re-sign last: install_name_tool invalidated the signature, and macOS
+    # (notably arm64) will SIGKILL any process that loads an invalidly-signed
+    # dylib.  "-s -" is an ad-hoc signature, matching how conda ships these.
+    cmds.append(["codesign", "--force", "--sign", "-", path])
+    return cmds
+
+
+def _rpath_commands(
+    path: str,
+    lib_dir: str,
+    system: str,
+    baked: set,
+    deps_of: Callable[[str], List[str]],
+) -> List[List[str]]:
+    """Build the commands that point ``path``'s runtime search at ``lib_dir``.
+
+    Linux uses a single ``patchelf --set-rpath`` (absolute ``lib_dir``,
+    replacing any existing RPATH); its bare-SONAME ``DT_NEEDED`` entries resolve
+    through RPATH, so nothing else is needed.  macOS additionally rewrites
+    bare-name/absolute dependency load commands to ``@rpath/...`` (see
+    :func:`_macho_commands`) because dyld will not resolve those through the
+    added rpath.
+    """
+    if system == "Darwin":
+        return _macho_commands(path, lib_dir, baked, deps_of(path))
+    return [["patchelf", "--set-rpath", lib_dir, path]]
+
+
+def _run(cmd: List[str]) -> None:
+    import subprocess
+
+    subprocess.run(cmd, check=True)
+
+
+def _check_output(cmd: List[str]) -> str:
+    import subprocess
+
+    return subprocess.run(
+        cmd, check=True, capture_output=True, text=True
+    ).stdout
+
+
+def fix_rpaths(
+    paths: List[str],
+    lib_dir: str,
+    system: Optional[str] = None,
+    runner: Optional[Callable[[List[str]], None]] = None,
+    warn: Optional[Callable[[str], None]] = None,
+    deps_of: Optional[Callable[[str], List[str]]] = None,
+) -> List[str]:
+    """Rewrite the RPATH of each binary in ``paths`` to point at ``lib_dir``.
+
+    After this, the copied libraries and extension modules find their
+    dependencies from the co-located ``lib_dir`` without ``LD_LIBRARY_PATH``
+    (or ``DYLD_LIBRARY_PATH``).  On macOS, dependency load commands that name a
+    co-baked library are also rewritten to ``@rpath/<name>`` so dyld resolves
+    them through the added rpath (bare-name/absolute deps are otherwise not
+    searched via ``LC_RPATH``).  Non-binary files (scripts, data) are skipped.
+    ``system`` defaults to :func:`platform.system`; ``runner`` runs each command
+    (defaults to a checked ``subprocess.run``); ``deps_of`` reads a Mach-O
+    binary's dependency install names (defaults to ``otool -L``).  Returns the
+    list of binaries whose RPATH was patched.
+    """
+    if system is None:
+        system = platform.system()
+    if runner is None:
+        runner = _run
+    if warn is None:
+        warn = lambda _msg: None  # noqa: E731
+    if deps_of is None:
+        deps_of = lambda p: _macho_deps(p, _check_output)  # noqa: E731
+
+    # Basenames of every library we baked into lib_dir, so we only rewrite
+    # dependencies that actually resolve to a co-located library.
+    baked: set = set()
+    if system == "Darwin":
+        try:
+            baked = set(os.listdir(lib_dir))
+        except OSError:
+            baked = set()
+
+    patched: List[str] = []
+    for path in paths:
+        if not _is_patchable(path, system):
+            continue
+        try:
+            for cmd in _rpath_commands(path, lib_dir, system, baked, deps_of):
+                runner(cmd)
+        except Exception as exc:  # noqa: BLE001 - report and continue
+            warn(f"rpath patch failed for {path}: {exc}")
+            continue
+        patched.append(path)
+    return patched
+
+
+def _is_bookkeeping(var: str) -> bool:
+    return var.startswith(_BOOKKEEPING_PREFIXES)
+
+
+def site_packages_dir(prefix: str) -> str:
+    """Return the ``site-packages`` directory of the conda env at ``prefix``.
+
+    Looks for ``<prefix>/lib/python*/site-packages``.  Raises
+    :class:`FileNotFoundError` if the environment has no Python.
+    """
+    import glob
+
+    matches = sorted(glob.glob(os.path.join(prefix, "lib", "python*", "site-packages")))
+    if not matches:
+        raise FileNotFoundError(
+            f"no lib/python*/site-packages under {prefix}; is this a conda env?"
+        )
+    return matches[-1]
+
+
+def _clone_tag_command(rebuild: str) -> List[str]:
+    """Command that promotes a rebuild tag to ``current`` for every product."""
+    return ["eups", "tags", "--clone", rebuild, "current"]
+
+
+def classify(node: ProductNode, system: str = None) -> Product:
+    """Sort a :class:`ProductNode`'s env actions into a :class:`Product`.
+
+    ``PYTHONPATH``, ``PATH`` and the platform's dynamic-library path variable
+    become the ``python_dirs``, ``bin_dirs`` and ``lib_dirs`` lists (preserving
+    action order).  EUPS bookkeeping variables are dropped.  Everything else is
+    kept as an ``env_vars`` mapping.
+
+    ``system`` selects the library-path variable (``platform.system()`` by
+    default) — ``LD_LIBRARY_PATH`` everywhere except ``Darwin``, which uses
+    ``DYLD_LIBRARY_PATH``.
+    """
+    if system is None:
+        system = platform.system()
+    lib_var = _library_path_var(system)
+
+    product = Product(
+        name=node.name,
+        version=node.version,
+        dir=node.dir,
+        required=list(node.required),
+        optional=list(node.optional),
+    )
+
+    for var, value in node.env_actions:
+        if var == "PYTHONPATH":
+            product.python_dirs.append(value)
+        elif var == "PATH":
+            product.bin_dirs.append(value)
+        elif var == lib_var:
+            product.lib_dirs.append(value)
+        elif _is_bookkeeping(var):
+            continue
+        else:
+            product.env_vars[var] = value
+
+    return product
+
+
+def bake(
+    products: List[Product],
+    prefix: str,
+    root: str = "lsst_distrib",
+    tag: str = "current",
+    system: Optional[str] = None,
+    dry_run: bool = False,
+    runner: Optional[Callable[[List[str]], None]] = None,
+    warn: Optional[Callable[[str], None]] = None,
+    data_packages: Optional["List[str]"] = None,
+    clean_existing: bool = True,
+) -> Manifest:
+    """Materialize ``products`` into the conda environment at ``prefix``.
+
+    Copies every product's ``python`` tree into ``site-packages`` and its
+    ``lib``/``bin`` into the environment, dereferencing symlinks and skipping
+    (with a warning) any file that already exists.  Copied binaries have their
+    RPATH rewritten to ``<prefix>/lib`` so the stack runs without
+    ``PYTHONPATH`` or ``LD_LIBRARY_PATH``.  For each product named in
+    ``data_packages`` (default :data:`DEFAULT_DATA_PACKAGES`), the product's
+    ``data`` tree is also copied into ``<prefix>/share/<name>/data`` so its
+    runtime data is found without ``<PKG>_DIR``.  Each product's ``include``
+    tree is copied into ``<prefix>/include`` (:func:`build_include_copy_ops`),
+    and any non-build resource dir with no ``python/.../resources`` link is
+    reported (:func:`check_resource_dirs`) as unreachable in the baked env.  A
+    :class:`Manifest` recording what was created is written to
+    ``<prefix>/share/eups_bake/manifest.json`` (unless ``dry_run``) and
+    returned.
+
+    When ``clean_existing`` (the default) and a manifest from a previous bake
+    already lives at that path, that bake is uninstalled first so a re-bake
+    starts from a clean environment.  Without this, a second bake would find
+    the first bake's files already present and record them all as
+    ``skipped_duplicates``, orphaning them: the new manifest's ``created`` list
+    would be empty and a later ``uninstall`` could no longer remove them.
+    """
+    if system is None:
+        system = platform.system()
+    if warn is None:
+        warn = lambda _msg: None  # noqa: E731
+    if data_packages is None:
+        data_packages = list(DEFAULT_DATA_PACKAGES)
+    data_packages = set(data_packages)
+
+    # Resolve destination roots before any pre-clean: uninstall prunes emptied
+    # directories, so in a minimal env it could remove site-packages itself.
+    # execute_copies recreates it, but site_packages_dir must resolve first.
+    site = site_packages_dir(prefix)
+    lib_dir = os.path.join(prefix, "lib")
+    bin_dir = os.path.join(prefix, "bin")
+    share_dir = os.path.join(prefix, "share")
+    include_dir = os.path.join(prefix, "include")
+
+    if clean_existing:
+        prior_path = _default_manifest_path(prefix)
+        if os.path.exists(prior_path):
+            prior = Manifest.load(prior_path)
+            verb = "would remove" if dry_run else "removing"
+            warn(
+                f"{verb} previous bake ({len(prior.created)} files) before re-baking"
+            )
+            uninstall(prior, dry_run=dry_run, warn=warn)
+
+    ops: List[CopyOp] = []
+    unlinked_resources: List[str] = []
+    for product in products:
+        product_ops = build_copy_ops(product, site, lib_dir, bin_dir)
+        ops.extend(product_ops)
+        if product.name in data_packages:
+            ops.extend(build_data_copy_ops(product, share_dir))
+        ops.extend(build_include_copy_ops(product, include_dir))
+        # Report resource dirs (config/policy/data/...) that no resources link
+        # exposes, so they will not reach the baked env.
+        python_ops = [o for o in product_ops if o.kind == "python"]
+        unlinked_resources.extend(check_resource_dirs(product, python_ops, warn=warn))
+
+    if unlinked_resources:
+        warn(
+            f"{len(unlinked_resources)} resource dirs not installed in the baked "
+            f"env (no python/.../resources link)"
+        )
+
+    created, skipped = execute_copies(ops, dry_run=dry_run, warn=warn)
+
+    if dry_run:
+        patched: List[str] = []
+    else:
+        patched = fix_rpaths(created, lib_dir, system=system, runner=runner, warn=warn)
+
+    manifest = Manifest(
+        prefix=prefix,
+        root=root,
+        tag=tag,
+        created=created,
+        skipped_duplicates=skipped,
+        rpath_patched=patched,
+    )
+    if not dry_run:
+        manifest.save(os.path.join(prefix, "share", "eups_bake", "manifest.json"))
+    return manifest
+
+
+def _default_manifest_path(prefix: str) -> str:
+    return os.path.join(prefix, "share", "eups_bake", "manifest.json")
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """Command-line entry point for baking an EUPS stack into a conda env."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Bake an EUPS stack (python/lib/bin) into a conda environment "
+        "so it runs without PYTHONPATH or LD_LIBRARY_PATH.",
+    )
+    parser.add_argument(
+        "--prefix",
+        default=os.environ.get("CONDA_PREFIX"),
+        help="target conda environment (default: $CONDA_PREFIX)",
+    )
+    parser.add_argument("--root", default="lsst_distrib", help="root product to walk")
+    parser.add_argument(
+        "--rebuild",
+        help="rebuild tag to clone onto 'current' before baking "
+        "(runs `eups tags --clone <rebuild> current`)",
+    )
+    parser.add_argument(
+        "--data-package",
+        action="append",
+        dest="data_packages",
+        metavar="PKG",
+        help="product whose data/ tree to copy into share/<PKG>/data so it is "
+        f"found without <PKG>_DIR (repeatable; default: {' '.join(DEFAULT_DATA_PACKAGES)})",
+    )
+    parser.add_argument("--dry-run", action="store_true", help="plan only; touch nothing")
+    parser.add_argument(
+        "--no-clean",
+        dest="clean_existing",
+        action="store_false",
+        help="do not uninstall a previous bake before re-baking (may orphan "
+        "the previous bake's files)",
+    )
+    parser.add_argument(
+        "--uninstall",
+        action="store_true",
+        help="remove a previous bake using its manifest",
+    )
+    parser.add_argument(
+        "--manifest",
+        help="manifest path (default: <prefix>/share/eups_bake/manifest.json)",
+    )
+    args = parser.parse_args(argv)
+
+    if not args.prefix:
+        parser.error("no --prefix and no active conda env ($CONDA_PREFIX unset)")
+
+    manifest_path = args.manifest or _default_manifest_path(args.prefix)
+
+    if args.uninstall:
+        manifest = Manifest.load(manifest_path)
+        removed = uninstall(manifest, dry_run=args.dry_run, warn=lambda m: print(m))
+        print(f"{'would remove' if args.dry_run else 'removed'} {len(removed)} files")
+        return 0
+
+    if args.rebuild and not args.dry_run:
+        print(f"cloning tag {args.rebuild} -> current")
+        _run(_clone_tag_command(args.rebuild))
+
+    print(f"walking dependency tree from {args.root} ...")
+    nodes = collect_product_nodes(args.root)
+    products = [classify(node) for node in nodes]
+    print(f"collected {len(products)} products")
+
+    manifest = bake(
+        products,
+        args.prefix,
+        root=args.root,
+        dry_run=args.dry_run,
+        warn=lambda m: print(m),
+        data_packages=args.data_packages,
+        clean_existing=args.clean_existing,
+    )
+    if args.dry_run:
+        print(
+            f"would create {len(manifest.created)} files, "
+            f"skip {len(manifest.skipped_duplicates)} duplicates "
+            f"(rpath patching skipped in dry-run)"
+        )
+    else:
+        print(
+            f"created {len(manifest.created)} files, "
+            f"skipped {len(manifest.skipped_duplicates)} duplicates, "
+            f"patched {len(manifest.rpath_patched)} binaries"
+        )
+    if not args.dry_run:
+        print(f"manifest: {_default_manifest_path(args.prefix)}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
