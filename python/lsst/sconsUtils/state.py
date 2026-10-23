@@ -152,6 +152,16 @@ def _initOptions():
             "Library targets in the test directory may still be built."
         ),
     )
+    SCons.Script.AddOption(
+        "--ci-reports",
+        dest="ci_reports",
+        action="store_true",
+        default=False,
+        help=(
+            "Write CI-friendly reports: a pytest JSON report"
+            "and if the compiler supports it, add sarif diagnostics to gcc>= 15"
+        ),
+    )
 
 
 def _initLog():
@@ -585,6 +595,17 @@ def _configureCommon():
                 break
         else:
             log.fail(f"C++20 extensions could not be enabled for compiler {env.whichCc!r}")
+        # Write sarif diagnostics alongside each object file for CI
+        if env.GetOption("ci_reports"):
+            sarifArg = ["-fdiagnostics-add-output=sarif:file=${TARGET}.sarif","-fdiagnostics-plain-output"]
+            conf.env = env.Clone()
+            conf.env.Append(CCFLAGS=sarifArg)
+            if conf.CheckCXX():
+                env.Append(CCFLAGS=sarifArg)
+                if not env.GetOption("no_progress"):
+                    log.info("SARIF diagnostics enabled")
+            else:
+                log.warn(f"--ci-reports: compiler {env.whichCc!r} does not support SARIF output; skipping")
         conf.Finish()
 
     #
@@ -668,6 +689,7 @@ def _configureCommon():
     # Disable link-time-optimization on GCC, for compatibility with conda
     # binaries
     #
+
     if env.whichCc == "gcc":
         env.Append(CCFLAGS=["-fno-lto"])
         env.Append(LINKFLAGS=["-fno-lto"])
