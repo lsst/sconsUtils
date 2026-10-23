@@ -466,6 +466,9 @@ class Control:
         interpreter += f" --junit-prefix={self.junitPrefix()}"
         interpreter += " --log-level=DEBUG"
         interpreter += self._getPytestCoverageCommand()
+        if self._env.GetOption("ci_reports"):
+            print("Ci reports")
+            interpreter += " --json-report --json-report-file=${TARGET}-report.json"
         # Avoids target install overwrite the real coverage
         if lfnfOpt == "none":
             interpreter += " --no-cov"

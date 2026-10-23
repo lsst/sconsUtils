@@ -152,6 +152,16 @@ def _initOptions():
             "Library targets in the test directory may still be built."
         ),
     )
+    SCons.Script.AddOption(
+        "--ci-reports",
+        dest="ci_reports",
+        action="store_true",
+        default=False,
+        help=(
+            "Add json-report and json-report-file to pytest"
+            "Add diagnostics-format=sarif-file to gcc"
+        ),
+    )
 
 
 def _initLog():
@@ -636,6 +646,7 @@ def _configureCommon():
             for k in filterWarnings:
                 env.Append(CCFLAGS=[f"-Wno-{k}"])
     elif env.whichCc == "gcc":
+
         env.Append(CCFLAGS=["-Wall"])
         env.Append(CCFLAGS=["-Wno-unknown-pragmas"])  # we don't want complaints about icc/clang pragmas
         env.Append(CCFLAGS=["-Wno-unused-local-typedefs"])  # boost generates a lot of these
@@ -668,6 +679,9 @@ def _configureCommon():
     # Disable link-time-optimization on GCC, for compatibility with conda
     # binaries
     #
+
+    if env.GetOption("ci_reports"):
+        env.Append(CCFLAGS=["-fdiagnostics-add-output=sarif"])
     if env.whichCc == "gcc":
         env.Append(CCFLAGS=["-fno-lto"])
         env.Append(LINKFLAGS=["-fno-lto"])
