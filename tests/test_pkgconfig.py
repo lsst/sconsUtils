@@ -35,6 +35,7 @@ from lsst.sconsUtils.pkgconfig import (
     cfg_path,
     check_single_format,
     output_path,
+    resolve,
     template_path,
     write_pc_from_template,
 )
@@ -228,6 +229,156 @@ class FlagQueryTestCase(unittest.TestCase):
         self.assertEqual(self.pc.libs_only_L([]), [])
         self.assertEqual(self.pc.libs_only_l([]), [])
         self.assertEqual(self.pc.libs_only_other([]), [])
+
+
+@unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
+class ResolveTestCase(unittest.TestCase):
+    """Tests for `resolve`."""
+
+    def setUp(self):
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        # Resolve the temporary directory itself so that the only
+        # difference between raw and realpath'd paths below is the
+        # deliberate `/../` detour, not e.g. a symlinked /tmp.
+        root = os.path.realpath(self._tmpdir.name)
+        pcdir = os.path.join(root, "pkgconfig")
+        self.conda = os.path.join(root, "conda")
+        self.prim_inc = os.path.join(root, "prim", "include")
+        # Written with a detour that pkg-config does not normalize.
+        self.dep_inc_raw = os.path.join(root, "dep", "..", "dep", "include")
+        self.dep_inc = os.path.join(root, "dep", "include")
+        self.prim_inc_file = os.path.join(root, "prim", "doc", "prim.inc")
+        self.dep_tag = os.path.join(root, "dep", "doc", "dep.tag")
+        for directory in (
+            pcdir,
+            os.path.join(self.conda, "include", "eigen3"),
+            self.prim_inc,
+            self.dep_inc,
+        ):
+            os.makedirs(directory)
+
+        write_pc(
+            pcdir,
+            "lsst_prim",
+            f"includedir={self.prim_inc}\n"
+            "lsst_build_requires=boost_test pybind11\n"
+            f"doxygen_tag={root}/prim/doc/prim.tag\n"
+            f"doxygen_include={self.prim_inc_file}\n"
+            "\n"
+            "Name: lsst_prim\nDescription: x\nVersion: 1.0\n"
+            "Requires: lsst_dep eigen3\n"
+            "Cflags: -I${includedir}\n"
+            "Libs: -lprim\n",
+        )
+        write_pc(
+            pcdir,
+            "lsst_dep",
+            f"includedir={self.dep_inc_raw}\n"
+            f"doxygen_tag={self.dep_tag}\n"
+            "lsst_test_libs=-lboost_unit_test_framework\n"
+            "\n"
+            "Name: lsst_dep\nDescription: x\nVersion: 2.0\n"
+            "Cflags: -I${includedir}\n"
+            "Libs: -ldep\n",
+        )
+        write_pc(
+            pcdir,
+            "eigen3",
+            f"Name: eigen3\nDescription: x\nVersion: 3.4\nCflags: -I{self.conda}/include/eigen3\nLibs:\n",
+        )
+        write_pc(
+            pcdir,
+            "boost_test",
+            "lsst_test_libs=-lboost_unit_test_framework\n"
+            "\n"
+            f"Name: boost_test\nDescription: x\nVersion: 1.86\nCflags: -I{self.conda}/include\nLibs:\n",
+        )
+        write_pc(
+            pcdir,
+            "pybind11",
+            "lsst_python_libs=-lpython_extra\n"
+            "\n"
+            f"Name: pybind11\nDescription: x\nVersion: 2.13\nCflags: -I{self.conda}/include\nLibs:\n",
+        )
+        write_pc(
+            pcdir,
+            "lsst_prim2",
+            "lsst_build_requires=nonexistent_mod\n"
+            "\n"
+            "Name: lsst_prim2\nDescription: x\nVersion: 1.0\nCflags:\nLibs:\n",
+        )
+        self.pc = PkgConfig([pcdir], conda_prefix=self.conda)
+
+    def test_modules_and_versions(self):
+        r = resolve("prim", self.pc, self.conda)
+        self.assertEqual(r.modules, ["lsst_prim", "lsst_dep", "eigen3", "boost_test", "pybind11"])
+        self.assertEqual(set(r.versions), {"prim", "dep", "eigen3", "boost_test", "pybind11"})
+        self.assertEqual(r.versions["dep"], "2.0")
+        self.assertEqual(r.versions["eigen3"], "3.4")
+
+    def test_include_routing(self):
+        r = resolve("prim", self.pc, self.conda)
+        # Guard: the detour really is there, so the assertion below fails
+        # unless realpath normalization is applied.
+        self.assertNotEqual(self.dep_inc_raw, os.path.realpath(self.dep_inc_raw))
+        self.assertEqual(r.cpppath, [os.path.realpath(self.prim_inc), os.path.realpath(self.dep_inc_raw)])
+        # <conda>/include is claimed by both boost_test and pybind11 but
+        # must appear exactly once.
+        self.assertEqual(
+            r.xcpppath,
+            [
+                os.path.realpath(os.path.join(self.conda, "include", "eigen3")),
+                os.path.realpath(os.path.join(self.conda, "include")),
+            ],
+        )
+
+    def test_conda_include_always_external(self):
+        # Even if an lsst_* module claims <conda>/include as its includedir
+        # (the container case), it must still route to xcpppath.
+        pcdir = os.path.join(os.path.dirname(self.conda), "pkgconfig")
+        write_pc(
+            pcdir,
+            "lsst_inst",
+            f"includedir={self.conda}/include\n"
+            "\n"
+            "Name: lsst_inst\nDescription: x\nVersion: 1.0\n"
+            "Cflags: -I${includedir}\nLibs: -linst\n",
+        )
+        r = resolve("inst", self.pc, self.conda)
+        self.assertEqual(r.cpppath, [])
+        self.assertEqual(r.xcpppath, [os.path.realpath(os.path.join(self.conda, "include"))])
+
+    def test_lib_categories(self):
+        r = resolve("prim", self.pc, self.conda)
+        self.assertEqual(r.libs["main"], ["prim", "dep"])
+        # Review Focus 5: declared by both lsst_dep and boost_test.
+        self.assertEqual(r.libs["test"], ["boost_unit_test_framework"])
+        self.assertEqual(r.libs["python"], ["python_extra"])
+
+    def test_doxygen(self):
+        r = resolve("prim", self.pc, self.conda)
+        # The primary's own tag is excluded.
+        self.assertEqual(r.doxygen["tags"], [self.dep_tag])
+        self.assertEqual(r.doxygen["includes"], [self.prim_inc_file])
+
+    def test_missing_build_require_names_module(self):  # Review Focus 4
+        with self.assertRaises(PkgConfigError) as cm:
+            resolve("prim2", self.pc, self.conda)
+        self.assertIn("nonexistent_mod", str(cm.exception))
+
+    def test_missing_primary_names_module(self):
+        with self.assertRaises(PkgConfigError) as cm:
+            resolve("absent", self.pc, self.conda)
+        self.assertIn("lsst_absent", str(cm.exception))
+
+    def test_without_build_requires(self):
+        r = resolve("prim", self.pc, self.conda, include_build_requires=False)
+        self.assertEqual(r.modules, ["lsst_prim", "lsst_dep", "eigen3"])
+        self.assertEqual(r.libs["python"], [])
+        # lsst_dep still contributes its test libraries.
+        self.assertEqual(r.libs["test"], ["boost_unit_test_framework"])
+        self.assertEqual(r.xcpppath, [os.path.realpath(os.path.join(self.conda, "include", "eigen3"))])
 
 
 class TemplateTestCase(unittest.TestCase):
