@@ -77,6 +77,10 @@ class SearchPathTestCase(unittest.TestCase):
             tempfile.TemporaryDirectory() as root,
             tempfile.TemporaryDirectory() as foo_dir_extra,
         ):
+            # Create the lib/pkgconfig subdirectory so that, if the
+            # `_EXTRA` guard were removed, `os.path.isdir` would not be
+            # the thing hiding the bug: the entry would actually appear.
+            os.makedirs(os.path.join(foo_dir_extra, "lib", "pkgconfig"))
             environ = {
                 "FOO_DIR_EXTRA": foo_dir_extra,
             }
@@ -131,7 +135,10 @@ class PkgConfigRunnerTestCase(unittest.TestCase):
         pc = PkgConfig([self.d], conda_prefix="/opt/conda")
         with self.assertRaises(PkgConfigError) as cm:
             pc.run("--cflags", "missing")
-        self.assertIn("missing", str(cm.exception))
+        # pkg-config 0.29.2's stderr for a missing module includes this
+        # sentence; assert on it so the exception message is confirmed to
+        # carry pkg-config's actual stderr, not just the echoed arguments.
+        self.assertIn("was not found in the pkg-config search path", str(cm.exception))
 
     def test_no_conda_prefix_fails(self):
         with self.assertRaises(PkgConfigError):
