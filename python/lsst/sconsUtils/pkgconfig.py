@@ -42,14 +42,19 @@ __all__ = (
     "build_search_path",
     "cfg_path",
     "check_single_format",
+    "main",
     "module_name",
     "output_path",
     "resolve",
+    "static_shim_dir",
     "template_path",
     "write_pc_from_template",
+    "write_shims",
 )
 
+import argparse
 import dataclasses
+import glob
 import os
 import re
 import shlex
@@ -773,3 +778,180 @@ def resolve(
         },
         versions={_strip_module_prefix(m): pkgconfig.modversion(m) for m in modules},
     )
+
+
+def _write_if_changed(output: str, contents: str) -> bool:
+    """Write `contents` to `output` unless it already has that content.
+
+    Parameters
+    ----------
+    output : `str`
+        Path of the file to write.  Its parent directory is created if it
+        does not already exist.
+    contents : `str`
+        The full content to write.
+
+    Returns
+    -------
+    wrote : `bool`
+        `True` if `output` was written or overwritten, `False` if its
+        content already matched `contents` and it was left untouched.
+    """
+    if os.path.exists(output):
+        with open(output) as f:
+            if f.read() == contents:
+                return False
+    os.makedirs(os.path.dirname(output), exist_ok=True)
+    with open(output, "w") as f:
+        f.write(contents)
+    return True
+
+
+def static_shim_dir() -> str | None:
+    """Return the directory of sconsUtils' static pkg-config shims.
+
+    Returns
+    -------
+    directory : `str` or `None`
+        ``$SCONSUTILS_DIR/pkgconfig`` if the ``SCONSUTILS_DIR`` environment
+        variable is set and that directory exists, otherwise `None`.  The
+        `None` case is normal in the container, where the static shims
+        have already been copied into ``$CONDA_PREFIX/lib/pkgconfig`` and
+        sconsUtils is not set up by EUPS at all.
+    """
+    sconsutils_dir = os.environ.get("SCONSUTILS_DIR")
+    if not sconsutils_dir:
+        return None
+    candidate = os.path.join(sconsutils_dir, "pkgconfig")
+    if not os.path.isdir(candidate):
+        return None
+    return candidate
+
+
+def _write_numpy_shim(directory: str) -> str | None:
+    """Generate ``numpy.pc`` in `directory`, or return `None` if skipped.
+
+    Runs the ``python`` found on ``PATH`` once to read both
+    ``numpy.__version__`` and ``numpy.get_include()``.  If that invocation
+    fails, for example because ``numpy`` is not importable, nothing is
+    written and `None` is returned; this is silent because an environment
+    without numpy simply has no use for the shim.
+    """
+    try:
+        output = subprocess.check_output(
+            [
+                "python",
+                "-c",
+                "import numpy; print(numpy.__version__); print(numpy.get_include())",
+            ],
+            text=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return None
+    lines = output.splitlines()
+    if len(lines) < 2:
+        return None
+    version, include = lines[0].strip(), lines[1].strip()
+    contents = f"Name: numpy\nDescription: NumPy C API\nVersion: {version}\nCflags: -I{include}\nLibs:\n"
+    output_file = os.path.join(directory, "numpy.pc")
+    _write_if_changed(output_file, contents)
+    return output_file
+
+
+def _write_starlink_ast_shim(directory: str) -> str | None:
+    """Generate ``starlink_ast.pc`` in `directory`, or `None` if skipped.
+
+    Runs the ``ast_link`` script found on ``PATH`` through ``sh``, exactly
+    as ``configs/starlink_ast.cfg`` did, to learn the library list.  If
+    ``ast_link`` cannot be found, nothing is written and `None` is
+    returned.
+    """
+    ast_link = shutil.which("ast_link")
+    if ast_link is None:
+        return None
+    try:
+        libs = subprocess.check_output(["sh", ast_link], text=True)
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    libs = " ".join(libs.split())
+    contents = (
+        "conda_prefix=${pcfiledir}/../..\n\n"
+        "Name: starlink_ast\n"
+        "Description: Starlink AST world coordinate system library\n"
+        "Version: unknown\n"
+        "Cflags: -I${conda_prefix}/include/star\n"
+        f"Libs: {libs}\n"
+    )
+    output_file = os.path.join(directory, "starlink_ast.pc")
+    _write_if_changed(output_file, contents)
+    return output_file
+
+
+def write_shims(directory: str, static_dir: str | None = None) -> list[str]:
+    """Write every pkg-config shim sconsUtils knows about into `directory`.
+
+    Parameters
+    ----------
+    directory : `str`
+        Directory to write into.  Created if it does not already exist.
+    static_dir : `str` or `None`, optional
+        Directory holding the static shims to copy, e.g. the repository's
+        top-level ``pkgconfig/`` directory.  Defaults to
+        `static_shim_dir`.  If that is also `None`, no static shims are
+        copied; this is the container case, where they have already been
+        installed directly into the conda tree.
+
+    Returns
+    -------
+    written : `list` [`str`]
+        The paths, under `directory`, of every shim that exists there
+        after this call: every ``*.pc`` copied from `static_dir`, plus
+        ``numpy.pc`` and ``starlink_ast.pc`` if they could be generated.
+        This list is returned regardless of whether a given file's
+        content actually changed; a file already present with identical
+        content is still included, and its modification time is left
+        untouched.
+    """
+    os.makedirs(directory, exist_ok=True)
+    if static_dir is None:
+        static_dir = static_shim_dir()
+
+    written: list[str] = []
+    if static_dir is not None:
+        for source in sorted(glob.glob(os.path.join(static_dir, "*.pc"))):
+            output_file = os.path.join(directory, os.path.basename(source))
+            with open(source) as f:
+                contents = f.read()
+            _write_if_changed(output_file, contents)
+            written.append(output_file)
+
+    numpy_shim = _write_numpy_shim(directory)
+    if numpy_shim is not None:
+        written.append(numpy_shim)
+
+    starlink_ast_shim = _write_starlink_ast_shim(directory)
+    if starlink_ast_shim is not None:
+        written.append(starlink_ast_shim)
+
+    return written
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the ``sconsUtils-write-pkgconfig-shims`` console script.
+
+    Parameters
+    ----------
+    argv : `~collections.abc.Sequence` [`str`] or `None`, optional
+        Command-line arguments, not including the program name.  Defaults
+        to `sys.argv[1:]`.
+
+    Returns
+    -------
+    status : `int`
+        Always ``0``.
+    """
+    parser = argparse.ArgumentParser(description="Write sconsUtils' pkg-config shims into a directory.")
+    parser.add_argument("directory", help="Directory to write the shims into.")
+    args = parser.parse_args(argv)
+    write_shims(args.directory)
+    return 0

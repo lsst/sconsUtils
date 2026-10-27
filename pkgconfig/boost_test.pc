@@ -1,0 +1,9 @@
+conda_prefix=${pcfiledir}/../..
+
+Name: boost_test
+Description: Boost unit test framework
+Version: unknown
+Requires: boost
+Cflags:
+Libs:
+lsst_test_libs=-lboost_unit_test_framework

@@ -1,0 +1,7 @@
+conda_prefix=${pcfiledir}/../..
+
+Name: minuit2
+Description: Minuit2 minimization library
+Version: unknown
+Cflags: -I${conda_prefix}/include/Minuit2
+Libs: -lMinuit2
