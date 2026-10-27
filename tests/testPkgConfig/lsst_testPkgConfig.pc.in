@@ -1,0 +1,9 @@
+prefix=${pcfiledir}/../..
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: lsst_testPkgConfig
+Description: sconsUtils end-to-end pkg-config fixture
+Version: @VERSION@
+Cflags: -I${includedir}
+Libs: -L${libdir} -ltestPkgConfig
