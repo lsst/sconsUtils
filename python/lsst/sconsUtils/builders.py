@@ -621,15 +621,14 @@ def VersionModule(self, filename, versionString=None):
             what = "__dependency_versions__"
             names.append(what)
             outFile.write(f"{what}: dict[str, str | None] = {{")
-            if env.dependencies.packages:
+            dependencyVersions = env.dependencies.versions
+            if dependencyVersions:
                 outFile.write("\n")
-                for name, mod in env.dependencies.packages.items():
-                    if mod is None:
+                for name, depVersion in dependencyVersions.items():
+                    if depVersion is None:
                         outFile.write(f'    "{name}": None,\n')
-                    elif hasattr(mod.config, "version"):
-                        outFile.write(f'    "{name}": "{mod.config.version}",\n')
                     else:
-                        outFile.write(f'    "{name}": "unknown",\n')
+                        outFile.write(f'    "{name}": "{depVersion}",\n')
             outFile.write("}\n")
 
             # Write out an entry per line as there can be many names
