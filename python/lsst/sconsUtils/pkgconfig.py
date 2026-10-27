@@ -40,6 +40,7 @@ __all__ = (
     "PkgConfigDependencies",
     "PkgConfigError",
     "ResolvedDependencies",
+    "SyntheticConfiguration",
     "apply_to_env",
     "build_search_path",
     "cfg_path",
@@ -50,6 +51,7 @@ __all__ = (
     "remove_generated_pc",
     "resolve",
     "static_shim_dir",
+    "synthesize_cfg_module",
     "template_path",
     "write_pc_from_template",
     "write_shims",
@@ -63,6 +65,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import types
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -442,6 +445,27 @@ class PkgConfig:
             raises, even if `module` cannot be found.
         """
         return self._invoke("--exists", module).returncode == 0
+
+    def present(self, module: str) -> bool:
+        """Return whether a ``.pc`` file for `module` is on the search path.
+
+        Unlike `exists`, this is `True` even if the ``Requires`` of
+        `module` cannot be satisfied, so that a broken module can be told
+        apart from a missing one.
+
+        Parameters
+        ----------
+        module : `str`
+            The pkg-config module name to look up.
+
+        Returns
+        -------
+        present : `bool`
+            `True` if a ``.pc`` file for the module can be read, `False`
+            otherwise.  This never raises.
+        """
+        # --modversion reads only the module's own file.
+        return self._invoke("--modversion", module).returncode == 0
 
     def modversion(self, module: str) -> str:
         """Return the version of `module`.
@@ -869,6 +893,139 @@ class PkgConfigDependencies:
         module name with a leading `MODULE_PREFIX` stripped
         (`dict` [`str`, `str` or `None`])."""
         return dict(self.resolved.versions)
+
+
+class SyntheticConfiguration:
+    """A ``.cfg``-style configuration synthesized from pkg-config.
+
+    This stands in for the ``config`` object of a ``.cfg`` module when a
+    package built through the ``.cfg`` path depends on a package that has
+    been converted to a pkg-config template and no longer ships a ``.cfg``
+    file.  It provides the attributes and the ``configure`` method that
+    `~lsst.sconsUtils.dependencies.PackageTree` uses, without depending on
+    `~lsst.sconsUtils.dependencies.Configuration`.
+
+    Parameters
+    ----------
+    name : `str`
+        The EUPS product name of the converted package.
+    resolved : `ResolvedDependencies`
+        The resolved dependencies of that package, as returned by
+        `resolve`.  These already cover the package's whole closure.
+
+    Notes
+    -----
+    The library lists are stored reversed, because
+    `~lsst.sconsUtils.dependencies.PackageTree.configure` reverses every
+    library list after configuring all packages; the final order is then
+    pkg-config's own, which already places a dependent's libraries before
+    those of the modules it depends on.
+    """
+
+    def __init__(self, name: str, resolved: ResolvedDependencies) -> None:
+        self.name = name
+        self.version = resolved.versions[name]
+        self.libs = {target: list(reversed(libs)) for target, libs in resolved.libs.items()}
+        self.paths = {
+            "CPPPATH": list(resolved.cpppath),
+            "XCPPPATH": list(resolved.xcpppath),
+            "LIBPATH": list(resolved.libpath),
+        }
+        self.doxygen = {key: list(value) for key, value in resolved.doxygen.items()}
+        self.provides = {"headers": (), "libs": tuple(resolved.libs["main"])}
+        self._ccflags = list(resolved.ccflags)
+        self._linkflags = list(resolved.linkflags)
+
+    def configure(self, conf: Any, packages: Mapping[str, Any], build: bool = True) -> bool:
+        """Update an SCons environment to make use of the package.
+
+        This has the same effect on ``conf.env`` as
+        `lsst.sconsUtils.dependencies.Configuration.configure`, and also
+        appends the package's compiler and linker flags.
+
+        Parameters
+        ----------
+        conf : `SCons.Configure`
+            An SCons Configure context.  The SCons Environment ``conf.env``
+            is updated.
+        packages : `~collections.abc.Mapping`
+            The configuration modules of all dependencies; unused, because
+            pkg-config has already flattened the closure.
+        build : `bool`, optional
+            If True, this is the package currently being built, and its
+            Doxygen tag files are not added.
+
+        Returns
+        -------
+        success : `bool`
+            Always `True`.
+        """
+        # Imported here so that this module stays free of SCons imports;
+        # this method is only ever called from inside an SCons build.
+        from . import state
+
+        log = state.log
+        assert log is not None, "sconsUtils state has not been initialized"
+        conf.env.PrependUnique(**self.paths)
+        conf.env.AppendUnique(CCFLAGS=self._ccflags, LINKFLAGS=self._linkflags)
+        log.info(f"Configuring package '{self.name}'.")
+        conf.env.doxygen["includes"].extend(self.doxygen["includes"])
+        if not build:
+            conf.env.doxygen["tags"].extend(self.doxygen["tags"])
+        for target, libs in self.libs.items():
+            if target not in conf.env.libs:
+                conf.env.libs[target] = libs.copy()
+                log.info(f"Adding '{libs}' libraries to target '{target}'.")
+            else:
+                for lib in libs:
+                    if lib not in conf.env.libs[target]:
+                        conf.env.libs[target].append(lib)
+                        log.info(f"Adding '{lib}' library to target '{target}'.")
+        return True
+
+
+def synthesize_cfg_module(name: str, pkgconfig: PkgConfig, conda_prefix: str) -> types.SimpleNamespace:
+    """Synthesize a ``.cfg`` configuration module from pkg-config.
+
+    Parameters
+    ----------
+    name : `str`
+        The EUPS product name of a package with a ``lsst_<name>`` module
+        on the pkg-config search path.
+    pkgconfig : `PkgConfig`
+        The runner used for every pkg-config query.
+    conda_prefix : `str`
+        The active conda prefix.
+
+    Returns
+    -------
+    module : `types.SimpleNamespace`
+        An object with an empty ``dependencies`` dict, because pkg-config
+        has already flattened the closure, and a ``config`` attribute
+        holding a `SyntheticConfiguration`.  The package's
+        ``lsst_build_requires`` are not included, because a dependency's
+        build-only requirements are never applied to the package consuming
+        it.  Unlike in `resolve`, the package's own ``doxygen_tag`` is
+        included, ahead of those of the modules it requires.
+
+    Raises
+    ------
+    PkgConfigError
+        Raised if the module is missing or its ``Requires`` cannot be
+        satisfied, with pkg-config's own explanation, or if it cannot be
+        resolved for another reason; see `resolve`.
+    """
+    # Fail with pkg-config's reason (e.g. which required module is missing)
+    # rather than resolve's generic "not found".
+    pkgconfig.run("--print-errors", "--exists", module_name(name))
+    resolved = resolve(name, pkgconfig, conda_prefix, include_build_requires=False)
+    # resolve() leaves out the primary module's own tag file, which only the
+    # package being built must do; a dependency's tag file is wanted, as
+    # with a .cfg dependency that sets hasDoxygenTag.
+    tag = pkgconfig.variable(module_name(name), "doxygen_tag")
+    if tag is not None:
+        resolved.doxygen["tags"].insert(0, tag)
+    return types.SimpleNamespace(dependencies={}, config=SyntheticConfiguration(name, resolved))
 
 
 def _write_if_changed(output: str, contents: str) -> bool:

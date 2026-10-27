@@ -25,6 +25,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import types
 import unittest
 
 import SCons.Environment
@@ -43,6 +44,7 @@ from lsst.sconsUtils.pkgconfig import (
     output_path,
     remove_generated_pc,
     resolve,
+    synthesize_cfg_module,
     template_path,
     write_pc_from_template,
     write_shims,
@@ -242,9 +244,12 @@ class FlagQueryTestCase(unittest.TestCase):
         self.assertEqual(self.pc.libs_only_other([]), [])
 
 
-@unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
-class ResolveTestCase(unittest.TestCase):
-    """Tests for `resolve`."""
+class ResolveFixture:
+    """Mixin providing a small tree of ``.pc`` files for `resolve` tests.
+
+    ``lsst_prim`` requires ``lsst_dep`` and ``eigen3`` and lists
+    ``boost_test`` and ``pybind11`` as build requirements.
+    """
 
     def setUp(self):
         self._tmpdir = tempfile.TemporaryDirectory()
@@ -261,6 +266,7 @@ class ResolveTestCase(unittest.TestCase):
         self.dep_inc = os.path.join(root, "dep", "include")
         self.prim_inc_file = os.path.join(root, "prim", "doc", "prim.inc")
         self.dep_tag = os.path.join(root, "dep", "doc", "dep.tag")
+        self.prim_tag = os.path.join(root, "prim", "doc", "prim.tag")
         for directory in (
             pcdir,
             os.path.join(self.conda, "include", "eigen3"),
@@ -274,7 +280,7 @@ class ResolveTestCase(unittest.TestCase):
             "lsst_prim",
             f"includedir={self.prim_inc}\n"
             "lsst_build_requires=boost_test pybind11\n"
-            f"doxygen_tag={root}/prim/doc/prim.tag\n"
+            f"doxygen_tag={self.prim_tag}\n"
             f"doxygen_include={self.prim_inc_file}\n"
             "\n"
             "Name: lsst_prim\nDescription: x\nVersion: 1.0\n"
@@ -319,7 +325,13 @@ class ResolveTestCase(unittest.TestCase):
             "\n"
             "Name: lsst_prim2\nDescription: x\nVersion: 1.0\nCflags:\nLibs:\n",
         )
+        self.pcdir = pcdir
         self.pc = PkgConfig([pcdir], conda_prefix=self.conda)
+
+
+@unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
+class ResolveTestCase(ResolveFixture, unittest.TestCase):
+    """Tests for `resolve`."""
 
     def test_modules_and_versions(self):
         r = resolve("prim", self.pc, self.conda)
@@ -390,6 +402,114 @@ class ResolveTestCase(unittest.TestCase):
         # lsst_dep still contributes its test libraries.
         self.assertEqual(r.libs["test"], ["boost_unit_test_framework"])
         self.assertEqual(r.xcpppath, [os.path.realpath(os.path.join(self.conda, "include", "eigen3"))])
+
+
+def make_cfg_env() -> SCons.Environment.Environment:
+    """Return an environment initialized the way `configure` initializes
+    one before running the ``.cfg`` path."""
+    env = SCons.Environment.Environment(tools=[])
+    env["CPPPATH"] = []
+    env["XCPPPATH"] = []
+    env["LIBPATH"] = []
+    env.libs = {"main": [], "python": [], "test": []}
+    env.doxygen = {"tags": [], "includes": []}
+    return env
+
+
+@unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
+class SynthesizeTestCase(ResolveFixture, unittest.TestCase):
+    """Tests for `synthesize_cfg_module` and `SyntheticConfiguration`."""
+
+    def setUp(self):
+        super().setUp()
+        self.mod = synthesize_cfg_module("prim", self.pc, self.conda)
+
+    def test_module_shape(self):
+        mod = self.mod
+        self.assertEqual(mod.dependencies, {})
+        self.assertEqual(mod.config.name, "prim")
+        self.assertEqual(mod.config.version, self.pc.modversion("lsst_prim"))
+        # Stored pre-reversed, as PackageTree.configure reverses them.
+        self.assertEqual(mod.config.libs["main"], ["dep", "prim"])
+        # Build requirements of a dependency are excluded.
+        self.assertEqual(mod.config.libs["python"], [])
+        self.assertEqual(mod.config.libs["test"], ["boost_unit_test_framework"])
+        self.assertEqual(
+            mod.config.paths,
+            {
+                "CPPPATH": [os.path.realpath(self.prim_inc), os.path.realpath(self.dep_inc)],
+                "XCPPPATH": [os.path.realpath(os.path.join(self.conda, "include", "eigen3"))],
+                "LIBPATH": [],
+            },
+        )
+        # Unlike resolve(), the package's own tag file is included.
+        self.assertEqual(
+            mod.config.doxygen, {"tags": [self.prim_tag, self.dep_tag], "includes": [self.prim_inc_file]}
+        )
+        self.assertEqual(mod.config.provides, {"headers": (), "libs": ("prim", "dep")})
+
+    def test_configure_applies_and_reversal_restores_order(self):
+        env = make_cfg_env()
+        env["CPPPATH"] = ["/already"]
+        # A library already contributed by another package is not repeated.
+        env.libs["main"].append("dep")
+        conf = types.SimpleNamespace(env=env)
+        self.assertTrue(self.mod.config.configure(conf, packages={}, build=False))
+        self.assertEqual(
+            env["CPPPATH"], [os.path.realpath(self.prim_inc), os.path.realpath(self.dep_inc), "/already"]
+        )
+        self.assertEqual(env["XCPPPATH"], [os.path.realpath(os.path.join(self.conda, "include", "eigen3"))])
+        self.assertEqual(
+            env.doxygen, {"tags": [self.prim_tag, self.dep_tag], "includes": [self.prim_inc_file]}
+        )
+        for target in env.libs:  # what PackageTree.configure does
+            env.libs[target].reverse()
+        self.assertEqual(env.libs["main"], ["prim", "dep"])
+        self.assertEqual(env.libs["test"], ["boost_unit_test_framework"])
+        # The configuration's own lists are left untouched.
+        self.assertEqual(self.mod.config.libs["main"], ["dep", "prim"])
+
+    def test_configure_build_adds_includes_not_tags(self):
+        env = make_cfg_env()
+        conf = types.SimpleNamespace(env=env)
+        self.assertTrue(self.mod.config.configure(conf, packages={}, build=True))
+        self.assertEqual(env.doxygen, {"tags": [], "includes": [self.prim_inc_file]})
+
+    def test_configure_appends_flags(self):
+        write_pc(
+            self.pcdir,
+            "lsst_flagged",
+            "Name: lsst_flagged\nDescription: x\nVersion: 3.0\n"
+            "Cflags: -DFLAGGED\nLibs: -L/lib/flagged -lflagged -Wl,-z,defs\n",
+        )
+        mod = synthesize_cfg_module("flagged", self.pc, self.conda)
+        self.assertEqual(mod.config.version, "3.0")
+        env = make_cfg_env()
+        env["CCFLAGS"] = ["-DFLAGGED"]
+        conf = types.SimpleNamespace(env=env)
+        self.assertTrue(mod.config.configure(conf, packages={}, build=False))
+        self.assertEqual(env["CCFLAGS"], ["-DFLAGGED"])
+        self.assertEqual(env["LINKFLAGS"], ["-Wl,-z,defs"])
+        self.assertEqual(env["LIBPATH"], ["/lib/flagged"])
+        self.assertEqual(env.libs["main"], ["flagged"])
+
+    def test_missing_module_raises(self):
+        with self.assertRaises(PkgConfigError):
+            synthesize_cfg_module("absent", self.pc, self.conda)
+
+    def test_broken_requires_is_present_and_named(self):
+        write_pc(
+            self.pcdir,
+            "lsst_broken",
+            "Name: lsst_broken\nDescription: x\nVersion: 1.0\nRequires: lsst_gone\nCflags:\nLibs:\n",
+        )
+        # A broken module is present but does not "exist" to pkg-config.
+        self.assertFalse(self.pc.exists("lsst_broken"))
+        self.assertTrue(self.pc.present("lsst_broken"))
+        self.assertFalse(self.pc.present("lsst_absent"))
+        with self.assertRaises(PkgConfigError) as cm:
+            synthesize_cfg_module("broken", self.pc, self.conda)
+        self.assertIn("lsst_gone", str(cm.exception))
 
 
 class TemplateTestCase(unittest.TestCase):
