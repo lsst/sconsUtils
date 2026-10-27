@@ -32,6 +32,11 @@ from lsst.sconsUtils.pkgconfig import (
     PkgConfig,
     PkgConfigError,
     build_search_path,
+    cfg_path,
+    check_single_format,
+    output_path,
+    template_path,
+    write_pc_from_template,
 )
 
 
@@ -223,6 +228,90 @@ class FlagQueryTestCase(unittest.TestCase):
         self.assertEqual(self.pc.libs_only_L([]), [])
         self.assertEqual(self.pc.libs_only_l([]), [])
         self.assertEqual(self.pc.libs_only_other([]), [])
+
+
+class TemplateTestCase(unittest.TestCase):
+    """Tests for template discovery and `.pc` generation."""
+
+    def test_paths(self):
+        self.assertEqual(template_path("/r", "afw"), "/r/lsst_afw.pc.in")
+        self.assertEqual(cfg_path("/r", "afw"), "/r/ups/afw.cfg")
+        self.assertEqual(output_path("/r", "afw"), "/r/lib/pkgconfig/lsst_afw.pc")
+
+    def test_both_formats_is_error(self):
+        with tempfile.TemporaryDirectory() as root:
+            os.makedirs(os.path.join(root, "ups"))
+            with open(template_path(root, "afw"), "w") as f:
+                f.write("Name: lsst_afw\n")
+            with open(cfg_path(root, "afw"), "w") as f:
+                f.write("")
+            with self.assertRaises(PkgConfigError) as cm:
+                check_single_format(root, "afw")
+            self.assertIn("lsst_afw.pc.in", str(cm.exception))
+            self.assertIn("afw.cfg", str(cm.exception))
+
+    def test_neither_format_is_fine(self):
+        with tempfile.TemporaryDirectory() as root:
+            # Neither file exists; should not raise.
+            check_single_format(root, "afw")
+
+    def test_only_template_is_fine(self):
+        with tempfile.TemporaryDirectory() as root:
+            with open(template_path(root, "afw"), "w") as f:
+                f.write("Name: lsst_afw\n")
+            check_single_format(root, "afw")
+
+    def test_only_cfg_is_fine(self):
+        with tempfile.TemporaryDirectory() as root:
+            os.makedirs(os.path.join(root, "ups"))
+            with open(cfg_path(root, "afw"), "w") as f:
+                f.write("")
+            check_single_format(root, "afw")
+
+    @unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
+    def test_write_substitutes_version_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as root:
+            tmpl = os.path.join(root, "lsst_x.pc.in")
+            out = os.path.join(root, "lib", "pkgconfig", "lsst_x.pc")
+            with open(tmpl, "w") as f:
+                f.write("Name: lsst_x\nDescription: d\nVersion: @VERSION@\nCflags:\nLibs:\n")
+
+            self.assertTrue(write_pc_from_template(tmpl, out, "g1234+5"))
+            with open(out) as f:
+                self.assertIn("Version: g1234+5\n", f.read())
+
+            mtime_after_first_write = os.path.getmtime(out)
+
+            self.assertFalse(write_pc_from_template(tmpl, out, "g1234+5"))
+            self.assertEqual(os.path.getmtime(out), mtime_after_first_write)
+
+            # And pkg-config reads it back correctly.
+            self.assertEqual(
+                PkgConfig([os.path.dirname(out)], "/c").modversion("lsst_x"),
+                "g1234+5",
+            )
+
+    def test_unknown_version_is_written(self):
+        with tempfile.TemporaryDirectory() as root:
+            tmpl = os.path.join(root, "lsst_x.pc.in")
+            out = os.path.join(root, "lib", "pkgconfig", "lsst_x.pc")
+            with open(tmpl, "w") as f:
+                f.write("Name: lsst_x\nDescription: d\nVersion: @VERSION@\nCflags:\nLibs:\n")
+
+            self.assertTrue(write_pc_from_template(tmpl, out, "unknown"))
+            with open(out) as f:
+                self.assertIn("Version: unknown\n", f.read())
+
+    def test_missing_token_fails(self):
+        with tempfile.TemporaryDirectory() as root:
+            tmpl = os.path.join(root, "lsst_x.pc.in")
+            out = os.path.join(root, "lib", "pkgconfig", "lsst_x.pc")
+            with open(tmpl, "w") as f:
+                f.write("Name: lsst_x\nDescription: d\nVersion: 1\nCflags:\nLibs:\n")
+
+            with self.assertRaises(PkgConfigError) as cm:
+                write_pc_from_template(tmpl, out, "1")
+            self.assertIn(tmpl, str(cm.exception))
 
 
 if __name__ == "__main__":

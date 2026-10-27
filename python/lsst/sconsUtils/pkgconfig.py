@@ -39,7 +39,12 @@ __all__ = (
     "PkgConfig",
     "PkgConfigError",
     "build_search_path",
+    "cfg_path",
+    "check_single_format",
     "module_name",
+    "output_path",
+    "template_path",
+    "write_pc_from_template",
 )
 
 import os
@@ -92,6 +97,133 @@ def module_name(package_name: str) -> str:
         The pkg-config module name, e.g. ``"lsst_afw"``.
     """
     return MODULE_PREFIX + package_name
+
+
+def template_path(build_root: str, package_name: str) -> str:
+    """Return the path of a package's pkg-config template file.
+
+    Parameters
+    ----------
+    build_root : `str`
+        Absolute path to the root of the package currently being built.
+    package_name : `str`
+        The EUPS product name, e.g. ``"afw"``.
+
+    Returns
+    -------
+    path : `str`
+        The path of the template, e.g. ``"<build_root>/lsst_afw.pc.in"``.
+    """
+    return os.path.join(build_root, module_name(package_name) + TEMPLATE_SUFFIX)
+
+
+def cfg_path(build_root: str, package_name: str) -> str:
+    """Return the path of a package's legacy ``ups/<name>.cfg`` file.
+
+    Parameters
+    ----------
+    build_root : `str`
+        Absolute path to the root of the package currently being built.
+    package_name : `str`
+        The EUPS product name, e.g. ``"afw"``.
+
+    Returns
+    -------
+    path : `str`
+        The path of the ``.cfg`` file, e.g. ``"<build_root>/ups/afw.cfg"``.
+    """
+    return os.path.join(build_root, "ups", package_name + ".cfg")
+
+
+def output_path(build_root: str, package_name: str) -> str:
+    """Return the path of a package's generated ``.pc`` file.
+
+    Parameters
+    ----------
+    build_root : `str`
+        Absolute path to the root of the package currently being built.
+    package_name : `str`
+        The EUPS product name, e.g. ``"afw"``.
+
+    Returns
+    -------
+    path : `str`
+        The path of the generated file, e.g.
+        ``"<build_root>/lib/pkgconfig/lsst_afw.pc"``.
+    """
+    return os.path.join(build_root, "lib", "pkgconfig", module_name(package_name) + ".pc")
+
+
+def check_single_format(build_root: str, package_name: str) -> None:
+    """Check that a package uses at most one dependency-description format.
+
+    Parameters
+    ----------
+    build_root : `str`
+        Absolute path to the root of the package currently being built.
+    package_name : `str`
+        The EUPS product name, e.g. ``"afw"``.
+
+    Raises
+    ------
+    PkgConfigError
+        Raised if both `template_path` and `cfg_path` exist for
+        `package_name`, naming both paths.  Nothing is raised if zero or
+        one of the two files exists.
+    """
+    template = template_path(build_root, package_name)
+    cfg = cfg_path(build_root, package_name)
+    if os.path.exists(template) and os.path.exists(cfg):
+        raise PkgConfigError(
+            f"Package {package_name!r} has both a pkg-config template ({template}) and a "
+            f"legacy configuration file ({cfg}); a package must use only one of the two formats."
+        )
+
+
+def write_pc_from_template(template: str, output: str, version: str) -> bool:
+    """Write a ``.pc`` file from a template, substituting the version.
+
+    Parameters
+    ----------
+    template : `str`
+        Path of the template file to read.  Every occurrence of
+        `VERSION_TOKEN` is replaced with `version`; no other substitution
+        is performed.
+    output : `str`
+        Path of the ``.pc`` file to write.  Its parent directory is
+        created if it does not already exist.
+    version : `str`
+        The version string to substitute for `VERSION_TOKEN`.
+
+    Returns
+    -------
+    wrote : `bool`
+        `True` if `output` was written or overwritten, `False` if its
+        content already matched the substituted template and it was left
+        untouched.
+
+    Raises
+    ------
+    PkgConfigError
+        Raised if `VERSION_TOKEN` does not appear anywhere in `template`,
+        naming `template`.
+    """
+    with open(template) as f:
+        contents = f.read()
+    if VERSION_TOKEN not in contents:
+        raise PkgConfigError(f"Template {template} does not contain the {VERSION_TOKEN} token")
+    new_contents = contents.replace(VERSION_TOKEN, version)
+
+    if os.path.exists(output):
+        with open(output) as f:
+            existing_contents = f.read()
+        if existing_contents == new_contents:
+            return False
+
+    os.makedirs(os.path.dirname(output), exist_ok=True)
+    with open(output, "w") as f:
+        f.write(new_contents)
+    return True
 
 
 def _dedup_preserve_order(entries: list[str]) -> list[str]:
