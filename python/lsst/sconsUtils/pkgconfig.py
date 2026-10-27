@@ -35,6 +35,7 @@ __all__ = (
     "MODULE_PREFIX",
     "TEMPLATE_SUFFIX",
     "VERSION_TOKEN",
+    "CyclicDependencyError",
     "PkgConfig",
     "PkgConfigError",
     "build_search_path",
@@ -43,6 +44,7 @@ __all__ = (
 
 import os
 import re
+import shlex
 import shutil
 import subprocess
 from collections.abc import Mapping, Sequence
@@ -66,6 +68,14 @@ _DIR_VAR_RE = re.compile(r"^(?P<name>\w+)_DIR(?P<extra>_EXTRA)?$")
 
 class PkgConfigError(RuntimeError):
     """Raised when invoking pkg-config fails or is misconfigured."""
+
+
+class CyclicDependencyError(PkgConfigError):
+    """Raised when `PkgConfig.closure` finds a cycle in ``Requires``.
+
+    The exception message lists the modules on the cycle, in path order,
+    e.g. ``"a -> b -> a"``.
+    """
 
 
 def module_name(package_name: str) -> str:
@@ -288,3 +298,173 @@ class PkgConfig:
         """
         value = self.run(f"--variable={name}", module).strip()
         return value or None
+
+    def requires(self, module: str) -> list[str]:
+        """Return the modules `module` directly requires.
+
+        Parameters
+        ----------
+        module : `str`
+            The pkg-config module name to look up.
+
+        Returns
+        -------
+        requires : `list` [`str`]
+            The module names listed in `module`'s ``Requires`` field, in
+            order, with any version constraint (e.g. ``"foo >= 1.2"``)
+            stripped down to just the module name.
+        """
+        requires = []
+        for line in self.run("--print-requires", module).splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            requires.append(line.split()[0])
+        return requires
+
+    def closure(self, modules: Sequence[str]) -> list[str]:
+        """Return the transitive closure of `modules` under ``Requires``.
+
+        Parameters
+        ----------
+        modules : `~collections.abc.Sequence` [`str`]
+            The pkg-config module names to start from.
+
+        Returns
+        -------
+        closure : `list` [`str`]
+            Every module reachable from `modules`, depth-first, in
+            first-visit order, with each module appearing only once.
+
+        Raises
+        ------
+        CyclicDependencyError
+            Raised if a cycle is found in the ``Requires`` graph.  The
+            exception message lists the modules on the cycle, in path
+            order (e.g. ``"a -> b -> a"``).
+        """
+        result: list[str] = []
+        visited: set[str] = set()
+        requires_cache: dict[str, list[str]] = {}
+
+        def visit(module: str, path: list[str]) -> None:
+            if module in path:
+                cycle = path[path.index(module) :] + [module]
+                raise CyclicDependencyError(" -> ".join(cycle))
+            if module in visited:
+                return
+            visited.add(module)
+            result.append(module)
+            if module not in requires_cache:
+                requires_cache[module] = self.requires(module)
+            for dependency in requires_cache[module]:
+                visit(dependency, path + [module])
+
+        for module in modules:
+            visit(module, [])
+        return result
+
+    def cflags_only_I(self, modules: Sequence[str]) -> list[str]:
+        """Return the ``-I`` include directories for `modules`.
+
+        Parameters
+        ----------
+        modules : `~collections.abc.Sequence` [`str`]
+            The pkg-config module names to query.
+
+        Returns
+        -------
+        directories : `list` [`str`]
+            Include directories, in pkg-config's order, with the ``-I``
+            prefix stripped.
+        """
+        return self._split_flags("--cflags-only-I", modules, "-I")
+
+    def cflags_only_other(self, modules: Sequence[str]) -> list[str]:
+        """Return the non-``-I`` compiler flags for `modules`.
+
+        Parameters
+        ----------
+        modules : `~collections.abc.Sequence` [`str`]
+            The pkg-config module names to query.
+
+        Returns
+        -------
+        flags : `list` [`str`]
+            Compiler flags other than ``-I``, in pkg-config's order.
+        """
+        return self._split_flags("--cflags-only-other", modules)
+
+    def libs_only_L(self, modules: Sequence[str]) -> list[str]:
+        """Return the ``-L`` library directories for `modules`.
+
+        Parameters
+        ----------
+        modules : `~collections.abc.Sequence` [`str`]
+            The pkg-config module names to query.
+
+        Returns
+        -------
+        directories : `list` [`str`]
+            Library search directories, in pkg-config's order, with the
+            ``-L`` prefix stripped.
+        """
+        return self._split_flags("--libs-only-L", modules, "-L")
+
+    def libs_only_l(self, modules: Sequence[str]) -> list[str]:
+        """Return the ``-l`` library names for `modules`.
+
+        Parameters
+        ----------
+        modules : `~collections.abc.Sequence` [`str`]
+            The pkg-config module names to query.
+
+        Returns
+        -------
+        names : `list` [`str`]
+            Library names, in pkg-config's order, with the ``-l`` prefix
+            stripped.
+        """
+        return self._split_flags("--libs-only-l", modules, "-l")
+
+    def libs_only_other(self, modules: Sequence[str]) -> list[str]:
+        """Return the non-``-L``/``-l`` linker flags for `modules`.
+
+        Parameters
+        ----------
+        modules : `~collections.abc.Sequence` [`str`]
+            The pkg-config module names to query.
+
+        Returns
+        -------
+        flags : `list` [`str`]
+            Linker flags other than ``-L`` and ``-l``, in pkg-config's
+            order.
+        """
+        return self._split_flags("--libs-only-other", modules)
+
+    def _split_flags(self, query: str, modules: Sequence[str], prefix: str | None = None) -> list[str]:
+        """Run `query` over `modules` and split the result into tokens.
+
+        Parameters
+        ----------
+        query : `str`
+            The pkg-config flag query to run, e.g. ``"--cflags-only-I"``.
+        modules : `~collections.abc.Sequence` [`str`]
+            The pkg-config module names to query.  If empty, pkg-config is
+            not invoked and an empty list is returned.
+        prefix : `str` or `None`, optional
+            A two-character prefix (e.g. ``"-I"``) to strip from each
+            token.  If `None`, tokens are returned unchanged.
+
+        Returns
+        -------
+        tokens : `list` [`str`]
+            The split, optionally unprefixed, tokens.
+        """
+        if not modules:
+            return []
+        tokens = shlex.split(self.run(query, *modules))
+        if prefix is None:
+            return tokens
+        return [token[len(prefix) :] for token in tokens]
