@@ -23,6 +23,7 @@
 
 import os
 import shutil
+import subprocess
 import tempfile
 import unittest
 
@@ -34,11 +35,16 @@ from lsst.sconsUtils.pkgconfig import (
     build_search_path,
     cfg_path,
     check_single_format,
+    main,
     output_path,
     resolve,
     template_path,
     write_pc_from_template,
+    write_shims,
 )
+
+#: Absolute path to the repository's top-level static shim directory.
+_STATIC_SHIM_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pkgconfig")
 
 
 def write_pc(directory: str, name: str, body: str) -> str:
@@ -463,6 +469,106 @@ class TemplateTestCase(unittest.TestCase):
             with self.assertRaises(PkgConfigError) as cm:
                 write_pc_from_template(tmpl, out, "1")
             self.assertIn(tmpl, str(cm.exception))
+
+
+@unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
+class ShimTestCase(unittest.TestCase):
+    """Tests for `write_shims` and the console script `main`."""
+
+    def setUp(self):
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        self.target = os.path.join(self._tmpdir.name, "shims")
+
+    def _pkg_config(self, *args):
+        """Run the real ``pkg-config`` binary with no ``--define-variable``,
+        so that a shim's own ``conda_prefix`` default is exercised."""
+        env = dict(os.environ)
+        env["PKG_CONFIG_PATH"] = self.target
+        return subprocess.run(
+            ["pkg-config", *args], env=env, capture_output=True, text=True, check=True
+        ).stdout
+
+    def _cflags(self, module):
+        return self._pkg_config("--cflags", module)
+
+    def _libs(self, module):
+        return self._pkg_config("--libs", module)
+
+    def _variable(self, module, name):
+        return self._pkg_config(f"--variable={name}", module).strip()
+
+    def test_static_shims_resolve_from_copy(self):
+        written = write_shims(self.target, static_dir=_STATIC_SHIM_DIR)
+        for name in (
+            "boost",
+            "boost_test",
+            "boost_timer",
+            "boost_math",
+            "boost_regex",
+            "boost_filesystem",
+            "boost_system",
+            "boost_thread",
+            "boost_program_options",
+            "boost_serialization",
+            "minuit2",
+            "ndarray",
+        ):
+            self.assertIn(os.path.join(self.target, f"{name}.pc"), written)
+
+        self.assertEqual(self._cflags("minuit2").split(), ["-I" + self.target + "/../../include/Minuit2"])
+        # boost_test.pc itself has an empty Libs:, but it Requires: boost,
+        # and pkg-config propagates a required module's Libs, so the
+        # effective link line still carries boost's own -lpthread.
+        self.assertEqual(self._libs("boost_test").strip(), "-lpthread")
+        self.assertEqual(self._variable("boost_test", "lsst_test_libs"), "-lboost_unit_test_framework")
+        self.assertEqual(self._libs("boost_math").split(), ["-lboost_math_c99", "-lpthread"])
+        self.assertEqual(self._libs("boost").strip(), "-lpthread")
+
+    def test_generated_numpy(self):
+        written = write_shims(self.target, static_dir=_STATIC_SHIM_DIR)
+        self.assertIn(os.path.join(self.target, "numpy.pc"), written)
+        inc = (
+            subprocess.check_output(["python", "-c", "import numpy; print(numpy.get_include())"])
+            .decode()
+            .strip()
+        )
+        self.assertEqual(PkgConfig([self.target], "/c").cflags_only_I(["numpy"]), [inc])
+
+    @unittest.skipUnless(shutil.which("ast_link"), "ast_link is not available on PATH")
+    @unittest.skipUnless(os.environ.get("CONDA_PREFIX"), "CONDA_PREFIX is not set")
+    def test_generated_starlink_ast(self):
+        written = write_shims(self.target, static_dir=_STATIC_SHIM_DIR)
+        self.assertIn(os.path.join(self.target, "starlink_ast.pc"), written)
+        conda_prefix = os.environ["CONDA_PREFIX"]
+        self.assertEqual(
+            PkgConfig([self.target], conda_prefix).cflags_only_I(["starlink_ast"]),
+            [os.path.join(conda_prefix, "include", "star")],
+        )
+
+    def test_rewrite_leaves_unchanged_file_untouched(self):
+        write_shims(self.target, static_dir=_STATIC_SHIM_DIR)
+        boost_pc = os.path.join(self.target, "boost.pc")
+        mtime_after_first_write = os.path.getmtime(boost_pc)
+
+        write_shims(self.target, static_dir=_STATIC_SHIM_DIR)
+        self.assertEqual(os.path.getmtime(boost_pc), mtime_after_first_write)
+
+    def test_no_static_dir_copies_nothing(self):
+        # Simulate the container case, where SCONSUTILS_DIR is unset (or
+        # unusable) and no static_dir is passed explicitly: static_shim_dir
+        # falls back to None and nothing is copied.
+        previous = os.environ.pop("SCONSUTILS_DIR", None)
+        self.addCleanup(lambda: previous is not None and os.environ.__setitem__("SCONSUTILS_DIR", previous))
+        written = write_shims(self.target, static_dir=None)
+        self.assertFalse(os.path.exists(os.path.join(self.target, "boost.pc")))
+        # numpy is still generated, since it does not depend on static_dir.
+        self.assertIn(os.path.join(self.target, "numpy.pc"), written)
+
+    def test_console_script(self):
+        target2 = os.path.join(self._tmpdir.name, "shims2")
+        self.assertEqual(main([target2]), 0)
+        self.assertTrue(os.path.exists(os.path.join(target2, "boost.pc")))
 
 
 if __name__ == "__main__":

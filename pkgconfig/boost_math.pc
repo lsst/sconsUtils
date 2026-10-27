@@ -1,0 +1,8 @@
+conda_prefix=${pcfiledir}/../..
+
+Name: boost_math
+Description: Boost math library
+Version: unknown
+Requires: boost
+Cflags:
+Libs: -lboost_math_c99
