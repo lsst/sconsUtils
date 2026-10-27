@@ -37,6 +37,9 @@ requires-python = ">=3.11.0"
 "Homepage" = "https://github.com/lsst/sconsUtils"
 "Source" = "https://github.com/lsst/sconsUtils"
 
+[project.scripts]
+sconsUtils-write-pkgconfig-shims = "lsst.sconsUtils.pkgconfig:main"
+
 [project.optional-dependencies]
 test = []
 

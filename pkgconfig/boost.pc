@@ -1,0 +1,7 @@
+conda_prefix=${pcfiledir}/../..
+
+Name: boost
+Description: Boost C++ libraries
+Version: unknown
+Cflags:
+Libs: -lpthread

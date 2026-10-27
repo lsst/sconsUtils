@@ -1,0 +1,8 @@
+conda_prefix=${pcfiledir}/../..
+
+Name: ndarray
+Description: ndarray header-only array library
+Version: unknown
+Requires: boost numpy fftw3 eigen3
+Cflags:
+Libs:
