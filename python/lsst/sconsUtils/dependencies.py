@@ -32,23 +32,31 @@ from sys import platform
 import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
 
-from . import eupsForScons, installation, state
+from . import eupsForScons, installation, pkgconfig, state
 from .utils import get_conda_prefix, use_conda_compilers
 
 
 def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath=None, noCfgFile=False):
-    """Recursively configure a package using ups/.cfg files.
+    """Configure a package from its pkg-config template or ups/.cfg files.
 
     Aliased as `lsst.sconsUtils.configure`.
 
     Usually, LSST packages will call this function through
     `~lsst.sconsUtils.scripts.BasicSConstruct`.
 
+    If the build root contains a pkg-config template
+    ``lsst_<packageName>.pc.in``, ``lib/pkgconfig/lsst_<packageName>.pc`` is
+    written from it and the package's dependencies are resolved through
+    pkg-config; ``.cfg`` files are never consulted.  Otherwise the
+    dependency tree is loaded recursively from ``.cfg`` files.  A package
+    with both a template and a ``ups/<packageName>.cfg`` is an error.
+
     Parameters
     ----------
     packageName : `str`
-        Name of the package being built; must correspond to a ``.cfg`` file
-        in the ``ups`` directory.
+        Name of the package being built; must correspond to a pkg-config
+        template at the build root or a ``.cfg`` file in the ``ups``
+        directory.
     versionString : `str`, optional
         Version-control system string to be parsed for version information
         (``$HeadURL$`` for SVN).
@@ -58,7 +66,8 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     eupsProductPath : `str`, optional
         An alternate directory where the package should be installed.
     noCfgFile : `bool`
-        If True, this package has no ``.cfg`` file.
+        If True, this package has no ``.cfg`` file.  Ignored if the package
+        has a pkg-config template.
 
     Returns
     -------
@@ -93,7 +102,15 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     #
     state.log.traceback = state.env.GetOption("traceback")
     state.log.verbose = state.env.GetOption("verbose")
-    packages = PackageTree(packageName, noCfgFile=noCfgFile)
+    root = SCons.Script.Dir("#").abspath
+    try:
+        pkgconfig.check_single_format(root, packageName)
+    except pkgconfig.PkgConfigError as err:
+        state.log.fail(str(err))
+    # A pkg-config template selects the pkg-config path, in which case no
+    # .cfg file is ever consulted for this build.
+    usePkgConfig = os.path.exists(pkgconfig.template_path(root, packageName))
+    packages = None if usePkgConfig else PackageTree(packageName, noCfgFile=noCfgFile)
     state.log.flush()  # if we've already hit a fatal error, die now.
     state.env.libs = {"main": [], "python": [], "test": []}
     state.env.doxygen = {"tags": [], "includes": []}
@@ -136,12 +153,73 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
             state.env.Append(CPPPATH=os.path.join(d, "include"))
             state.env.Append(LIBPATH=os.path.join(d, "lib"))
 
+    if usePkgConfig:
+        state.env.dependencies = _configurePkgConfig(root, packageName)
+    else:
+        if not state.env.GetOption("clean") and not state.env.GetOption("help"):
+            packages.configure(state.env)
+        state.env.dependencies = packages
     if not state.env.GetOption("clean") and not state.env.GetOption("help"):
-        packages.configure(state.env)
         for target in state.env.libs:
             state.log.info(f"Libraries in target '{target}': {state.env.libs[target]}")
-    state.env.dependencies = packages
     state.log.flush()
+
+
+def _configurePkgConfig(root, packageName):
+    """Configure the package being built through pkg-config.
+
+    Parameters
+    ----------
+    root : `str`
+        Absolute path to the build root, holding the package's pkg-config
+        template.
+    packageName : `str`
+        Name of the package being built.
+
+    Returns
+    -------
+    dependencies : `~lsst.sconsUtils.pkgconfig.PkgConfigDependencies`
+        The resolved dependencies, to be stored as ``env.dependencies``.
+        With ``--clean`` or ``--help`` pkg-config is not run at all and the
+        result is empty; with ``--clean`` and no explicit targets the
+        generated ``.pc`` file is removed instead.
+    """
+    if state.env.GetOption("clean") or state.env.GetOption("help"):
+        # Mirror the condition CleanTree uses, so that e.g.
+        # "scons --clean install" does not remove the file.
+        if state.env.GetOption("clean") and not SCons.Script.COMMAND_LINE_TARGETS:
+            if pkgconfig.remove_generated_pc(root, packageName):
+                state.log.info(f"Removed {pkgconfig.output_path(root, packageName)}.")
+        empty = pkgconfig.ResolvedDependencies(
+            modules=[],
+            cpppath=[],
+            xcpppath=[],
+            ccflags=[],
+            libpath=[],
+            linkflags=[],
+            libs={"main": [], "python": [], "test": []},
+            doxygen={"tags": [], "includes": []},
+            versions={},
+        )
+        return pkgconfig.PkgConfigDependencies(packageName, empty)
+
+    try:
+        pkgconfig.write_shims(os.path.join(root, pkgconfig.GENERATED_SHIM_SUBDIR))
+        template = pkgconfig.template_path(root, packageName)
+        output = pkgconfig.output_path(root, packageName)
+        if pkgconfig.write_pc_from_template(template, output, state.env["version"]):
+            state.log.info(f"Wrote {output} from {template}.")
+        condaPrefix = get_conda_prefix()
+        runner = pkgconfig.PkgConfig(pkgconfig.build_search_path(root, os.environ), condaPrefix)
+        state.log.info(f"Using pkg-config at '{runner.executable}'.")
+        resolved = pkgconfig.resolve(packageName, runner, condaPrefix)
+    except pkgconfig.PkgConfigError as err:
+        state.log.fail(str(err))
+    state.log.info(f"Configuring package '{packageName}' through pkg-config modules {resolved.modules}.")
+    state.log.info(f"CPPPATH from pkg-config: {resolved.cpppath}")
+    state.log.info(f"XCPPPATH from pkg-config: {resolved.xcpppath}")
+    pkgconfig.apply_to_env(state.env, resolved)
+    return pkgconfig.PkgConfigDependencies(packageName, resolved)
 
 
 class Configuration:
@@ -442,6 +520,19 @@ class PackageTree:
             self._recurse(dependency)
 
     name = property(lambda self: self.primary.config.name)
+
+    @property
+    def versions(self):
+        """Version of every dependency, keyed by package name
+        (`dict` [`str`, `str` or `None`]).
+
+        A dependency that was not found has a version of `None`, and one
+        whose configuration does not record a version has ``"unknown"``.
+        """
+        return {
+            name: (getattr(mod.config, "version", "unknown") if mod is not None else None)
+            for name, mod in self.packages.items()
+        }
 
     def configure(self, env):
         """Configure the entire dependency tree in order. and return an

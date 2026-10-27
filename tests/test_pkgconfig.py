@@ -27,16 +27,21 @@ import subprocess
 import tempfile
 import unittest
 
+import SCons.Environment
 from lsst.sconsUtils.pkgconfig import (
     GENERATED_SHIM_SUBDIR,
     CyclicDependencyError,
     PkgConfig,
+    PkgConfigDependencies,
     PkgConfigError,
+    ResolvedDependencies,
+    apply_to_env,
     build_search_path,
     cfg_path,
     check_single_format,
     main,
     output_path,
+    remove_generated_pc,
     resolve,
     template_path,
     write_pc_from_template,
@@ -569,6 +574,93 @@ class ShimTestCase(unittest.TestCase):
         target2 = os.path.join(self._tmpdir.name, "shims2")
         self.assertEqual(main([target2]), 0)
         self.assertTrue(os.path.exists(os.path.join(target2, "boost.pc")))
+
+
+def make_resolved() -> ResolvedDependencies:
+    """Return a small `ResolvedDependencies` for environment tests."""
+    return ResolvedDependencies(
+        modules=["lsst_m"],
+        cpppath=["/a"],
+        xcpppath=["/b"],
+        ccflags=["-DX"],
+        libpath=["/l"],
+        linkflags=["-Wl,-z"],
+        libs={"main": ["m"], "python": [], "test": ["t"]},
+        doxygen={"tags": [], "includes": []},
+        versions={"m": "1"},
+    )
+
+
+class ApplyToEnvTestCase(unittest.TestCase):
+    """Tests for `apply_to_env`."""
+
+    def test_apply(self):
+        env = SCons.Environment.Environment(tools=[])
+        env["CPPPATH"] = ["/already"]
+        env["XCPPPATH"] = []
+        env["LIBPATH"] = []
+        resolved = make_resolved()
+        apply_to_env(env, resolved)
+        self.assertEqual(env["CPPPATH"], ["/a", "/already"])
+        self.assertEqual(env["XCPPPATH"], ["/b"])
+        self.assertEqual(env["LIBPATH"], ["/l"])
+        self.assertEqual(env["CCFLAGS"], ["-DX"])
+        self.assertEqual(env["LINKFLAGS"], ["-Wl,-z"])
+        self.assertEqual(env.libs, {"main": ["m"], "python": [], "test": ["t"]})
+        self.assertEqual(env.doxygen, {"tags": [], "includes": []})
+        # The environment gets its own copies of the library lists.
+        env.libs["main"].append("extra")
+        self.assertEqual(resolved.libs["main"], ["m"])
+
+
+class PkgConfigDependenciesTestCase(unittest.TestCase):
+    """Tests for `PkgConfigDependencies`."""
+
+    def test_versions(self):
+        resolved = make_resolved()
+        d = PkgConfigDependencies("afw", resolved)
+        self.assertEqual(d.name, "afw")
+        self.assertIs(d.resolved, resolved)
+        self.assertEqual(d.versions, {"m": "1"})
+
+
+class RemoveGeneratedPcTestCase(unittest.TestCase):
+    """Tests for `remove_generated_pc`."""
+
+    def setUp(self):
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        self.root = self._tmpdir.name
+        self.output = output_path(self.root, "afw")
+        self.pcdir = os.path.dirname(self.output)
+
+    def test_removes_file_and_empty_directory(self):
+        os.makedirs(self.pcdir)
+        with open(self.output, "w") as f:
+            f.write("x")
+        self.assertTrue(remove_generated_pc(self.root, "afw"))
+        self.assertFalse(os.path.exists(self.output))
+        self.assertFalse(os.path.exists(self.pcdir))
+        # lib/ itself is left alone.
+        self.assertTrue(os.path.isdir(os.path.join(self.root, "lib")))
+
+    def test_keeps_non_empty_directory(self):
+        os.makedirs(self.pcdir)
+        with open(self.output, "w") as f:
+            f.write("x")
+        other = os.path.join(self.pcdir, "other.pc")
+        with open(other, "w") as f:
+            f.write("y")
+        self.assertTrue(remove_generated_pc(self.root, "afw"))
+        self.assertFalse(os.path.exists(self.output))
+        self.assertTrue(os.path.exists(other))
+
+    def test_missing_file(self):
+        self.assertFalse(remove_generated_pc(self.root, "afw"))
+        os.makedirs(self.pcdir)
+        self.assertFalse(remove_generated_pc(self.root, "afw"))
+        # An empty directory not holding our file is left alone.
+        self.assertTrue(os.path.isdir(self.pcdir))
 
 
 if __name__ == "__main__":

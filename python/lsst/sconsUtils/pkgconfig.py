@@ -37,14 +37,17 @@ __all__ = (
     "VERSION_TOKEN",
     "CyclicDependencyError",
     "PkgConfig",
+    "PkgConfigDependencies",
     "PkgConfigError",
     "ResolvedDependencies",
+    "apply_to_env",
     "build_search_path",
     "cfg_path",
     "check_single_format",
     "main",
     "module_name",
     "output_path",
+    "remove_generated_pc",
     "resolve",
     "static_shim_dir",
     "template_path",
@@ -61,6 +64,7 @@ import shlex
 import shutil
 import subprocess
 from collections.abc import Mapping, Sequence
+from typing import Any
 
 #: Prefix applied to an EUPS product name to get its pkg-config module name.
 MODULE_PREFIX = "lsst_"
@@ -231,6 +235,40 @@ def write_pc_from_template(template: str, output: str, version: str) -> bool:
     os.makedirs(os.path.dirname(output), exist_ok=True)
     with open(output, "w") as f:
         f.write(new_contents)
+    return True
+
+
+def remove_generated_pc(build_root: str, package_name: str) -> bool:
+    """Remove a package's generated ``.pc`` file, as ``scons --clean`` does.
+
+    Parameters
+    ----------
+    build_root : `str`
+        Absolute path to the root of the package currently being built.
+    package_name : `str`
+        The EUPS product name, e.g. ``"afw"``.
+
+    Returns
+    -------
+    removed : `bool`
+        `True` if `output_path` existed and was removed, `False` if there
+        was nothing to remove.  When the file is removed and its
+        ``lib/pkgconfig`` directory is left empty, that directory is
+        removed too; ``lib/`` itself is never touched.
+
+    Notes
+    -----
+    Only this one file is removed, rather than every ``*.pc`` file in the
+    tree, so that ``.pc`` files tracked in a package's repository (such as
+    sconsUtils's own static shims) survive a clean.
+    """
+    output = output_path(build_root, package_name)
+    if not os.path.exists(output):
+        return False
+    os.remove(output)
+    directory = os.path.dirname(output)
+    if not os.listdir(directory):
+        os.rmdir(directory)
     return True
 
 
@@ -778,6 +816,59 @@ def resolve(
         },
         versions={_strip_module_prefix(m): pkgconfig.modversion(m) for m in modules},
     )
+
+
+def apply_to_env(env: Any, resolved: ResolvedDependencies) -> None:
+    """Update an SCons environment with a package's resolved dependencies.
+
+    Parameters
+    ----------
+    env : `SCons.Environment.Environment`
+        The environment to update.  Its ``CPPPATH``, ``XCPPPATH`` and
+        ``LIBPATH`` have the resolved directories prepended, and its
+        ``CCFLAGS`` and ``LINKFLAGS`` have the resolved flags appended,
+        skipping entries already present.  Its ``libs`` and ``doxygen``
+        attributes are replaced with copies of the resolved values.
+    resolved : `ResolvedDependencies`
+        The resolved dependencies, as returned by `resolve`.
+
+    Notes
+    -----
+    Unlike the ``.cfg`` path, the library lists are not reversed, because
+    pkg-config already emits a dependent's libraries before those of the
+    modules it depends on.
+    """
+    env.PrependUnique(CPPPATH=resolved.cpppath, XCPPPATH=resolved.xcpppath, LIBPATH=resolved.libpath)
+    env.AppendUnique(CCFLAGS=resolved.ccflags, LINKFLAGS=resolved.linkflags)
+    env.libs = {k: list(v) for k, v in resolved.libs.items()}
+    env.doxygen = {k: list(v) for k, v in resolved.doxygen.items()}
+
+
+class PkgConfigDependencies:
+    """The dependencies of a package configured through pkg-config.
+
+    This is stored as ``env.dependencies`` in place of a
+    `~lsst.sconsUtils.dependencies.PackageTree` when the package being
+    built has a pkg-config template.
+
+    Parameters
+    ----------
+    package_name : `str`
+        The EUPS product name of the package being built.
+    resolved : `ResolvedDependencies`
+        The resolved dependencies of that package.
+    """
+
+    def __init__(self, package_name: str, resolved: ResolvedDependencies) -> None:
+        self.name = package_name
+        self.resolved = resolved
+
+    @property
+    def versions(self) -> dict[str, str | None]:
+        """Version of every module in the dependency closure, keyed by
+        module name with a leading `MODULE_PREFIX` stripped
+        (`dict` [`str`, `str` or `None`])."""
+        return dict(self.resolved.versions)
 
 
 def _write_if_changed(output: str, contents: str) -> bool:
