@@ -31,16 +31,11 @@ import shutil
 import warnings
 from stat import ST_MODE
 
-from SCons.Script import BUILD_TARGETS, Dir, File, GetOption, Glob, SConscript
+from SCons.Script import BUILD_TARGETS, Dir, GetOption, Glob, SConscript
 
 from . import dependencies, state, tests, utils
 
 DEFAULT_TARGETS = ("lib", "python", "shebang", "tests", "examples", "doc")
-
-
-def _getFileBase(node):
-    name, ext = os.path.splitext(os.path.basename(str(node)))
-    return name
 
 
 class BasicSConstruct:
@@ -596,8 +591,6 @@ class BasicSConscript:
     def tests(
         pyList=None,
         ccList=None,
-        swigNameList=None,
-        swigSrc=None,
         ignoreList=None,
         noBuildList=None,
         pySingles=None,
@@ -607,31 +600,22 @@ class BasicSConscript:
         boilerplate.
 
         With no arguments, will attempt to figure out which files should be
-        run as tests and which are support code (like SWIG modules).
+        run as tests and which are support code.
 
         Python tests will be marked as dependent on the entire ``#python``
-        directory and any SWIG modules built in the tests directory.  This
-        should ensure tests are always run when their results might have
-        changed, but may result in them being re-run more often
-        than necessary.
+        directory.  This should ensure tests are always run when their
+        results might have changed, but may result in them being re-run
+        more often than necessary.
 
         Parameters
         ----------
         pyList : `list`, optional
             A sequence of Python tests to run (including .py extensions).
-            Defaults to a ``*.py`` glob of the tests directory, minus any
-            files corresponding to the SWIG modules in swigFileList.
+            Defaults to a ``*.py`` glob of the tests directory.
             An empty list will enable automated test discovery.
         ccList : `list`, optional
             A sequence of C++ unit tests to run (including .cc extensions).
-            Defaults to a ``*.cc`` glob of the tests directory, minus any
-            files that end with ``*_wrap.cc`` and files present in swigSrc.
-        swigNameList : `list`, optional
-            A sequence of SWIG modules to build (NOT including .i extensions).
-        swigSrc : `dict`, optional
-            Additional source files to be compiled into SWIG modules, as a
-            dictionary; each key must be an entry in swigNameList, and each
-            value a list of additional source files.
+            Defaults to a ``*.cc`` glob of the tests directory.
         ignoreList : `list`, optional
             List of ignored tests to be passed to
             `lsst.sconsUtils.tests.Control` (note that ignored tests will be
@@ -660,36 +644,14 @@ class BasicSConscript:
             noBuildList = []
         if pySingles is None:
             pySingles = []
-        if swigNameList is None:
-            swigFileList = Glob("*.i")
-            swigNameList = [_getFileBase(node) for node in swigFileList]
-        else:
-            swigFileList = [File(name + ".i") for name in swigNameList]
-        if swigSrc is None:
-            swigSrc = {}
-        allSwigSrc = set()
-        for name, node in zip(swigNameList, swigFileList, strict=True):
-            src = swigSrc.setdefault(name, [])
-            allSwigSrc.update(str(element) for element in src)
-            src.append(node)
         if pyList is None:
-            pyList = [
-                node
-                for node in Glob("*.py")
-                if _getFileBase(node) not in swigNameList and os.path.basename(str(node)) not in noBuildList
-            ]
+            pyList = [node for node in Glob("*.py") if os.path.basename(str(node)) not in noBuildList]
             # if we got no matches, reset to None so we do not enabled
             # auto test detection in pytest
             if not pyList:
                 pyList = None
         if ccList is None:
-            ccList = [
-                node
-                for node in Glob("*.cc")
-                if (not str(node).endswith("_wrap.cc"))
-                and str(node) not in allSwigSrc
-                and os.path.basename(str(node)) not in noBuildList
-            ]
+            ccList = [node for node in Glob("*.cc") if os.path.basename(str(node)) not in noBuildList]
         if ignoreList is None:
             ignoreList = []
 
@@ -698,7 +660,6 @@ class BasicSConscript:
                 return ["None"]
             return [str(i) for i in ll]
 
-        state.log.info(f"SWIG modules for tests: {s(swigFileList)}")
         state.log.info(f"Python tests: {s(pyList)}")
         state.log.info(f"C++ tests: {s(ccList)}")
         state.log.info(f"Files that will not be built: {noBuildList}")
@@ -706,11 +667,6 @@ class BasicSConscript:
         control = tests.Control(state.env, ignoreList=ignoreList, args=args, verbose=True)
         for ccTest in ccList:
             state.env.Program(ccTest, LIBS=state.env.getLibs("main test"))
-        swigMods = []
-        for name, src in swigSrc.items():
-            swigMods.extend(
-                state.env.SwigLoadableModule("_" + name, src, LIBS=state.env.getLibs("main python"))
-            )
 
         # Warn about insisting that a test in pySingles starts with test_ and
         # therefore might be automatically discovered by pytest. These files
@@ -748,7 +704,6 @@ class BasicSConscript:
         pyList.extend(pySingles)
         for pyTest in pyList:
             state.env.Depends(pyTest, ccList)
-            state.env.Depends(pyTest, swigMods)
             state.env.Depends(pyTest, state.targets["python"])
             state.env.Depends(pyTest, state.targets["shebang"])
         result = ccList + pyList
@@ -756,7 +711,7 @@ class BasicSConscript:
         return result
 
     @staticmethod
-    def examples(ccList=None, swigNameList=None, swigSrc=None):
+    def examples(ccList=None):
         """Convenience function to replace standard examples/SConscript
         boilerplate.
 
@@ -764,47 +719,19 @@ class BasicSConscript:
         ----------
         ccList : `list`, optional
             A sequence of C++ examples to build (including .cc extensions).
-            Defaults to a ``*.cc`` glob of the examples directory, minus any
-            files that end with ``*_wrap.cc`` and files present in swigSrc.
-        swigNameList : `list`, optional
-            A sequence of SWIG modules to build (NOT including .i extensions).
-        swigSrc : `list`, optional
-            Additional source files to be compiled into SWIG modules, as a
-            dictionary; each key must be an entry in swigNameList, and each
-            value a list of additional source files.
+            Defaults to a ``*.cc`` glob of the examples directory.
 
         Returns
         -------
         result : ???
             ???
         """
-        if swigNameList is None:
-            swigFileList = Glob("*.i")
-            swigNameList = [_getFileBase(node) for node in swigFileList]
-        else:
-            swigFileList = [File(name) for name in swigNameList]
-        if swigSrc is None:
-            swigSrc = {}
-        allSwigSrc = set()
-        for name, node in zip(swigNameList, swigFileList, strict=True):
-            src = swigSrc.setdefault(name, [])
-            allSwigSrc.update(str(element) for element in src)
-            src.append(node)
         if ccList is None:
-            ccList = [
-                node
-                for node in Glob("*.cc")
-                if (not str(node).endswith("_wrap.cc")) and str(node) not in allSwigSrc
-            ]
-        state.log.info(f"SWIG modules for examples: {swigFileList}")
+            ccList = Glob("*.cc")
         state.log.info(f"C++ examples: {ccList}")
         results = []
         for src in ccList:
             results.extend(state.env.Program(src, LIBS=state.env.getLibs("main")))
-        for name, src in swigSrc.items():
-            results.extend(
-                state.env.SwigLoadableModule("_" + name, src, LIBS=state.env.getLibs("main python"))
-            )
         for result in results:
             state.env.Depends(result, state.targets["lib"])
         state.targets["examples"].extend(results)
