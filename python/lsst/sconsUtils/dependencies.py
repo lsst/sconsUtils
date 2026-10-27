@@ -130,18 +130,14 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
         "$( ${_concat(INCPREFIX, CPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)}"
         " ${_concat(XCPPPREFIX, XCPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)} $)"
     )
-    state.env["_SWIGINCFLAGS"] = (
-        state.env["_CPPINCFLAGS"].replace("CPPPATH", "SWIGPATH").replace("XCPPPREFIX", "SWIGINCPREFIX")
-    )
 
     if state.env.linkFarmDir:
         for d in [state.env.linkFarmDir, "#"]:
             state.env.Append(CPPPATH=os.path.join(d, "include"))
             state.env.Append(LIBPATH=os.path.join(d, "lib"))
-        state.env["SWIGPATH"] = state.env["CPPPATH"]
 
     if not state.env.GetOption("clean") and not state.env.GetOption("help"):
-        packages.configure(state.env, check=state.env.GetOption("checkDependencies"))
+        packages.configure(state.env)
         for target in state.env.libs:
             state.log.info(f"Libraries in target '{target}': {state.env.libs[target]}")
     state.env.dependencies = packages
@@ -181,8 +177,8 @@ class Configuration:
         autoconf-style tests and to support ``env.getLibs(...)``, which
         recursively computes the libraries a package must be linked with.
     hasSwigFiles : `bool`, optional
-        If True, the package provides SWIG interface files in
-        ``<root>/python``.
+        Accepted for backwards compatibility and ignored; SWIG support has
+        been removed from sconsUtils.
     hasDoxygenInclude : `bool`, optional
         If True, the package provides a Doxygen include file with the
         name ``<root>/doc/<name>.inc``.
@@ -284,10 +280,6 @@ class Configuration:
         else:
             self.libs = {"main": libs, "python": [], "test": []}
         self.paths = {}
-        if hasSwigFiles:
-            self.paths["SWIGPATH"] = [os.path.join(self.root, "python")]
-        else:
-            self.paths["SWIGPATH"] = []
 
         for pathName, subDirs in [("CPPPATH", includeFileDirs), ("LIBPATH", libFileDirs)]:
             self.paths[pathName] = []
@@ -302,23 +294,7 @@ class Configuration:
 
         self.provides = {"headers": tuple(headers), "libs": tuple(self.libs["main"])}
 
-    def addCustomTests(self, tests):
-        """Add custom SCons configuration tests to the Configure Context
-        passed to the configure() method.
-
-        This needs to be done up-front so we can pass in a dictionary of
-        custom tests when calling ``env.Configure()``, and use the same
-        configure context for all packages.
-
-        Parameters
-        ----------
-        tests : `dict`
-            A dictionary to add custom tests to.  This will be passed as the
-            custom_tests argument to ``env.Configure()``.
-        """
-        pass
-
-    def configure(self, conf, packages, check=False, build=True):
+    def configure(self, conf, packages, build=True):
         """Update an SCons environment to make use of the package.
 
         Parameters
@@ -331,15 +307,11 @@ class Configuration:
             dependencies (or `None` if the dependency was optional and was not
             found).  The ``<module>.config.configure(...)`` method will have
             already been called on all dependencies.
-        check : `bool`, optional
-            If True, perform autoconf-style tests to verify that key
-            components are in fact in place.
         build : `bool`, optional
             If True, this is the package currently being built, and packages in
             "buildRequired" and "buildOptional" dependencies will also be
             present in the packages dict.
         """
-        assert not (check and build)
         conf.env.PrependUnique(**self.paths)
         state.log.info(f"Configuring package '{self.name}'.")
         conf.env.doxygen["includes"].extend(self.doxygen["includes"])
@@ -354,13 +326,6 @@ class Configuration:
                     if lib not in conf.env.libs[target]:
                         conf.env.libs[target].append(lib)
                         state.log.info(f"Adding '{lib}' library to target '{target}'.")
-        if check:
-            for header in self.provides["headers"]:
-                if not conf.CheckCXXHeader(header):
-                    return False
-            for lib in self.libs["main"]:
-                if not conf.CheckLib(lib, autoadd=False, language="C++"):
-                    return False
         return True
 
 
@@ -413,125 +378,6 @@ class ExternalConfiguration(Configuration):
         del self.paths["CPPPATH"]
 
 
-def CustomCFlagCheck(context, flag, append=True):
-    """A configuration test that checks whether a C compiler supports
-    a particular flag.
-
-    Parameters
-    ----------
-    context :
-        Configuration context.
-    flag : `str`
-        Flag to test, e.g., ``-fvisibility-inlines-hidden``.
-    append : `bool`, optional
-        Automatically append the flag to ``context.env["CCFLAGS"]``
-        if the compiler supports it?
-
-    Returns
-    -------
-    result : `bool`
-        Did the flag work?
-    """
-    context.Message("Checking if C compiler supports " + flag + " flag ")
-    ccflags = context.env["CCFLAGS"]
-    context.env.Append(CCFLAGS=flag)
-    result = context.TryCompile("int main(int argc, char **argv) { return 0; }", ".c")
-    context.Result(result)
-    if not append or not result:
-        context.env.Replace(CCFLAGS=ccflags)
-    return result
-
-
-def CustomCppFlagCheck(context, flag, append=True):
-    """A configuration test that checks whether a C++ compiler supports
-    a particular flag.
-
-    Parameters
-    ----------
-    context :
-        Configuration context.
-    flag : `str`
-        Flag to test, e.g., ``-fvisibility-inlines-hidden``.
-    append : `bool`, optional
-        Automatically append the flag to ``context.env["CXXFLAGS"]``
-        if the compiler supports it?
-
-    Returns
-    -------
-    result : `bool`
-        Did the flag work?
-    """
-    context.Message("Checking if C++ compiler supports " + flag + " flag ")
-    cxxflags = context.env["CXXFLAGS"]
-    context.env.Append(CXXFLAGS=flag)
-    result = context.TryCompile("int main(int argc, char **argv) { return 0; }", ".cc")
-    context.Result(result)
-    if not append or not result:
-        context.env.Replace(CXXFLAGS=cxxflags)
-    return result
-
-
-def CustomCompileCheck(context, message, source, extension=".cc"):
-    """A configuration test that checks whether the given source code
-    compiles.
-
-    Parameters
-    ----------
-    context :
-        Configuration context.
-    message : `str`
-        Message displayed on console prior to running the test.
-    source : `str`
-        Source code to compile.
-    extension : `str`, optional
-        Identifies the language of the source code. Use ".c" for C, and ".cc"
-        for C++ (the default).
-
-    Returns
-    -------
-    result : `bool`
-        Did the code compile?
-    """
-    context.Message(message)
-
-    env = context.env
-    if env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec"):
-        result = True
-    else:
-        result = context.TryCompile(source, extension)
-
-    context.Result(result)
-
-    return result
-
-
-def CustomLinkCheck(context, message, source, extension=".cc"):
-    """A configuration test that checks whether the given source code
-    compiles and links.
-
-    Parameters
-    ----------
-    context :
-        Configuration context.
-    message : `str`
-        Message displayed on console prior to running the test.
-    source : `str`
-        Source code to compile.
-    extension : `str`, optional
-        Identifies the language of the source code. Use ".c" for C, and ".cc"
-        for C++ (the default).
-
-    Returns
-    -------
-    result : `bool`
-        Did the code compile and link?
-    """
-    context.Message(message)
-    result = context.TryLink(source, extension)
-    context.Result(result)
-    return result
-
-
 class PackageTree:
     """A class for loading and managing the dependency tree of a package,
     as defined by its configuration module (.cfg) file.
@@ -566,12 +412,6 @@ class PackageTree:
     def __init__(self, primaryName, noCfgFile=False):
         self.cfgPath = state.env.cfgPath
         self.packages = collections.OrderedDict()
-        self.customTests = {
-            "CustomCFlagCheck": CustomCFlagCheck,
-            "CustomCppFlagCheck": CustomCppFlagCheck,
-            "CustomCompileCheck": CustomCompileCheck,
-            "CustomLinkCheck": CustomLinkCheck,
-        }
         self._current = {primaryName}
         if noCfgFile:
             self.primary = None
@@ -603,20 +443,18 @@ class PackageTree:
 
     name = property(lambda self: self.primary.config.name)
 
-    def configure(self, env, check=False):
+    def configure(self, env):
         """Configure the entire dependency tree in order. and return an
         updated environment."""
-        conf = env.Configure(custom_tests=self.customTests)
+        conf = env.Configure()
         for name, module in self.packages.items():
             if module is None:
                 state.log.info(f"Skipping missing optional package {name}.")
                 continue
-            if not module.config.configure(conf, packages=self.packages, check=check, build=False):
+            if not module.config.configure(conf, packages=self.packages, build=False):
                 state.log.fail(f"{name} was found but did not pass configuration checks.")
         if self.primary:
-            self.primary.config.configure(conf, packages=self.packages, check=False, build=True)
-        env.AppendUnique(SWIGPATH=env["CPPPATH"])
-        env.AppendUnique(XSWIGPATH=env["XCPPPATH"])
+            self.primary.config.configure(conf, packages=self.packages, build=True)
         # reverse the order of libraries in env.libs, so libraries that
         # fulfill a dependency of another appear after it. required by the
         # linker to successfully resolve symbols in static libraries.
@@ -674,8 +512,6 @@ class PackageTree:
                 if not hasattr(module, "config") or not isinstance(module.config, Configuration):
                     state.log.warn(f"Configuration module for package '{name}' lacks a config object.")
                     return None
-                else:
-                    module.config.addCustomTests(self.customTests)
                 return module
         state.log.info(f"Failed to import configuration for optional package '{name}'.")
 
