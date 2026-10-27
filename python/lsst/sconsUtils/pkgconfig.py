@@ -38,15 +38,18 @@ __all__ = (
     "CyclicDependencyError",
     "PkgConfig",
     "PkgConfigError",
+    "ResolvedDependencies",
     "build_search_path",
     "cfg_path",
     "check_single_format",
     "module_name",
     "output_path",
+    "resolve",
     "template_path",
     "write_pc_from_template",
 )
 
+import dataclasses
 import os
 import re
 import shlex
@@ -600,3 +603,173 @@ class PkgConfig:
         if prefix is None:
             return tokens
         return [token[len(prefix) :] for token in tokens]
+
+
+@dataclasses.dataclass
+class ResolvedDependencies:
+    """The result of resolving a package's dependencies through pkg-config.
+
+    This is a plain description of what the build needs; it holds no SCons
+    objects, so it can be used both to populate an SCons environment and to
+    synthesize a legacy configuration.
+    """
+
+    modules: list[str]
+    """Transitive closure of the module set, primary module first."""
+
+    cpppath: list[str]
+    """Include directories belonging to ``lsst_*`` modules in the closure,
+    normalized with `os.path.realpath`; these are dependency-scanned."""
+
+    xcpppath: list[str]
+    """All other include directories, normalized with `os.path.realpath`;
+    these are treated as system headers."""
+
+    ccflags: list[str]
+    """Compiler flags other than ``-I``."""
+
+    libpath: list[str]
+    """Library search directories, with the ``-L`` prefix stripped."""
+
+    linkflags: list[str]
+    """Linker flags other than ``-L`` and ``-l``."""
+
+    libs: dict[str, list[str]]
+    """Library names without the ``-l`` prefix, keyed by category
+    (``"main"``, ``"python"``, ``"test"``)."""
+
+    doxygen: dict[str, list[str]]
+    """Doxygen tag files (``"tags"``) and include files (``"includes"``)."""
+
+    versions: dict[str, str]
+    """Version of every module in the closure, keyed by module name with a
+    leading `MODULE_PREFIX` stripped."""
+
+
+def _strip_module_prefix(module: str) -> str:
+    """Return `module` with a leading `MODULE_PREFIX` removed, if present."""
+    return module[len(MODULE_PREFIX) :] if module.startswith(MODULE_PREFIX) else module
+
+
+def _variable_values(pkgconfig: PkgConfig, modules: Sequence[str], name: str) -> list[str]:
+    """Return the set values of variable `name` over `modules`, in order."""
+    values = []
+    for module in modules:
+        value = pkgconfig.variable(module, name)
+        if value is not None:
+            values.append(value)
+    return values
+
+
+def _library_union(pkgconfig: PkgConfig, modules: Sequence[str], name: str) -> list[str]:
+    """Return the de-duplicated union of a library-list variable.
+
+    Each value is split on whitespace; tokens starting with ``-l`` have
+    that prefix stripped and any other token is kept unchanged.
+    """
+    libraries = []
+    for value in _variable_values(pkgconfig, modules, name):
+        for token in value.split():
+            libraries.append(token[2:] if token.startswith("-l") else token)
+    return _dedup_preserve_order(libraries)
+
+
+def _route_includes(
+    pkgconfig: PkgConfig, flag_modules: Sequence[str], modules: Sequence[str], conda_prefix: str
+) -> tuple[list[str], list[str]]:
+    """Split the ``-I`` directories of `flag_modules` into internal and
+    external include paths.
+
+    A directory is internal if its realpath equals the realpath of the
+    ``includedir`` of some ``lsst_*`` module in `modules`, except that
+    ``<conda_prefix>/include`` is always external.  Every other directory
+    is external.  Both returned lists hold realpath'd directories, in
+    pkg-config's order, with duplicates removed.
+    """
+    lsst_includes = {
+        os.path.realpath(includedir)
+        for includedir in _variable_values(
+            pkgconfig, [m for m in modules if m.startswith(MODULE_PREFIX)], "includedir"
+        )
+    }
+    conda_include = os.path.realpath(os.path.join(conda_prefix, "include"))
+    cpppath: list[str] = []
+    xcpppath: list[str] = []
+    for directory in pkgconfig.cflags_only_I(flag_modules):
+        resolved = os.path.realpath(directory)
+        if resolved != conda_include and resolved in lsst_includes:
+            cpppath.append(resolved)
+        else:
+            xcpppath.append(resolved)
+    return _dedup_preserve_order(cpppath), _dedup_preserve_order(xcpppath)
+
+
+def resolve(
+    package_name: str, pkgconfig: PkgConfig, conda_prefix: str, include_build_requires: bool = True
+) -> ResolvedDependencies:
+    """Resolve a package's dependencies through pkg-config.
+
+    Parameters
+    ----------
+    package_name : `str`
+        The EUPS product name of the primary package, e.g. ``"afw"``.
+    pkgconfig : `PkgConfig`
+        The runner used for every pkg-config query.
+    conda_prefix : `str`
+        The active conda prefix.  ``<conda_prefix>/include`` is always
+        routed to `ResolvedDependencies.xcpppath`.
+    include_build_requires : `bool`, optional
+        If `True` (the default), the module set also includes every module
+        named in the primary module's ``lsst_build_requires`` variable.
+
+    Returns
+    -------
+    resolved : `ResolvedDependencies`
+        The resolved dependencies.  Flag queries are run once over the
+        module set (the primary plus any build requirements), letting
+        pkg-config expand ``Requires`` itself; per-module variables and
+        versions are read for every module in the closure.
+
+    Raises
+    ------
+    PkgConfigError
+        Raised if the primary module or any of its build requirements
+        cannot be found, naming the missing module.
+    CyclicDependencyError
+        Raised if the ``Requires`` graph contains a cycle.
+    """
+    primary = module_name(package_name)
+    if not pkgconfig.exists(primary):
+        raise PkgConfigError(f"pkg-config module {primary} for package {package_name!r} was not found")
+    module_set = [primary]
+    if include_build_requires:
+        for required in (pkgconfig.variable(primary, "lsst_build_requires") or "").split():
+            if not pkgconfig.exists(required):
+                raise PkgConfigError(
+                    f"pkg-config module {required}, listed in lsst_build_requires of {primary}, was not found"
+                )
+            module_set.append(required)
+    module_set = _dedup_preserve_order(module_set)
+
+    modules = pkgconfig.closure(module_set)
+    lsst_modules = [m for m in modules if m.startswith(MODULE_PREFIX)]
+    cpppath, xcpppath = _route_includes(pkgconfig, module_set, modules, conda_prefix)
+
+    return ResolvedDependencies(
+        modules=modules,
+        cpppath=cpppath,
+        xcpppath=xcpppath,
+        ccflags=pkgconfig.cflags_only_other(module_set),
+        libpath=_dedup_preserve_order(pkgconfig.libs_only_L(module_set)),
+        linkflags=pkgconfig.libs_only_other(module_set),
+        libs={
+            "main": pkgconfig.libs_only_l(module_set),
+            "python": _library_union(pkgconfig, modules, "lsst_python_libs"),
+            "test": _library_union(pkgconfig, modules, "lsst_test_libs"),
+        },
+        doxygen={
+            "tags": _variable_values(pkgconfig, [m for m in lsst_modules if m != primary], "doxygen_tag"),
+            "includes": _variable_values(pkgconfig, lsst_modules, "doxygen_include"),
+        },
+        versions={_strip_module_prefix(m): pkgconfig.modversion(m) for m in modules},
+    )
