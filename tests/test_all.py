@@ -55,6 +55,11 @@ class SconsUtilsTestCase(unittest.TestCase):
             "Failed to detect failed tests",
         )
 
+    # When this file is run under scons's own pytest invocation, the
+    # environment scons forwards to that subprocess (state.py's
+    # preserveVars) does not include CONDA_PREFIX, so this test always
+    # skips there. It is instead exercised by a CI step that runs plain
+    # pytest directly, where CONDA_PREFIX is present.
     @unittest.skipUnless(
         shutil.which("pkg-config") and os.environ.get("CONDA_PREFIX"),
         "pkg-config and a conda environment are required to build the testPkgConfig fixture",
