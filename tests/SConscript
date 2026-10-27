@@ -23,3 +23,13 @@ if env.GetOption("clean"):
         shutil.rmtree(os.path.join(dirName, "python"))
     except OSError:
         pass
+
+    pkgConfigDirName = os.path.join(SCons.Script.Dir("#").abspath, "tests", "testPkgConfig")
+
+    subprocess.call(
+        f"""
+            cd {pkgConfigDirName}
+            scons -Qc > /dev/null 2>&1
+        """,
+        shell=True,
+    )
