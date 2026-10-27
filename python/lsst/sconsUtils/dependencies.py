@@ -491,6 +491,11 @@ class PackageTree:
         self.cfgPath = state.env.cfgPath
         self.packages = collections.OrderedDict()
         self._current = {primaryName}
+        # The pkg-config runner used to synthesize configurations for
+        # dependencies without a .cfg file; built on first use by
+        # _pkgconfig(), which sets _pkgconfigFailed if that is impossible.
+        self._pkgconfigInstance = None
+        self._pkgconfigFailed = False
         if noCfgFile:
             self.primary = None
             return
@@ -576,9 +581,35 @@ class PackageTree:
         k.append(self.name)
         return k
 
+    def _pkgconfig(self):
+        """Return the pkg-config runner used for dependencies without a
+        .cfg file, constructing it on first use.
+
+        Returns
+        -------
+        pkgconfig : `~lsst.sconsUtils.pkgconfig.PkgConfig` or `None`
+            The runner, or `None` if it cannot be constructed (no conda
+            prefix or no ``pkg-config`` executable).  The reason is logged
+            once, and construction is not retried.
+        """
+        if self._pkgconfigInstance is None and not self._pkgconfigFailed:
+            searchPath = pkgconfig.build_search_path(SCons.Script.Dir("#").abspath, os.environ)
+            try:
+                self._pkgconfigInstance = pkgconfig.PkgConfig(searchPath, get_conda_prefix())
+            except pkgconfig.PkgConfigError as err:
+                state.log.info(f"Not looking for pkg-config modules: {err}.")
+                self._pkgconfigFailed = True
+        return self._pkgconfigInstance
+
     def _tryImport(self, name):
         """Search for and import an individual configuration module from
-        file."""
+        file.
+
+        If no ``<name>.cfg`` file is found on the configuration path but
+        pkg-config can find a ``lsst_<name>`` module, a configuration
+        module is synthesized from pkg-config instead; see
+        `~lsst.sconsUtils.pkgconfig.synthesize_cfg_module`.
+        """
         for path in self.cfgPath:
             filename = os.path.join(path, name + ".cfg")
             if os.path.exists(filename):
@@ -604,6 +635,17 @@ class PackageTree:
                     state.log.warn(f"Configuration module for package '{name}' lacks a config object.")
                     return None
                 return module
+        runner = self._pkgconfig()
+        moduleName = pkgconfig.module_name(name)
+        # present() rather than exists(): a module whose Requires cannot be
+        # satisfied is broken, not missing, and must not be skipped as an
+        # absent optional dependency.
+        if runner is not None and runner.present(moduleName):
+            state.log.info(f"Using pkg-config module '{moduleName}' for package '{name}'.")
+            try:
+                return pkgconfig.synthesize_cfg_module(name, runner, get_conda_prefix())
+            except pkgconfig.PkgConfigError as err:
+                state.log.fail(str(err))
         state.log.info(f"Failed to import configuration for optional package '{name}'.")
 
     def _recurse(self, name):
