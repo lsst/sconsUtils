@@ -940,6 +940,15 @@ class PackageTreeFallbackTestCase(unittest.TestCase):
         tree._tryImport("conv")
         self.assertEqual(self.stdout.getvalue().count("Using pkg-config at"), 1)
 
+    def test_fallback_not_used_for_primary(self):
+        write_pc(self.pcdir, "lsst_prim", "Name: lsst_prim\nDescription: x\nVersion: 1.0\nCflags:\nLibs:\n")
+        with self.assertRaises(SystemExit):
+            dependencies.PackageTree("prim")
+        self.assertIn("Failed to load primary package configuration for prim", self.stderr.getvalue())
+        self.assertFalse(os.path.exists(os.path.join(self.root, GENERATED_SHIM_SUBDIR)))
+        # As a dependency, the same module is used.
+        self.assertIsNotNone(self._make_tree()._tryImport("prim"))
+
 
 class RemoveGeneratedPcTestCase(unittest.TestCase):
     """Tests for `remove_generated_pc`."""

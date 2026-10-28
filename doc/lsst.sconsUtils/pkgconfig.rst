@@ -126,6 +126,7 @@ It also passes ``noCfgFile=True`` to ``configure()``, even though the pkg-config
 A converted package may only depend on other converted packages, because pkg-config resolves ``Requires`` itself and fails outright on a missing module.
 Conversion therefore proceeds bottom-up through the dependency graph.
 A ``.cfg`` package, by contrast, may depend on a converted package: when ``PackageTree._tryImport`` finds no ``<dep>.cfg`` file, it looks for a ``lsst_<dep>`` pkg-config module on the search path above.
+This fallback applies only to dependencies; the package being built still needs its own ``ups/<name>.cfg``.
 If no ``lsst_<dep>.pc`` file is on the search path or on pkg-config's default path, the dependency is treated as an optional package that was not found.
 If the file is there but its own ``Requires`` cannot be satisfied, the build fails with pkg-config's explanation rather than treating the dependency as absent.
 This holds under both pkg-config and pkgconf.
