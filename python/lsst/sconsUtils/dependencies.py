@@ -182,12 +182,11 @@ def _configurePkgConfig(root, packageName):
         The resolved dependencies, to be stored as ``env.dependencies``.
         With ``--clean`` or ``--help`` pkg-config is not run at all and the
         result is empty; with ``--clean`` and no explicit targets the
-        generated ``.pc`` file is removed instead.
+        generated ``.pc`` file is removed instead, unless ``--no-exec`` is
+        also given.
     """
     if state.env.GetOption("clean") or state.env.GetOption("help"):
-        # Mirror the condition CleanTree uses, so that e.g.
-        # "scons --clean install" does not remove the file.
-        if state.env.GetOption("clean") and not SCons.Script.COMMAND_LINE_TARGETS:
+        if _removesGeneratedPc(state.env, SCons.Script.COMMAND_LINE_TARGETS):
             if pkgconfig.remove_generated_pc(root, packageName):
                 state.log.info(f"Removed {pkgconfig.output_path(root, packageName)}.")
         empty = pkgconfig.ResolvedDependencies(
@@ -220,6 +219,28 @@ def _configurePkgConfig(root, packageName):
     state.log.info(f"XCPPPATH from pkg-config: {resolved.xcpppath}")
     pkgconfig.apply_to_env(state.env, resolved)
     return pkgconfig.PkgConfigDependencies(packageName, resolved)
+
+
+def _removesGeneratedPc(env, commandLineTargets):
+    """Return whether this SCons invocation removes the generated ``.pc``
+    file.
+
+    Parameters
+    ----------
+    env : `SCons.Environment.Environment`
+        The environment whose ``clean`` and ``no_exec`` options are read.
+    commandLineTargets : `list`
+        The targets given on the command line.
+
+    Returns
+    -------
+    removes : `bool`
+        `True` for ``--clean`` with no explicit targets, mirroring the
+        condition `~lsst.sconsUtils.builders.CleanTree` uses so that e.g.
+        ``scons --clean install`` does not remove the file, unless
+        ``--no-exec`` is also given.
+    """
+    return bool(env.GetOption("clean") and not commandLineTargets and not env.GetOption("no_exec"))
 
 
 def _writeShims(root):
