@@ -29,7 +29,7 @@ jobs:
       - name: Install conda packages used by this package
         shell: bash -l {0}
         run: |
-          conda install -y -q scons eups compilers ruff flake8
+          conda install -y -q scons eups compilers ruff flake8 pkg-config numpy
 
       # We have two cores so we can speed up the testing with xdist
       - name: Install pytest packages
@@ -50,6 +50,12 @@ jobs:
           setup -k -r .
           scons -j2
           python -c 'import importlib.metadata as M; print(M.version("lsst.sconsUtils"))'
+
+      - name: Test pkg-config support directly under pytest
+        shell: bash -l {0}
+        run: |
+          setup -k -r .
+          pytest -r a -v tests/test_pkgconfig.py tests/test_all.py
 
       - name: Upload coverage to codecov
         uses: codecov/codecov-action@v7

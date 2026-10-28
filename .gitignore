@@ -31,6 +31,7 @@ doc/sconsUtils.tag
 tests/.tests
 tests/testFailedTests/python
 tests/testFailedTests/tests/.tests
+tests/testPkgConfig/lib/pkgconfig/
 .coverage
 python/*.dist-info/
 
