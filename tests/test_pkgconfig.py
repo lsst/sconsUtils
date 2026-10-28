@@ -21,12 +21,14 @@
 
 """Tests for `lsst.sconsUtils.pkgconfig`."""
 
+import glob
 import os
 import shutil
 import subprocess
 import tempfile
 import types
 import unittest
+from unittest import mock
 
 import SCons.Environment
 from lsst.sconsUtils.pkgconfig import (
@@ -52,6 +54,23 @@ from lsst.sconsUtils.pkgconfig import (
 
 #: Absolute path to the repository's top-level static shim directory.
 _STATIC_SHIM_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pkgconfig")
+
+
+def _pkg_config_executables() -> list[str]:
+    """Return every distinct pkg-config implementation available: the one
+    on ``PATH`` and the system's ``/usr/bin/pkg-config``, which is often
+    pkgconf."""
+    executables = []
+    seen = set()
+    for candidate in (shutil.which("pkg-config"), "/usr/bin/pkg-config"):
+        if candidate is None or not os.access(candidate, os.X_OK):
+            continue
+        resolved = os.path.realpath(candidate)
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        executables.append(candidate)
+    return executables
 
 
 def write_pc(directory: str, name: str, body: str) -> str:
@@ -168,6 +187,65 @@ class PkgConfigRunnerTestCase(unittest.TestCase):
     def test_no_conda_prefix_fails(self):
         with self.assertRaises(PkgConfigError):
             PkgConfig([self.d], conda_prefix=None)
+
+
+@unittest.skipUnless(_pkg_config_executables(), "no pkg-config implementation is available")
+class PresentTestCase(unittest.TestCase):
+    """Tests for `PkgConfig.present`, under every available pkg-config
+    implementation (pkg-config and pkgconf behave differently for a module
+    whose ``Requires`` are missing)."""
+
+    def setUp(self):
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.d = self._tmpdir.name
+        self.addCleanup(self._tmpdir.cleanup)
+        write_pc(
+            self.d,
+            "lsst_broken",
+            "Name: lsst_broken\nDescription: x\nVersion: 1.0\nRequires: lsst_gone\nCflags:\nLibs:\n",
+        )
+        write_pc(self.d, "lsst_fine", "Name: lsst_fine\nDescription: x\nVersion: 1.0\nCflags:\nLibs:\n")
+
+    def test_broken_is_present_but_does_not_exist(self):
+        for executable in _pkg_config_executables():
+            with self.subTest(executable=executable):
+                pc = PkgConfig([self.d], conda_prefix="/opt/conda", executable=executable)
+                self.assertFalse(pc.exists("lsst_broken"))
+                self.assertTrue(pc.present("lsst_broken"))
+                self.assertTrue(pc.present("lsst_fine"))
+                self.assertFalse(pc.present("lsst_absent"))
+                with self.assertRaises(PkgConfigError) as cm:
+                    synthesize_cfg_module("broken", pc, "/opt/conda")
+                self.assertIn("lsst_gone", str(cm.exception))
+
+    def test_default_search_path_is_searched(self):
+        # PKG_CONFIG_LIBDIR replaces pkg-config's compiled-in default path.
+        with mock.patch.dict(os.environ, {"PKG_CONFIG_LIBDIR": self.d}):
+            for executable in _pkg_config_executables():
+                with self.subTest(executable=executable):
+                    pc = PkgConfig([], conda_prefix="/opt/conda", executable=executable)
+                    self.assertTrue(pc.exists("lsst_fine"))
+                    self.assertTrue(pc.present("lsst_broken"))
+                    self.assertFalse(pc.present("lsst_absent"))
+
+    def test_compiled_in_default_path_is_searched(self):
+        with mock.patch.dict(os.environ):
+            os.environ.pop("PKG_CONFIG_LIBDIR", None)
+            for executable in _pkg_config_executables():
+                with self.subTest(executable=executable):
+                    pc_path = subprocess.run(
+                        [executable, "--variable=pc_path", "pkg-config"], capture_output=True, text=True
+                    ).stdout.strip()
+                    found = [
+                        os.path.basename(path)[: -len(".pc")]
+                        for directory in pc_path.split(os.pathsep)
+                        if directory
+                        for path in sorted(glob.glob(os.path.join(directory, "*.pc")))
+                    ]
+                    if not found:
+                        self.skipTest(f"{executable} has no .pc files on its default path")
+                    pc = PkgConfig([], conda_prefix="/opt/conda", executable=executable)
+                    self.assertTrue(pc.present(found[0]))
 
 
 @unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")

@@ -377,6 +377,9 @@ class PkgConfig:
         self.executable: str = executable
         self._search_path = list(search_path)
         self._conda_prefix = conda_prefix
+        # pkg-config's own default search path; queried on first use by
+        # _default_search_path().
+        self._default_path: list[str] | None = None
 
     def _invoke(self, *args: str) -> subprocess.CompletedProcess[str]:
         """Run ``pkg-config`` with `args` and return the completed process.
@@ -461,11 +464,39 @@ class PkgConfig:
         Returns
         -------
         present : `bool`
-            `True` if a ``.pc`` file for the module can be read, `False`
+            `True` if a ``<module>.pc`` file exists in a directory of the
+            search path or of pkg-config's own default search path, `False`
             otherwise.  This never raises.
+
+        Notes
+        -----
+        This looks for the file itself rather than asking pkg-config,
+        because no pkg-config query reliably succeeds for a module whose
+        ``Requires`` are missing: pkg-config 0.29.2 still answers
+        ``--modversion`` for one, but pkgconf does not.
         """
-        # --modversion reads only the module's own file.
-        return self._invoke("--modversion", module).returncode == 0
+        filename = module + ".pc"
+        if any(os.path.isfile(os.path.join(d, filename)) for d in self._search_path):
+            return True
+        return any(os.path.isfile(os.path.join(d, filename)) for d in self._default_search_path())
+
+    def _default_search_path(self) -> list[str]:
+        """Return the directories pkg-config searches after
+        ``PKG_CONFIG_PATH``.
+
+        This is ``PKG_CONFIG_LIBDIR`` if that is set, since it replaces the
+        compiled-in default, and otherwise the default as reported by
+        ``pkg-config --variable=pc_path pkg-config``, which both pkg-config
+        and pkgconf support.  The result is computed once and cached; it
+        is empty if the query fails.
+        """
+        if self._default_path is None:
+            value = os.environ.get("PKG_CONFIG_LIBDIR")
+            if value is None:
+                result = self._invoke("--variable=pc_path", "pkg-config")
+                value = result.stdout.strip() if result.returncode == 0 else ""
+            self._default_path = [d for d in value.split(os.pathsep) if d]
+        return self._default_path
 
     def modversion(self, module: str) -> str:
         """Return the version of `module`.
