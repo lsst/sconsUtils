@@ -29,7 +29,7 @@ jobs:
       - name: Install conda packages used by this package
         shell: bash -l {0}
         run: |
-          conda install -y -q scons eups compilers ruff flake8 pkg-config
+          conda install -y -q scons eups compilers ruff flake8 pkg-config numpy
 
       # We have two cores so we can speed up the testing with xdist
       - name: Install pytest packages

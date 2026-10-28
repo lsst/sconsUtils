@@ -21,7 +21,9 @@
 
 """Tests for `lsst.sconsUtils.pkgconfig`."""
 
+import contextlib
 import glob
+import io
 import os
 import shutil
 import subprocess
@@ -52,8 +54,20 @@ from lsst.sconsUtils.pkgconfig import (
     write_shims,
 )
 
+#: Absolute path to the root of this repository.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 #: Absolute path to the repository's top-level static shim directory.
-_STATIC_SHIM_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pkgconfig")
+_STATIC_SHIM_DIR = os.path.join(_REPO_ROOT, "pkgconfig")
+
+
+def _python_has_numpy() -> bool:
+    """Return whether the ``python`` on ``PATH`` can import numpy, which is
+    what `write_shims` needs to generate ``numpy.pc``."""
+    try:
+        return subprocess.run(["python", "-c", "import numpy"], capture_output=True).returncode == 0
+    except OSError:
+        return False
 
 
 def _pkg_config_executables() -> list[str]:
@@ -728,6 +742,7 @@ class ShimTestCase(unittest.TestCase):
         self.assertEqual(self._libs("boost_math").split(), ["-lboost_math_c99", "-lpthread"])
         self.assertEqual(self._libs("boost").strip(), "-lpthread")
 
+    @unittest.skipUnless(_python_has_numpy(), "the python on PATH cannot import numpy")
     def test_generated_numpy(self):
         written = write_shims(self.target, static_dir=_STATIC_SHIM_DIR)
         self.assertIn(os.path.join(self.target, "numpy.pc"), written)
@@ -761,17 +776,29 @@ class ShimTestCase(unittest.TestCase):
         # Simulate the container case, where SCONSUTILS_DIR is unset (or
         # unusable) and no static_dir is passed explicitly: static_shim_dir
         # falls back to None and nothing is copied.
-        previous = os.environ.pop("SCONSUTILS_DIR", None)
-        self.addCleanup(lambda: previous is not None and os.environ.__setitem__("SCONSUTILS_DIR", previous))
-        written = write_shims(self.target, static_dir=None)
+        with mock.patch.dict(os.environ):
+            os.environ.pop("SCONSUTILS_DIR", None)
+            written = write_shims(self.target, static_dir=None)
         self.assertFalse(os.path.exists(os.path.join(self.target, "boost.pc")))
-        # numpy is still generated, since it does not depend on static_dir.
-        self.assertIn(os.path.join(self.target, "numpy.pc"), written)
+        # numpy is still generated if it can be, since it does not depend
+        # on static_dir.
+        if _python_has_numpy():
+            self.assertIn(os.path.join(self.target, "numpy.pc"), written)
+        else:
+            self.assertNotIn(os.path.join(self.target, "numpy.pc"), written)
 
     def test_console_script(self):
         target2 = os.path.join(self._tmpdir.name, "shims2")
-        self.assertEqual(main([target2]), 0)
+        with (
+            mock.patch.dict(os.environ, {"SCONSUTILS_DIR": _REPO_ROOT}),
+            contextlib.redirect_stdout(io.StringIO()) as stdout,
+            contextlib.redirect_stderr(io.StringIO()) as stderr,
+        ):
+            self.assertEqual(main([target2]), 0)
         self.assertTrue(os.path.exists(os.path.join(target2, "boost.pc")))
+        # The console script is quiet, even about skipped shims.
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue(), "")
 
 
 def make_resolved() -> ResolvedDependencies:
