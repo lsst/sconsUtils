@@ -1107,14 +1107,19 @@ def static_shim_dir() -> str | None:
     return candidate
 
 
-def _write_numpy_shim(directory: str) -> str | None:
-    """Generate ``numpy.pc`` in `directory`, or return `None` if skipped.
+class _ShimSkippedError(Exception):
+    """Raised by a shim generator that cannot write its shim; the message
+    says why."""
+
+
+def _write_numpy_shim(directory: str) -> str:
+    """Generate ``numpy.pc`` in `directory` and return its path.
 
     Runs the ``python`` found on ``PATH`` once to read both
     ``numpy.__version__`` and ``numpy.get_include()``.  If that invocation
     fails, for example because ``numpy`` is not importable, nothing is
-    written and `None` is returned; this is silent because an environment
-    without numpy simply has no use for the shim.
+    written and `_ShimSkippedError` is raised; an environment without numpy
+    simply has no use for the shim.
     """
     try:
         output = subprocess.check_output(
@@ -1124,12 +1129,13 @@ def _write_numpy_shim(directory: str) -> str | None:
                 "import numpy; print(numpy.__version__); print(numpy.get_include())",
             ],
             text=True,
+            stderr=subprocess.DEVNULL,
         )
-    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
-        return None
+    except (subprocess.CalledProcessError, OSError) as err:
+        raise _ShimSkippedError(f"numpy is not importable by the python on PATH ({err})") from None
     lines = output.splitlines()
     if len(lines) < 2:
-        return None
+        raise _ShimSkippedError(f"unexpected output from the python on PATH: {output!r}")
     version, include = lines[0].strip(), lines[1].strip()
     contents = f"Name: numpy\nDescription: NumPy C API\nVersion: {version}\nCflags: -I{include}\nLibs:\n"
     output_file = os.path.join(directory, "numpy.pc")
@@ -1137,21 +1143,21 @@ def _write_numpy_shim(directory: str) -> str | None:
     return output_file
 
 
-def _write_starlink_ast_shim(directory: str) -> str | None:
-    """Generate ``starlink_ast.pc`` in `directory`, or `None` if skipped.
+def _write_starlink_ast_shim(directory: str) -> str:
+    """Generate ``starlink_ast.pc`` in `directory` and return its path.
 
     Runs the ``ast_link`` script found on ``PATH`` through ``sh``, exactly
     as ``configs/starlink_ast.cfg`` did, to learn the library list.  If
-    ``ast_link`` cannot be found, nothing is written and `None` is
-    returned.
+    ``ast_link`` cannot be found or fails, nothing is written and
+    `_ShimSkippedError` is raised.
     """
     ast_link = shutil.which("ast_link")
     if ast_link is None:
-        return None
+        raise _ShimSkippedError("ast_link was not found on PATH")
     try:
         libs = subprocess.check_output(["sh", ast_link], text=True)
-    except (subprocess.CalledProcessError, OSError):
-        return None
+    except (subprocess.CalledProcessError, OSError) as err:
+        raise _ShimSkippedError(f"running {ast_link} failed ({err})") from None
     libs = " ".join(libs.split())
     contents = (
         "conda_prefix=${pcfiledir}/../..\n\n"
@@ -1166,7 +1172,7 @@ def _write_starlink_ast_shim(directory: str) -> str | None:
     return output_file
 
 
-def write_shims(directory: str, static_dir: str | None = None) -> list[str]:
+def write_shims(directory: str, static_dir: str | None = None, skipped: list[str] | None = None) -> list[str]:
     """Write every pkg-config shim sconsUtils knows about into `directory`.
 
     Parameters
@@ -1179,6 +1185,11 @@ def write_shims(directory: str, static_dir: str | None = None) -> list[str]:
         `static_shim_dir`.  If that is also `None`, no static shims are
         copied; this is the container case, where they have already been
         installed directly into the conda tree.
+    skipped : `list` [`str`] or `None`, optional
+        If given, a message is appended to this list for every generated
+        shim that could not be written, naming the shim and saying why,
+        e.g. because ``numpy`` is not importable.  Skipping a shim is not
+        an error.
 
     Returns
     -------
@@ -1204,13 +1215,12 @@ def write_shims(directory: str, static_dir: str | None = None) -> list[str]:
             _write_if_changed(output_file, contents)
             written.append(output_file)
 
-    numpy_shim = _write_numpy_shim(directory)
-    if numpy_shim is not None:
-        written.append(numpy_shim)
-
-    starlink_ast_shim = _write_starlink_ast_shim(directory)
-    if starlink_ast_shim is not None:
-        written.append(starlink_ast_shim)
+    for name, generator in (("numpy.pc", _write_numpy_shim), ("starlink_ast.pc", _write_starlink_ast_shim)):
+        try:
+            written.append(generator(directory))
+        except _ShimSkippedError as err:
+            if skipped is not None:
+                skipped.append(f"Not writing pkg-config shim {name}: {err}")
 
     return written
 

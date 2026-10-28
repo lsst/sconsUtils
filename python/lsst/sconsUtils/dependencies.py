@@ -204,7 +204,7 @@ def _configurePkgConfig(root, packageName):
         return pkgconfig.PkgConfigDependencies(packageName, empty)
 
     try:
-        pkgconfig.write_shims(os.path.join(root, pkgconfig.GENERATED_SHIM_SUBDIR))
+        _writeShims(root)
         template = pkgconfig.template_path(root, packageName)
         output = pkgconfig.output_path(root, packageName)
         if pkgconfig.write_pc_from_template(template, output, state.env["version"]):
@@ -213,13 +213,35 @@ def _configurePkgConfig(root, packageName):
         runner = pkgconfig.PkgConfig(pkgconfig.build_search_path(root, os.environ), condaPrefix)
         state.log.info(f"Using pkg-config at '{runner.executable}'.")
         resolved = pkgconfig.resolve(packageName, runner, condaPrefix)
-    except pkgconfig.PkgConfigError as err:
+    except (pkgconfig.PkgConfigError, OSError) as err:
         state.log.fail(str(err))
     state.log.info(f"Configuring package '{packageName}' through pkg-config modules {resolved.modules}.")
     state.log.info(f"CPPPATH from pkg-config: {resolved.cpppath}")
     state.log.info(f"XCPPPATH from pkg-config: {resolved.xcpppath}")
     pkgconfig.apply_to_env(state.env, resolved)
     return pkgconfig.PkgConfigDependencies(packageName, resolved)
+
+
+def _writeShims(root):
+    """Write the configure-time pkg-config shims for a build.
+
+    Parameters
+    ----------
+    root : `str`
+        Absolute path to the build root; the shims are written into its
+        ``.sconf_temp/pkgconfig`` directory.
+
+    Notes
+    -----
+    A generated shim that cannot be written, e.g. ``numpy.pc`` when
+    ``numpy`` is not importable, is reported through ``state.log.info``
+    rather than treated as an error.  `OSError` from writing a file is
+    propagated.
+    """
+    skipped = []
+    pkgconfig.write_shims(os.path.join(root, pkgconfig.GENERATED_SHIM_SUBDIR), skipped=skipped)
+    for message in skipped:
+        state.log.info(f"{message}.")
 
 
 class Configuration:
@@ -591,14 +613,28 @@ class PackageTree:
             The runner, or `None` if it cannot be constructed (no conda
             prefix or no ``pkg-config`` executable).  The reason is logged
             once, and construction is not retried.
+
+        Notes
+        -----
+        The configure-time shims are written into
+        ``<build root>/.sconf_temp/pkgconfig`` before the runner is
+        constructed, as on the pkg-config path, so that a converted
+        dependency requiring e.g. ``numpy`` can be resolved.
         """
         if self._pkgconfigInstance is None and not self._pkgconfigFailed:
-            searchPath = pkgconfig.build_search_path(SCons.Script.Dir("#").abspath, os.environ)
+            root = SCons.Script.Dir("#").abspath
+            try:
+                _writeShims(root)
+            except OSError as err:
+                state.log.fail(str(err))
+            searchPath = pkgconfig.build_search_path(root, os.environ)
             try:
                 self._pkgconfigInstance = pkgconfig.PkgConfig(searchPath, get_conda_prefix())
             except pkgconfig.PkgConfigError as err:
                 state.log.info(f"Not looking for pkg-config modules: {err}.")
                 self._pkgconfigFailed = True
+            else:
+                state.log.info(f"Using pkg-config at '{self._pkgconfigInstance.executable}'.")
         return self._pkgconfigInstance
 
     def _tryImport(self, name):

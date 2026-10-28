@@ -138,4 +138,6 @@ The static shims live in sconsUtils's top-level ``pkgconfig/`` directory, coveri
 Two further shims, for NumPy and Starlink AST, cannot be static because they depend on the Python interpreter or the installed AST library, and are generated at configure time into ``.sconf_temp/pkgconfig/``.
 
 The console script ``sconsUtils-write-pkgconfig-shims DIRECTORY`` writes every shim, static and generated, into the given directory.
-sconsUtils calls it itself at configure time with ``<build root>/.sconf_temp/pkgconfig/`` as the target, and a container install calls it with ``$CONDA_PREFIX/lib/pkgconfig`` so that the shims are available with no sconsUtils involvement at all.
+sconsUtils does the same itself at configure time with ``<build root>/.sconf_temp/pkgconfig/`` as the target, both for a package with a template and for a ``.cfg`` package the first time it falls back to pkg-config for a dependency.
+A container install runs the script with ``$CONDA_PREFIX/lib/pkgconfig`` so that the shims are available with no sconsUtils involvement at all.
+A generated shim that cannot be written, because ``numpy`` is not importable or ``ast_link`` is not on ``PATH``, is skipped rather than treated as an error, and sconsUtils logs why with ``--verbose``.
