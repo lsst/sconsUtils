@@ -693,14 +693,15 @@ class PkgConfig:
         Returns
         -------
         tokens : `list` [`str`]
-            The split, optionally unprefixed, tokens.
+            The split, optionally unprefixed, tokens.  Tokens that are
+            empty once unprefixed, such as a bare ``-I``, are dropped.
         """
         if not modules:
             return []
         tokens = shlex.split(self.run(query, *modules))
-        if prefix is None:
-            return tokens
-        return [token[len(prefix) :] for token in tokens]
+        if prefix is not None:
+            tokens = [token[len(prefix) :] for token in tokens]
+        return [token for token in tokens if token]
 
 
 @dataclasses.dataclass
@@ -920,10 +921,16 @@ class PkgConfigDependencies:
 
     @property
     def versions(self) -> dict[str, str | None]:
-        """Version of every module in the dependency closure, keyed by
-        module name with a leading `MODULE_PREFIX` stripped
-        (`dict` [`str`, `str` or `None`])."""
-        return dict(self.resolved.versions)
+        """Version of every module in the dependency closure except the
+        package's own, keyed by module name with a leading `MODULE_PREFIX`
+        stripped (`dict` [`str`, `str` or `None`]).
+
+        The package itself is left out, as
+        `~lsst.sconsUtils.dependencies.PackageTree.versions` leaves out the
+        primary package, so that ``__dependency_versions__`` lists only
+        dependencies.
+        """
+        return {name: version for name, version in self.resolved.versions.items() if name != self.name}
 
 
 class SyntheticConfiguration:
@@ -1000,9 +1007,13 @@ class SyntheticConfiguration:
         conf.env.PrependUnique(**self.paths)
         conf.env.AppendUnique(CCFLAGS=self._ccflags, LINKFLAGS=self._linkflags)
         log.info(f"Configuring package '{self.name}'.")
-        conf.env.doxygen["includes"].extend(self.doxygen["includes"])
-        if not build:
-            conf.env.doxygen["tags"].extend(self.doxygen["tags"])
+        # Synthesized closures overlap, so a shared dependency's files may
+        # already be there.
+        keys = ["includes"] if build else ["includes", "tags"]
+        for key in keys:
+            for path in self.doxygen[key]:
+                if path not in conf.env.doxygen[key]:
+                    conf.env.doxygen[key].append(path)
         for target, libs in self.libs.items():
             if target not in conf.env.libs:
                 conf.env.libs[target] = libs.copy()

@@ -339,6 +339,16 @@ class FlagQueryTestCase(unittest.TestCase):
         self.assertEqual(self.pc.libs_only_l(["top"]), ["top", "leaf"])
         self.assertEqual(self.pc.libs_only_other(["top"]), ["-Wl,-rpath,/lib/top"])
 
+    def test_bare_prefix_is_dropped(self):
+        # A bare -I or -L must not become "" (realpath("") is the cwd).
+        write_pc(
+            self.d,
+            "bare",
+            "Name: bare\nDescription: x\nVersion: 1.0\nCflags: -I/inc/bare -I\nLibs: -L/lib/bare -L -lbare\n",
+        )
+        self.assertEqual(self.pc.cflags_only_I(["bare"]), ["/inc/bare"])
+        self.assertEqual(self.pc.libs_only_L(["bare"]), ["/lib/bare"])
+
     def test_empty_modules_returns_empty_without_invoking(self):
         self.assertEqual(self.pc.cflags_only_I([]), [])
         self.assertEqual(self.pc.cflags_only_other([]), [])
@@ -396,7 +406,7 @@ class ResolveFixture:
             "lsst_dep",
             f"includedir={self.dep_inc_raw}\n"
             f"doxygen_tag={self.dep_tag}\n"
-            "lsst_test_libs=-lboost_unit_test_framework\n"
+            "lsst_test_libs=-lboost_unit_test_framework -ldep_test\n"
             "\n"
             "Name: lsst_dep\nDescription: x\nVersion: 2.0\n"
             "Cflags: -I${includedir}\n"
@@ -478,8 +488,9 @@ class ResolveTestCase(ResolveFixture, unittest.TestCase):
     def test_lib_categories(self):
         r = resolve("prim", self.pc, self.conda)
         self.assertEqual(r.libs["main"], ["prim", "dep"])
-        # Review Focus 5: declared by both lsst_dep and boost_test.
-        self.assertEqual(r.libs["test"], ["boost_unit_test_framework"])
+        # Review Focus 5: boost_unit_test_framework is declared by both
+        # lsst_dep and boost_test, and appears once, in first-seen order.
+        self.assertEqual(r.libs["test"], ["boost_unit_test_framework", "dep_test"])
         self.assertEqual(r.libs["python"], ["python_extra"])
 
     def test_doxygen(self):
@@ -503,7 +514,7 @@ class ResolveTestCase(ResolveFixture, unittest.TestCase):
         self.assertEqual(r.modules, ["lsst_prim", "lsst_dep", "eigen3"])
         self.assertEqual(r.libs["python"], [])
         # lsst_dep still contributes its test libraries.
-        self.assertEqual(r.libs["test"], ["boost_unit_test_framework"])
+        self.assertEqual(r.libs["test"], ["boost_unit_test_framework", "dep_test"])
         self.assertEqual(r.xcpppath, [os.path.realpath(os.path.join(self.conda, "include", "eigen3"))])
 
 
@@ -536,7 +547,7 @@ class SynthesizeTestCase(ResolveFixture, unittest.TestCase):
         self.assertEqual(mod.config.libs["main"], ["dep", "prim"])
         # Build requirements of a dependency are excluded.
         self.assertEqual(mod.config.libs["python"], [])
-        self.assertEqual(mod.config.libs["test"], ["boost_unit_test_framework"])
+        self.assertEqual(mod.config.libs["test"], ["dep_test", "boost_unit_test_framework"])
         self.assertEqual(
             mod.config.paths,
             {
@@ -568,9 +579,20 @@ class SynthesizeTestCase(ResolveFixture, unittest.TestCase):
         for target in env.libs:  # what PackageTree.configure does
             env.libs[target].reverse()
         self.assertEqual(env.libs["main"], ["prim", "dep"])
-        self.assertEqual(env.libs["test"], ["boost_unit_test_framework"])
+        self.assertEqual(env.libs["test"], ["boost_unit_test_framework", "dep_test"])
         # The configuration's own lists are left untouched.
         self.assertEqual(self.mod.config.libs["main"], ["dep", "prim"])
+
+    def test_configure_does_not_repeat_doxygen_files(self):
+        # Two synthesized closures sharing lsst_dep must not add its tag
+        # file twice.
+        env = make_cfg_env()
+        conf = types.SimpleNamespace(env=env)
+        self.assertTrue(self.mod.config.configure(conf, packages={}, build=False))
+        self.assertTrue(synthesize_cfg_module("dep", self.pc, self.conda).config.configure(conf, {}, False))
+        self.assertEqual(
+            env.doxygen, {"tags": [self.prim_tag, self.dep_tag], "includes": [self.prim_inc_file]}
+        )
 
     def test_configure_build_adds_includes_not_tags(self):
         env = make_cfg_env()
@@ -874,6 +896,15 @@ class PkgConfigDependenciesTestCase(unittest.TestCase):
         self.assertEqual(d.name, "afw")
         self.assertIs(d.resolved, resolved)
         self.assertEqual(d.versions, {"m": "1"})
+
+    def test_versions_exclude_package_itself(self):
+        # As with PackageTree.versions, the package being built is not one
+        # of its own dependencies.
+        resolved = make_resolved()
+        resolved.versions = {"m": "1", "base": "2", "eigen3": "3.4"}
+        d = PkgConfigDependencies("m", resolved)
+        self.assertEqual(d.versions, {"base": "2", "eigen3": "3.4"})
+        self.assertEqual(resolved.versions, {"m": "1", "base": "2", "eigen3": "3.4"})
 
 
 @unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
