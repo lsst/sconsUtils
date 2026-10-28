@@ -88,7 +88,7 @@ Generation
 sconsUtils writes ``lib/pkgconfig/lsst_<product>.pc`` from the template during ``configure()``, substituting ``@VERSION@`` with ``env["version"]``.
 This happens synchronously rather than as a deferred SCons target, because sconsUtils queries the package's own ``.pc`` file to configure its own include and library paths before the SCons build graph exists.
 The file is written only if its content would change, so an unchanged build does not touch it.
-It is not written when SCons is run with ``--clean`` and no explicit targets, or with ``--help``.
+It is never written when SCons is run with ``--clean`` or ``--help``, whatever the targets.
 
 Running ``scons --clean`` with no explicit targets removes the generated ``lib/pkgconfig/lsst_<name>.pc`` file, and removes the ``lib/pkgconfig/`` directory too if it is left empty.
 Nothing is removed when ``--no-exec`` is also given, or when explicit targets are given, as in ``scons --clean install``.
@@ -117,6 +117,8 @@ An ``-I`` directory is routed to ``CPPPATH``, and so is dependency-scanned, if i
 Every other directory is routed to ``XCPPPATH`` and treated as a system header directory with ``-isystem``.
 ``<conda_prefix>/include`` always goes to ``XCPPPATH``, regardless of which module claims it.
 Both sides of the comparison are passed through ``os.path.realpath`` first, because pkg-config does not normalize ``${pcfiledir}/../..``.
+
+Compiler flags other than ``-I`` are appended to ``CCFLAGS``, and linker flags other than ``-L`` and ``-l`` are appended to ``LINKFLAGS``.
 
 Migration changes for a converting package
 =============================================
