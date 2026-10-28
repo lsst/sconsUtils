@@ -522,7 +522,10 @@ class PackageTree:
             self.primary = None
             return
 
-        self.primary = self._tryImport(primaryName)
+        # The pkg-config fallback is for dependencies only; a primary
+        # package without a .cfg file must not pick up e.g. a stale
+        # lib/pkgconfig/lsst_<name>.pc instead.
+        self.primary = self._tryImport(primaryName, allowPkgConfig=False)
         if self.primary is None:
             state.log.fail(f"Failed to load primary package configuration for {primaryName}.")
 
@@ -637,14 +640,22 @@ class PackageTree:
                 state.log.info(f"Using pkg-config at '{self._pkgconfigInstance.executable}'.")
         return self._pkgconfigInstance
 
-    def _tryImport(self, name):
+    def _tryImport(self, name, allowPkgConfig=True):
         """Search for and import an individual configuration module from
         file.
 
-        If no ``<name>.cfg`` file is found on the configuration path but
-        pkg-config can find a ``lsst_<name>`` module, a configuration
-        module is synthesized from pkg-config instead; see
-        `~lsst.sconsUtils.pkgconfig.synthesize_cfg_module`.
+        Parameters
+        ----------
+        name : `str`
+            Name of the package.
+        allowPkgConfig : `bool`, optional
+            If True (the default) and no ``<name>.cfg`` file is found on
+            the configuration path but pkg-config can find a
+            ``lsst_<name>`` module, a configuration module is synthesized
+            from pkg-config instead; see
+            `~lsst.sconsUtils.pkgconfig.synthesize_cfg_module`.  This is
+            False for the primary package, which must have a ``.cfg`` file
+            on this path.
         """
         for path in self.cfgPath:
             filename = os.path.join(path, name + ".cfg")
@@ -671,6 +682,8 @@ class PackageTree:
                     state.log.warn(f"Configuration module for package '{name}' lacks a config object.")
                     return None
                 return module
+        if not allowPkgConfig:
+            return None
         runner = self._pkgconfig()
         moduleName = pkgconfig.module_name(name)
         # present() rather than exists(): a module whose Requires cannot be
