@@ -91,6 +91,7 @@ The file is written only if its content would change, so an unchanged build does
 It is not written when SCons is run with ``--clean`` and no explicit targets, or with ``--help``.
 
 Running ``scons --clean`` with no explicit targets removes the generated ``lib/pkgconfig/lsst_<name>.pc`` file, and removes the ``lib/pkgconfig/`` directory too if it is left empty.
+Nothing is removed when ``--no-exec`` is also given, or when explicit targets are given, as in ``scons --clean install``.
 ``*.pc`` is not part of the default ``cleanExt`` pattern, so this removal is specific to the one generated file and does not touch ``.pc`` files tracked in a repository, such as sconsUtils's own static shims.
 
 Search path
