@@ -950,6 +950,22 @@ class PackageTreeFallbackTestCase(unittest.TestCase):
         self.assertIsNotNone(self._make_tree()._tryImport("prim"))
 
 
+class RemovesGeneratedPcTestCase(unittest.TestCase):
+    """Tests for when ``scons --clean`` removes the generated ``.pc``."""
+
+    @staticmethod
+    def _env(**options):
+        return types.SimpleNamespace(GetOption=lambda name: options.get(name))
+
+    def test_conditions(self):
+        removes = dependencies._removesGeneratedPc
+        self.assertTrue(removes(self._env(clean=True), []))
+        self.assertFalse(removes(self._env(clean=True), ["install"]))
+        self.assertFalse(removes(self._env(clean=True, no_exec=True), []))
+        self.assertFalse(removes(self._env(help=True), []))
+        self.assertFalse(removes(self._env(), []))
+
+
 class RemoveGeneratedPcTestCase(unittest.TestCase):
     """Tests for `remove_generated_pc`."""
 
