@@ -26,6 +26,7 @@ import glob
 import io
 import os
 import shutil
+import stat
 import subprocess
 import tempfile
 import types
@@ -33,6 +34,7 @@ import unittest
 from unittest import mock
 
 import SCons.Environment
+from lsst.sconsUtils import dependencies, state
 from lsst.sconsUtils.pkgconfig import (
     GENERATED_SHIM_SUBDIR,
     CyclicDependencyError,
@@ -85,6 +87,15 @@ def _pkg_config_executables() -> list[str]:
         seen.add(resolved)
         executables.append(candidate)
     return executables
+
+
+def write_stub_python(directory: str, script: str) -> None:
+    """Write an executable ``<directory>/python`` shell script that runs
+    `script`, to stand in for the ``python`` on ``PATH``."""
+    path = os.path.join(directory, "python")
+    with open(path, "w") as f:
+        f.write("#!/bin/sh\n" + script + "\n")
+    os.chmod(path, os.stat(path).st_mode | stat.S_IXUSR)
 
 
 def write_pc(directory: str, name: str, body: str) -> str:
@@ -787,6 +798,22 @@ class ShimTestCase(unittest.TestCase):
         else:
             self.assertNotIn(os.path.join(self.target, "numpy.pc"), written)
 
+    def test_skipped_generated_shims_are_reported(self):
+        # A python that cannot import numpy, and no ast_link, on PATH.
+        stub_dir = os.path.join(self._tmpdir.name, "bin")
+        os.makedirs(stub_dir)
+        write_stub_python(stub_dir, "exit 1")
+        skipped = []
+        with mock.patch.dict(os.environ, {"PATH": stub_dir}):
+            written = write_shims(self.target, static_dir=_STATIC_SHIM_DIR, skipped=skipped)
+        self.assertNotIn(os.path.join(self.target, "numpy.pc"), written)
+        self.assertNotIn(os.path.join(self.target, "starlink_ast.pc"), written)
+        self.assertEqual(len(skipped), 2)
+        self.assertIn("numpy.pc", skipped[0])
+        self.assertIn("numpy is not importable", skipped[0])
+        self.assertIn("starlink_ast.pc", skipped[1])
+        self.assertIn("ast_link was not found", skipped[1])
+
     def test_console_script(self):
         target2 = os.path.join(self._tmpdir.name, "shims2")
         with (
@@ -847,6 +874,71 @@ class PkgConfigDependenciesTestCase(unittest.TestCase):
         self.assertEqual(d.name, "afw")
         self.assertIs(d.resolved, resolved)
         self.assertEqual(d.versions, {"m": "1"})
+
+
+@unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
+class PackageTreeFallbackTestCase(unittest.TestCase):
+    """Tests for the pkg-config fallback of
+    `lsst.sconsUtils.dependencies.PackageTree`."""
+
+    def setUp(self):
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        tmp = os.path.realpath(self._tmpdir.name)
+        self.root = os.path.join(tmp, "root")
+        self.cfgdir = os.path.join(tmp, "ups")
+        self.pcdir = os.path.join(tmp, "pkgconfig")
+        self.conda = os.path.join(tmp, "conda")
+        self.numpy_inc = os.path.join(tmp, "numpy", "include")
+        stub_dir = os.path.join(tmp, "bin")
+        for directory in (self.root, self.cfgdir, self.pcdir, self.conda, self.numpy_inc, stub_dir):
+            os.makedirs(directory)
+        # A converted package whose closure reaches numpy, which only has
+        # a configure-time generated shim.
+        write_pc(
+            self.pcdir,
+            "lsst_conv",
+            "Name: lsst_conv\nDescription: x\nVersion: 1.0\nRequires: numpy\nCflags:\nLibs: -lconv\n",
+        )
+        # Stand in for a python that can import numpy, so this test does
+        # not need numpy itself.
+        write_stub_python(stub_dir, f"echo 1.99; echo {self.numpy_inc}")
+        environ = {
+            "PATH": stub_dir + os.pathsep + os.environ.get("PATH", ""),
+            "PKG_CONFIG_PATH": self.pcdir,
+            "CONDA_PREFIX": self.conda,
+        }
+        stack = contextlib.ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(mock.patch.dict(os.environ, environ))
+        stack.enter_context(
+            mock.patch.object(
+                dependencies.SCons.Script, "Dir", lambda _: types.SimpleNamespace(abspath=self.root)
+            )
+        )
+        stack.enter_context(mock.patch.object(state.env, "cfgPath", [self.cfgdir], create=True))
+        stack.enter_context(mock.patch.object(state.log, "traceback", False))
+        self.stdout = stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+        self.stderr = stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
+
+    def _make_tree(self):
+        """Return a `PackageTree` with no packages loaded yet."""
+        tree = dependencies.PackageTree("prim", noCfgFile=True)
+        tree._current = set()
+        return tree
+
+    def test_fallback_writes_generated_shims(self):
+        tree = self._make_tree()
+        module = tree._tryImport("conv")
+        self.assertIsNotNone(module)
+        self.assertTrue(os.path.exists(os.path.join(self.root, GENERATED_SHIM_SUBDIR, "numpy.pc")))
+        self.assertEqual(module.config.paths["XCPPPATH"], [self.numpy_inc])
+        self.assertEqual(module.config.libs["main"], ["conv"])
+        self.assertEqual(module.config.version, "1.0")
+        # The pkg-config executable is logged once, however many packages
+        # fall back to pkg-config.
+        tree._tryImport("conv")
+        self.assertEqual(self.stdout.getvalue().count("Using pkg-config at"), 1)
 
 
 class RemoveGeneratedPcTestCase(unittest.TestCase):
