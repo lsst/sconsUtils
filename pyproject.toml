@@ -105,6 +105,15 @@ convention = "numpy"
 addopts = "--import-mode=importlib"  # Recommended as best practice
 norecursedirs = ["build"]
 
+[tool.coverage.run]
+# Measure the scons runs that tests start on fixture packages.
+patch = ["subprocess"]
+
+[tool.coverage.report]
+exclude_also = [
+    'if __name__ == "__main__":',
+]
+
 [tool.ruff.format]
 docstring-code-format = true
 # ruff format does not seem to take indenting into account.
