@@ -619,6 +619,10 @@ class PkgConfig:
             Raised if a cycle is found in the ``Requires`` graph.  The
             exception message lists the modules on the cycle, in path
             order (e.g. ``"a -> b -> a"``).
+        PkgConfigError
+            Raised if a module cannot be queried.  pkgconf 2 refuses every
+            query about a module on a cycle, so with it a cycle is
+            reported this way instead.
         """
         result: list[str] = []
         visited: set[str] = set()
