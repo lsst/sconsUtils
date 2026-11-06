@@ -141,6 +141,14 @@ class SearchPathTestCase(unittest.TestCase):
                 ],
             )
 
+    def test_sconsutils_dir_without_shims_is_skipped(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as sconsutils_dir:
+            path = build_search_path(root, {"SCONSUTILS_DIR": sconsutils_dir})
+            self.assertEqual(
+                path,
+                [os.path.join(root, "lib", "pkgconfig"), os.path.join(root, GENERATED_SHIM_SUBDIR)],
+            )
+
     def test_dir_extra_is_ignored(self):
         with (
             tempfile.TemporaryDirectory() as root,
@@ -212,6 +220,16 @@ class PkgConfigRunnerTestCase(unittest.TestCase):
     def test_no_conda_prefix_fails(self):
         with self.assertRaises(PkgConfigError):
             PkgConfig([self.d], conda_prefix=None)
+
+    def test_no_executable_on_path_fails(self):
+        with mock.patch.dict(os.environ, {"PATH": self.d}), self.assertRaises(PkgConfigError) as cm:
+            PkgConfig([self.d], conda_prefix="/opt/conda")
+        self.assertIn("pkg-config was not found on PATH", str(cm.exception))
+
+    def test_requires_skips_blank_lines(self):
+        pc = PkgConfig([self.d], conda_prefix="/opt/conda")
+        with mock.patch.object(pc, "run", return_value="\nalpha >= 1.0\n\nbeta\n"):
+            self.assertEqual(pc.requires("top"), ["alpha", "beta"])
 
 
 @unittest.skipUnless(_pkg_config_executables(), "no pkg-config implementation is available")
@@ -594,6 +612,15 @@ class SynthesizeTestCase(ResolveFixture, unittest.TestCase):
             env.doxygen, {"tags": [self.prim_tag, self.dep_tag], "includes": [self.prim_inc_file]}
         )
 
+    def test_configure_adds_new_target(self):
+        env = make_cfg_env()
+        del env.libs["test"]
+        conf = types.SimpleNamespace(env=env)
+        self.assertTrue(self.mod.config.configure(conf, packages={}, build=False))
+        self.assertEqual(env.libs["test"], ["dep_test", "boost_unit_test_framework"])
+        # The environment gets its own copy of the library list.
+        self.assertIsNot(env.libs["test"], self.mod.config.libs["test"])
+
     def test_configure_build_adds_includes_not_tags(self):
         env = make_cfg_env()
         conf = types.SimpleNamespace(env=env)
@@ -691,6 +718,12 @@ class TemplateTestCase(unittest.TestCase):
 
             self.assertFalse(write_pc_from_template(tmpl, out, "g1234+5"))
             self.assertEqual(os.path.getmtime(out), mtime_after_first_write)
+
+            # A new version rewrites the existing file.
+            self.assertTrue(write_pc_from_template(tmpl, out, "g5678"))
+            with open(out) as f:
+                self.assertIn("Version: g5678\n", f.read())
+            self.assertTrue(write_pc_from_template(tmpl, out, "g1234+5"))
 
             # And pkg-config reads it back correctly.
             self.assertEqual(
@@ -804,6 +837,56 @@ class ShimTestCase(unittest.TestCase):
 
         write_shims(self.target, static_dir=_STATIC_SHIM_DIR)
         self.assertEqual(os.path.getmtime(boost_pc), mtime_after_first_write)
+
+    def test_rewrite_replaces_changed_file(self):
+        write_shims(self.target, static_dir=_STATIC_SHIM_DIR)
+        boost_pc = os.path.join(self.target, "boost.pc")
+        with open(boost_pc, "w") as f:
+            f.write("stale\n")
+        write_shims(self.target, static_dir=_STATIC_SHIM_DIR)
+        with open(boost_pc) as f, open(os.path.join(_STATIC_SHIM_DIR, "boost.pc")) as g:
+            self.assertEqual(f.read(), g.read())
+
+    def test_sconsutils_dir_without_shims_copies_nothing(self):
+        with mock.patch.dict(os.environ, {"SCONSUTILS_DIR": self._tmpdir.name}):
+            write_shims(self.target)
+        self.assertFalse(os.path.exists(os.path.join(self.target, "boost.pc")))
+
+    def _write_shims_with_stubs(self, python_script, ast_link_script=None):
+        """Run `write_shims` with only stub ``python`` and (optionally)
+        ``ast_link`` scripts on ``PATH``, and return what it skipped."""
+        stub_dir = os.path.join(self._tmpdir.name, "bin")
+        os.makedirs(stub_dir)
+        write_stub_python(stub_dir, python_script)
+        if ast_link_script is not None:
+            path = os.path.join(stub_dir, "ast_link")
+            with open(path, "w") as f:
+                f.write(ast_link_script + "\n")
+            os.chmod(path, os.stat(path).st_mode | stat.S_IXUSR)
+        skipped = []
+        with mock.patch.dict(os.environ, {"PATH": stub_dir + os.pathsep + "/bin" + os.pathsep + "/usr/bin"}):
+            written = write_shims(self.target, static_dir=None, skipped=skipped)
+        return written, skipped
+
+    def test_unexpected_python_output_is_skipped(self):
+        written, skipped = self._write_shims_with_stubs("echo 1.0")
+        self.assertNotIn(os.path.join(self.target, "numpy.pc"), written)
+        self.assertIn("unexpected output from the python on PATH", skipped[0])
+
+    def test_failing_ast_link_is_skipped(self):
+        written, skipped = self._write_shims_with_stubs("exit 1", "exit 1")
+        self.assertNotIn(os.path.join(self.target, "starlink_ast.pc"), written)
+        self.assertIn("starlink_ast.pc", skipped[1])
+        self.assertIn("failed", skipped[1])
+
+    def test_stub_ast_link(self):
+        written, skipped = self._write_shims_with_stubs("exit 1", "echo -last -lerfa")
+        shim = os.path.join(self.target, "starlink_ast.pc")
+        self.assertIn(shim, written)
+        self.assertEqual(len(skipped), 1)
+        pc = PkgConfig([self.target], "/opt/conda")
+        self.assertEqual(pc.cflags_only_I(["starlink_ast"]), ["/opt/conda/include/star"])
+        self.assertEqual(pc.libs_only_l(["starlink_ast"]), ["ast", "erfa"])
 
     def test_no_static_dir_copies_nothing(self):
         # Simulate the container case, where SCONSUTILS_DIR is unset (or
@@ -971,6 +1054,52 @@ class PackageTreeFallbackTestCase(unittest.TestCase):
         tree._tryImport("conv")
         self.assertEqual(self.stdout.getvalue().count("Using pkg-config at"), 1)
 
+    def test_fallback_without_runner(self):
+        os.environ.pop("CONDA_PREFIX")
+        tree = self._make_tree()
+        self.assertIsNone(tree._tryImport("conv"))
+        self.assertIsNone(tree._tryImport("conv"))
+        # The reason is logged once, and construction is not retried.
+        self.assertEqual(self.stdout.getvalue().count("Not looking for pkg-config modules"), 1)
+        self.assertIn("CONDA_PREFIX is not set", self.stdout.getvalue())
+
+    def test_fallback_shim_write_failure_fails(self):
+        with (
+            mock.patch.object(dependencies, "_writeShims", side_effect=OSError("disk full")),
+            self.assertRaises(SystemExit),
+        ):
+            self._make_tree()._tryImport("conv")
+        self.assertIn("disk full", self.stderr.getvalue())
+
+    def test_fallback_broken_module_fails(self):
+        write_pc(
+            self.pcdir,
+            "lsst_broken",
+            "Name: lsst_broken\nDescription: x\nVersion: 1.0\nRequires: lsst_gone\nCflags:\nLibs:\n",
+        )
+        with self.assertRaises(SystemExit):
+            self._make_tree()._tryImport("broken")
+        self.assertIn("lsst_gone", self.stderr.getvalue())
+
+    def test_skipped_shims_are_logged(self):
+        def write_shims(directory, skipped):
+            skipped.append("Not writing pkg-config shim numpy.pc: no numpy")
+
+        with mock.patch.object(dependencies.pkgconfig, "write_shims", side_effect=write_shims):
+            dependencies._writeShims(self.root)
+        self.assertIn("Not writing pkg-config shim numpy.pc: no numpy.", self.stdout.getvalue())
+
+    def test_failed_configuration_check_fails(self):
+        tree = self._make_tree()
+        tree.primary = None
+        tree.packages["bad"] = types.SimpleNamespace(
+            config=types.SimpleNamespace(configure=lambda conf, packages, build: False)
+        )
+        env = mock.Mock(libs={})
+        with self.assertRaises(SystemExit):
+            tree.configure(env)
+        self.assertIn("bad was found but did not pass configuration checks", self.stderr.getvalue())
+
     def test_fallback_not_used_for_primary(self):
         write_pc(self.pcdir, "lsst_prim", "Name: lsst_prim\nDescription: x\nVersion: 1.0\nCflags:\nLibs:\n")
         with self.assertRaises(SystemExit):
@@ -979,6 +1108,50 @@ class PackageTreeFallbackTestCase(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.root, GENERATED_SHIM_SUBDIR)))
         # As a dependency, the same module is used.
         self.assertIsNotNone(self._make_tree()._tryImport("prim"))
+
+
+class ConfigurePkgConfigTestCase(unittest.TestCase):
+    """Tests for `lsst.sconsUtils.dependencies._configurePkgConfig`."""
+
+    def test_resolution_failure_fails(self):
+        with tempfile.TemporaryDirectory() as root:
+            with open(template_path(root, "absent"), "w") as f:
+                f.write("Name: lsst_absent\nDescription: x\nVersion: @VERSION@\nRequires: lsst_gone\n")
+            env = mock.MagicMock(GetOption=lambda name: None)
+            env.__getitem__.side_effect = {"version": "1.0"}.__getitem__
+            with (
+                mock.patch.dict(os.environ, {"CONDA_PREFIX": root}),
+                mock.patch.object(state, "env", env),
+                mock.patch.object(state.log, "traceback", False),
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(io.StringIO()) as stderr,
+                self.assertRaises(SystemExit),
+            ):
+                dependencies._configurePkgConfig(root, "absent")
+            self.assertTrue(os.path.exists(output_path(root, "absent")))
+        # lsst_absent itself is written, but its requirement is missing.
+        self.assertIn("lsst_absent", stderr.getvalue())
+
+
+class VersionModuleTestCase(unittest.TestCase):
+    """Tests for the ``__dependency_versions__`` written by
+    `~lsst.sconsUtils.builders.VersionModule`."""
+
+    def test_dependency_versions(self):
+        for versions, expected in (
+            ({"base": "1.0", "gone": None}, '{\n    "base": "1.0",\n    "gone": None,\n}\n'),
+            ({}, "{}\n"),
+        ):
+            with self.subTest(versions=versions), tempfile.TemporaryDirectory() as d:
+                env = SCons.Environment.Environment(tools=[])
+                env.dependencies = types.SimpleNamespace(versions=versions)
+                output = os.path.join(d, "version.py")
+                node = env.VersionModule(output, versionString="git")[0]
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    node.get_builder().action.execfunction(target=[node], source=[], env=env)
+                with open(output) as f:
+                    contents = f.read()
+                self.assertIn("__dependency_versions__: dict[str, str | None] = " + expected, contents)
 
 
 class RemovesGeneratedPcTestCase(unittest.TestCase):
