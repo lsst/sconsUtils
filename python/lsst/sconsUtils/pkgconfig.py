@@ -578,7 +578,6 @@ class PkgConfig:
         """
         result: list[str] = []
         visited: set[str] = set()
-        requires_cache: dict[str, list[str]] = {}
 
         def visit(module: str, path: list[str]) -> None:
             if module in path:
@@ -588,9 +587,7 @@ class PkgConfig:
                 return
             visited.add(module)
             result.append(module)
-            if module not in requires_cache:
-                requires_cache[module] = self.requires(module)
-            for dependency in requires_cache[module]:
+            for dependency in self.requires(module):
                 visit(dependency, path + [module])
 
         for module in modules:

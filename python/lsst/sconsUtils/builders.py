@@ -563,7 +563,8 @@ def _calcMd5(filename):
     try:
         import hashlib
 
-        md5 = hashlib.md5(open(filename, "rb").read()).hexdigest()
+        with open(filename, "rb") as f:
+            md5 = hashlib.md5(f.read()).hexdigest()
     except OSError:
         md5 = None
 
