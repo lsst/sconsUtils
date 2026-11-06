@@ -43,7 +43,7 @@ import SCons.Conftest
 import SCons.Script
 
 from . import eupsForScons
-from .utils import get_conda_prefix, use_conda_compilers
+from .utils import conda_compilers, get_conda_prefix, use_conda_compilers
 
 SCons.Script.EnsureSConsVersion(2, 1, 0)
 
@@ -502,8 +502,7 @@ def _configureCommon():
     else:
         if use_conda_compilers():
             # conda-build expects you to use the compilers as-is
-            env["CC"] = os.environ["CC"]
-            env["CXX"] = os.environ["CXX"]
+            env["CC"], env["CXX"] = conda_compilers()
 
             conf = env.Configure(custom_tests={"ClassifyCc": ClassifyCc})
             env.whichCc, env.ccVersion = conf.ClassifyCc()
