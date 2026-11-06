@@ -635,8 +635,8 @@ class PackageTree:
         -------
         pkgconfig : `~lsst.sconsUtils.pkgconfig.PkgConfig` or `None`
             The runner, or `None` if it cannot be constructed (no conda
-            prefix or no ``pkg-config`` executable).  The reason is logged
-            once, and construction is not retried.
+            prefix, or neither ``pkgconf`` nor ``pkg-config`` on ``PATH``).
+            The reason is logged once, and construction is not retried.
 
         Notes
         -----

@@ -46,6 +46,7 @@ from lsst.sconsUtils.pkgconfig import (
     build_search_path,
     cfg_path,
     check_single_format,
+    find_executable,
     main,
     output_path,
     remove_generated_pc,
@@ -72,13 +73,30 @@ def _python_has_numpy() -> bool:
         return False
 
 
+def _find_executable() -> str | None:
+    """Return the pkg-config implementation `PkgConfig` runs by default, or
+    `None` if there is none."""
+    try:
+        return find_executable()
+    except PkgConfigError:
+        return None
+
+
+#: The pkg-config implementation found on ``PATH``, or `None`.
+_EXECUTABLE = _find_executable()
+
+
 def _pkg_config_executables() -> list[str]:
     """Return every distinct pkg-config implementation available: the one
-    on ``PATH`` and the system's ``/usr/bin/pkg-config``, which is often
-    pkgconf."""
+    `PkgConfig` runs by default and any other ``pkgconf`` or ``pkg-config``
+    on ``PATH`` or in ``/usr/bin``, which may be a different implementation
+    or version."""
     executables = []
     seen = set()
-    for candidate in (shutil.which("pkg-config"), "/usr/bin/pkg-config"):
+    candidates = [_EXECUTABLE]
+    for name in ("pkgconf", "pkg-config"):
+        candidates += [shutil.which(name), os.path.join("/usr/bin", name)]
+    for candidate in candidates:
         if candidate is None or not os.access(candidate, os.X_OK):
             continue
         resolved = os.path.realpath(candidate)
@@ -106,7 +124,7 @@ def write_pc(directory: str, name: str, body: str) -> str:
     return path
 
 
-@unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
+@unittest.skipUnless(_EXECUTABLE, "neither pkgconf nor pkg-config is available on PATH")
 class SearchPathTestCase(unittest.TestCase):
     """Tests for `build_search_path`."""
 
@@ -178,7 +196,7 @@ class SearchPathTestCase(unittest.TestCase):
             self.assertEqual(path[0], os.path.join(root, "lib", "pkgconfig"))
 
 
-@unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
+@unittest.skipUnless(_EXECUTABLE, "neither pkgconf nor pkg-config is available on PATH")
 class PkgConfigRunnerTestCase(unittest.TestCase):
     """Tests for `PkgConfig`."""
 
@@ -212,10 +230,12 @@ class PkgConfigRunnerTestCase(unittest.TestCase):
         pc = PkgConfig([self.d], conda_prefix="/opt/conda")
         with self.assertRaises(PkgConfigError) as cm:
             pc.run("--cflags", "missing")
-        # pkg-config 0.29.2's stderr for a missing module includes this
-        # sentence; assert on it so the exception message is confirmed to
-        # carry pkg-config's actual stderr, not just the echoed arguments.
+        # The stderr of both pkgconf and pkg-config 0.29.2 for a missing
+        # module includes this sentence; assert on it so the exception
+        # message is confirmed to carry the actual stderr, not just the
+        # echoed arguments.
         self.assertIn("was not found in the pkg-config search path", str(cm.exception))
+        self.assertIn(os.path.basename(pc.executable), str(cm.exception))
 
     def test_no_conda_prefix_fails(self):
         with self.assertRaises(PkgConfigError):
@@ -223,13 +243,70 @@ class PkgConfigRunnerTestCase(unittest.TestCase):
 
     def test_no_executable_on_path_fails(self):
         with mock.patch.dict(os.environ, {"PATH": self.d}), self.assertRaises(PkgConfigError) as cm:
+            os.environ.pop("PKG_CONFIG", None)
             PkgConfig([self.d], conda_prefix="/opt/conda")
-        self.assertIn("pkg-config was not found on PATH", str(cm.exception))
+        self.assertIn("neither pkgconf nor pkg-config was found on PATH", str(cm.exception))
 
     def test_requires_skips_blank_lines(self):
         pc = PkgConfig([self.d], conda_prefix="/opt/conda")
         with mock.patch.object(pc, "run", return_value="\nalpha >= 1.0\n\nbeta\n"):
             self.assertEqual(pc.requires("top"), ["alpha", "beta"])
+
+
+class FindExecutableTestCase(unittest.TestCase):
+    """Tests for `find_executable`."""
+
+    def setUp(self):
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        self.first = os.path.join(self._tmpdir.name, "first")
+        self.second = os.path.join(self._tmpdir.name, "second")
+        os.makedirs(self.first)
+        os.makedirs(self.second)
+
+    def _stub(self, directory, name):
+        path = os.path.join(directory, name)
+        with open(path, "w") as f:
+            f.write("#!/bin/sh\n")
+        os.chmod(path, os.stat(path).st_mode | stat.S_IXUSR)
+        return path
+
+    def _path(self, *directories):
+        return {"PATH": os.pathsep.join(directories)}
+
+    def test_pkgconf_is_preferred_within_a_directory(self):
+        pkgconf = self._stub(self.first, "pkgconf")
+        self._stub(self.first, "pkg-config")
+        self.assertEqual(find_executable(self._path(self.first)), pkgconf)
+
+    def test_pkg_config_alone_is_used(self):
+        pkg_config = self._stub(self.first, "pkg-config")
+        self.assertEqual(find_executable(self._path(self.first)), pkg_config)
+
+    def test_earlier_directory_wins(self):
+        # e.g. a conda pkg-config is used over a system pkgconf.
+        pkg_config = self._stub(self.first, "pkg-config")
+        self._stub(self.second, "pkgconf")
+        self.assertEqual(find_executable(self._path(self.first, self.second)), pkg_config)
+
+    def test_pkg_config_variable(self):
+        self._stub(self.first, "pkgconf")
+        chosen = self._stub(self.second, "my-pkg-config")
+        environ = dict(self._path(self.first, self.second), PKG_CONFIG="my-pkg-config")
+        self.assertEqual(find_executable(environ), chosen)
+        environ["PKG_CONFIG"] = chosen
+        self.assertEqual(find_executable(environ), chosen)
+
+    def test_missing_pkg_config_variable_fails(self):
+        self._stub(self.first, "pkgconf")
+        environ = dict(self._path(self.first), PKG_CONFIG="absent")
+        with self.assertRaises(PkgConfigError) as cm:
+            find_executable(environ)
+        self.assertIn("PKG_CONFIG=absent", str(cm.exception))
+
+    def test_nothing_found_fails(self):
+        with self.assertRaises(PkgConfigError):
+            find_executable(self._path(self.first))
 
 
 @unittest.skipUnless(_pkg_config_executables(), "no pkg-config implementation is available")
@@ -291,7 +368,7 @@ class PresentTestCase(unittest.TestCase):
                     self.assertTrue(pc.present(found[0]))
 
 
-@unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
+@unittest.skipUnless(_EXECUTABLE, "neither pkgconf nor pkg-config is available on PATH")
 class ClosureTestCase(unittest.TestCase):
     """Tests for `PkgConfig.closure` and `PkgConfig.requires`."""
 
@@ -328,7 +405,7 @@ class ClosureTestCase(unittest.TestCase):
         self.assertIn("b", str(cm.exception))
 
 
-@unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
+@unittest.skipUnless(_EXECUTABLE, "neither pkgconf nor pkg-config is available on PATH")
 class FlagQueryTestCase(unittest.TestCase):
     """Tests for the ``*_only_*`` flag query methods on `PkgConfig`."""
 
@@ -358,14 +435,18 @@ class FlagQueryTestCase(unittest.TestCase):
         self.assertEqual(self.pc.libs_only_other(["top"]), ["-Wl,-rpath,/lib/top"])
 
     def test_bare_prefix_is_dropped(self):
-        # A bare -I or -L must not become "" (realpath("") is the cwd).
+        # A bare -I or -L, e.g. from an empty variable, must not become ""
+        # (realpath("") is the cwd).  A literal "-L -lbare" would not do
+        # here: pkgconf 3 reads it as the single argument "-L-lbare".
         write_pc(
             self.d,
             "bare",
-            "Name: bare\nDescription: x\nVersion: 1.0\nCflags: -I/inc/bare -I\nLibs: -L/lib/bare -L -lbare\n",
+            "empty=\nName: bare\nDescription: x\nVersion: 1.0\n"
+            "Cflags: -I/inc/bare -I${empty}\nLibs: -L/lib/bare -L${empty} -lbare\n",
         )
         self.assertEqual(self.pc.cflags_only_I(["bare"]), ["/inc/bare"])
         self.assertEqual(self.pc.libs_only_L(["bare"]), ["/lib/bare"])
+        self.assertEqual(self.pc.libs_only_l(["bare"]), ["bare"])
 
     def test_empty_modules_returns_empty_without_invoking(self):
         self.assertEqual(self.pc.cflags_only_I([]), [])
@@ -460,7 +541,7 @@ class ResolveFixture:
         self.pc = PkgConfig([pcdir], conda_prefix=self.conda)
 
 
-@unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
+@unittest.skipUnless(_EXECUTABLE, "neither pkgconf nor pkg-config is available on PATH")
 class ResolveTestCase(ResolveFixture, unittest.TestCase):
     """Tests for `resolve`."""
 
@@ -548,7 +629,7 @@ def make_cfg_env() -> SCons.Environment.Environment:
     return env
 
 
-@unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
+@unittest.skipUnless(_EXECUTABLE, "neither pkgconf nor pkg-config is available on PATH")
 class SynthesizeTestCase(ResolveFixture, unittest.TestCase):
     """Tests for `synthesize_cfg_module` and `SyntheticConfiguration`."""
 
@@ -702,7 +783,7 @@ class TemplateTestCase(unittest.TestCase):
                 f.write("")
             check_single_format(root, "afw")
 
-    @unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
+    @unittest.skipUnless(_EXECUTABLE, "neither pkgconf nor pkg-config is available on PATH")
     def test_write_substitutes_version_and_is_idempotent(self):
         with tempfile.TemporaryDirectory() as root:
             tmpl = os.path.join(root, "lsst_x.pc.in")
@@ -754,7 +835,7 @@ class TemplateTestCase(unittest.TestCase):
             self.assertIn(tmpl, str(cm.exception))
 
 
-@unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
+@unittest.skipUnless(_EXECUTABLE, "neither pkgconf nor pkg-config is available on PATH")
 class ShimTestCase(unittest.TestCase):
     """Tests for `write_shims` and the console script `main`."""
 
@@ -764,12 +845,13 @@ class ShimTestCase(unittest.TestCase):
         self.target = os.path.join(self._tmpdir.name, "shims")
 
     def _pkg_config(self, *args):
-        """Run the real ``pkg-config`` binary with no ``--define-variable``,
-        so that a shim's own ``conda_prefix`` default is exercised."""
+        """Run the real pkg-config implementation with no
+        ``--define-variable``, so that a shim's own ``conda_prefix`` default
+        is exercised."""
         env = dict(os.environ)
         env["PKG_CONFIG_PATH"] = self.target
         return subprocess.run(
-            ["pkg-config", *args], env=env, capture_output=True, text=True, check=True
+            [_EXECUTABLE, *args], env=env, capture_output=True, text=True, check=True
         ).stdout
 
     def _cflags(self, module):
@@ -990,7 +1072,7 @@ class PkgConfigDependenciesTestCase(unittest.TestCase):
         self.assertEqual(resolved.versions, {"m": "1", "base": "2", "eigen3": "3.4"})
 
 
-@unittest.skipUnless(shutil.which("pkg-config"), "pkg-config is not available on PATH")
+@unittest.skipUnless(_EXECUTABLE, "neither pkgconf nor pkg-config is available on PATH")
 class PackageTreeFallbackTestCase(unittest.TestCase):
     """Tests for the pkg-config fallback of
     `lsst.sconsUtils.dependencies.PackageTree`."""
