@@ -1,0 +1,8 @@
+conda_prefix=${pcfiledir}/../..
+
+Name: boost_timer
+Description: Boost timer library
+Version: unknown
+Requires: boost
+Cflags:
+Libs: -lboost_timer

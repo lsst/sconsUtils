@@ -1,0 +1,8 @@
+conda_prefix=${pcfiledir}/../..
+
+Name: boost_program_options
+Description: Boost program_options library
+Version: unknown
+Requires: boost
+Cflags:
+Libs: -lboost_program_options
