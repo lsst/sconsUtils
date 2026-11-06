@@ -399,10 +399,23 @@ class ClosureTestCase(unittest.TestCase):
         self.assertEqual(self.pc.closure(["top", "side"]), ["top", "mid", "leaf", "side"])
 
     def test_cycle_detected(self):
-        with self.assertRaises(CyclicDependencyError) as cm:
+        # Not every implementation answers queries about a module on a
+        # cycle (see test_real_cycle_fails), so stub out requires().
+        graph = {"top": ["a"], "a": ["b"], "b": ["c", "a"], "c": []}
+        with (
+            mock.patch.object(self.pc, "requires", side_effect=graph.__getitem__),
+            self.assertRaises(CyclicDependencyError) as cm,
+        ):
+            self.pc.closure(["top"])
+        self.assertEqual(str(cm.exception), "a -> b -> a")
+
+    def test_real_cycle_fails(self):
+        # pkg-config 0.29 and pkgconf 1 and 3 report the requirements of a
+        # module on a cycle, so closure() finds the cycle; pkgconf 2 refuses
+        # every query about such a module.  Either way it is an error.
+        with self.assertRaises(PkgConfigError) as cm:
             self.pc.closure(["a"])
         self.assertIn("a", str(cm.exception))
-        self.assertIn("b", str(cm.exception))
 
 
 @unittest.skipUnless(_EXECUTABLE, "neither pkgconf nor pkg-config is available on PATH")
