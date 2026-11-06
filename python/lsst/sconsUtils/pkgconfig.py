@@ -22,10 +22,10 @@
 """pkg-config support for sconsUtils.
 
 This module knows how to construct the ``PKG_CONFIG_PATH`` search path
-sconsUtils uses for every pkg-config invocation, and how to run
-``pkg-config`` itself.  It is deliberately free of any SCons import so
-that it can be unit tested with plain ``pytest`` and reused outside of
-an SCons build.
+sconsUtils uses for every pkg-config invocation, and how to run a
+pkg-config implementation, preferably ``pkgconf``, itself.  It is
+deliberately free of any SCons import so that it can be unit tested with
+plain ``pytest`` and reused outside of an SCons build.
 """
 
 from __future__ import annotations
@@ -45,6 +45,7 @@ __all__ = (
     "build_search_path",
     "cfg_path",
     "check_single_format",
+    "find_executable",
     "main",
     "module_name",
     "output_path",
@@ -80,6 +81,11 @@ VERSION_TOKEN = "@VERSION@"
 
 #: Subdirectory, relative to a build root, holding configure-time shims.
 GENERATED_SHIM_SUBDIR = os.path.join(".sconf_temp", "pkgconfig")
+
+#: Names of the pkg-config implementations looked for on ``PATH``, in order
+#: of preference within a directory.  conda-forge provides ``pkgconf``, and
+#: not every build of it also installs a ``pkg-config`` link.
+_EXECUTABLE_NAMES = ("pkgconf", "pkg-config")
 
 # Matches the same `<name>_DIR` / `<name>_DIR_EXTRA` environment variables
 # that `state.py` scans when building the EUPS configuration search path.
@@ -339,8 +345,48 @@ def build_search_path(build_root: str, environ: Mapping[str, str]) -> list[str]:
     return _dedup_preserve_order(search_path)
 
 
+def find_executable(environ: Mapping[str, str] | None = None) -> str:
+    """Find the pkg-config implementation to run.
+
+    Parameters
+    ----------
+    environ : `~collections.abc.Mapping` [`str`, `str`], optional
+        Environment variables to consult, in the style of `os.environ`,
+        which is the default.
+
+    Returns
+    -------
+    executable : `str`
+        Path of the executable.  This is ``$PKG_CONFIG`` if that is set,
+        as for other build tools.  Otherwise it is the first ``pkgconf`` or
+        ``pkg-config`` on ``PATH``, preferring ``pkgconf`` within a
+        directory, so that an earlier directory always wins.
+
+    Raises
+    ------
+    PkgConfigError
+        Raised if ``$PKG_CONFIG`` is set but cannot be found, or if it is
+        unset and neither name is on ``PATH``.
+    """
+    if environ is None:
+        environ = os.environ
+    path = environ.get("PATH", os.defpath)
+    requested = environ.get("PKG_CONFIG")
+    if requested:
+        executable = shutil.which(requested, path=path)
+        if executable is None:
+            raise PkgConfigError(f"PKG_CONFIG={requested} was not found")
+        return executable
+    for directory in path.split(os.pathsep):
+        for name in _EXECUTABLE_NAMES:
+            executable = shutil.which(name, path=directory)
+            if executable is not None:
+                return executable
+    raise PkgConfigError(f"neither {' nor '.join(_EXECUTABLE_NAMES)} was found on PATH")
+
+
 class PkgConfig:
-    """A runner for the ``pkg-config`` executable.
+    """A runner for a pkg-config implementation such as ``pkgconf``.
 
     Parameters
     ----------
@@ -352,14 +398,14 @@ class PkgConfig:
         this as ``--define-variable=conda_prefix=<conda_prefix>``.  Builds
         without a conda environment are unsupported, so `None` is rejected.
     executable : `str`, optional
-        Path to the ``pkg-config`` executable.  Defaults to the first
-        ``pkg-config`` found on ``PATH``.
+        Path to the executable.  Defaults to the one `find_executable`
+        returns.
 
     Raises
     ------
     PkgConfigError
-        Raised if `executable` is not given and no ``pkg-config`` can be
-        found on ``PATH``, or if `conda_prefix` is `None`.
+        Raised if `executable` is not given and `find_executable` fails, or
+        if `conda_prefix` is `None`.
     """
 
     def __init__(
@@ -371,9 +417,7 @@ class PkgConfig:
         if conda_prefix is None:
             raise PkgConfigError("sconsUtils requires a conda environment; CONDA_PREFIX is not set")
         if executable is None:
-            executable = shutil.which("pkg-config")
-            if executable is None:
-                raise PkgConfigError("pkg-config was not found on PATH")
+            executable = find_executable()
         self.executable: str = executable
         self._search_path = list(search_path)
         self._conda_prefix = conda_prefix
@@ -382,7 +426,7 @@ class PkgConfig:
         self._default_path: list[str] | None = None
 
     def _invoke(self, *args: str) -> subprocess.CompletedProcess[str]:
-        """Run ``pkg-config`` with `args` and return the completed process.
+        """Run the executable with `args` and return the completed process.
 
         The ``--define-variable=conda_prefix=...`` argument is always
         prepended.  This never raises on a non-zero exit status; callers
@@ -405,12 +449,12 @@ class PkgConfig:
         )
 
     def run(self, *args: str) -> str:
-        """Run ``pkg-config`` with the given arguments and return its output.
+        """Run the executable with the given arguments and return its output.
 
         Parameters
         ----------
         *args : `str`
-            Arguments to pass to ``pkg-config``, after the
+            Arguments to pass to the executable, after the
             ``--define-variable=conda_prefix=...`` argument that is always
             prepended.
 
@@ -422,14 +466,14 @@ class PkgConfig:
         Raises
         ------
         PkgConfigError
-            Raised if ``pkg-config`` exits with a non-zero status.  The
+            Raised if the executable exits with a non-zero status.  The
             exception message includes the command's standard error.
         """
         result = self._invoke(*args)
         if result.returncode != 0:
             raise PkgConfigError(
-                f"pkg-config {' '.join(args)} failed with exit status {result.returncode}: "
-                f"{result.stderr.strip()}"
+                f"{os.path.basename(self.executable)} {' '.join(args)} failed with exit status "
+                f"{result.returncode}: {result.stderr.strip()}"
             )
         return result.stdout
 
@@ -486,9 +530,9 @@ class PkgConfig:
 
         This is ``PKG_CONFIG_LIBDIR`` if that is set, since it replaces the
         compiled-in default, and otherwise the default as reported by
-        ``pkg-config --variable=pc_path pkg-config``, which both pkg-config
-        and pkgconf support.  The result is computed once and cached; it
-        is empty if the query fails.
+        ``--variable=pc_path pkg-config``, which both pkgconf and
+        pkg-config support.  The result is computed once and cached; it is
+        empty if the query fails.
         """
         if self._default_path is None:
             value = os.environ.get("PKG_CONFIG_LIBDIR")

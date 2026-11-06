@@ -35,6 +35,16 @@ import sys
 import tempfile
 import unittest
 
+from lsst.sconsUtils.pkgconfig import PkgConfigError, find_executable
+
+
+def _pkg_config():
+    """Return the pkg-config implementation sconsUtils runs, or `None`."""
+    try:
+        return find_executable()
+    except PkgConfigError:
+        return None
+
 
 def _conda_prefix():
     """Return the conda environment pytest runs in, or `None`.
@@ -72,8 +82,8 @@ class SconsUtilsTestCase(unittest.TestCase):
         )
 
     @unittest.skipUnless(
-        shutil.which("pkg-config") and _conda_prefix(),
-        "pkg-config and a conda environment are required to build the testPkgConfig fixture",
+        _pkg_config() and _conda_prefix(),
+        "pkgconf or pkg-config and a conda environment are required to build the testPkgConfig fixture",
     )
     def testPkgConfigPackage(self):
         fixture = os.path.join(os.path.dirname(__file__), "testPkgConfig")
@@ -113,21 +123,21 @@ class SconsUtilsTestCase(unittest.TestCase):
         self.assertEqual(os.path.getmtime(pc), mtime)
 
         env = dict(sconsEnv, PKG_CONFIG_PATH=os.path.dirname(pc))
-        version = subprocess.check_output(["pkg-config", "--modversion", "lsst_testPkgConfig"], env=env)
+        version = subprocess.check_output([_pkg_config(), "--modversion", "lsst_testPkgConfig"], env=env)
         version = version.decode().strip()
         self.assertNotEqual(version, "")
         self.assertNotIn("@VERSION@", version)
 
         # pkg-config does not normalize ${pcfiledir}/../.., so compare
         # realpaths.
-        cflags = subprocess.check_output(["pkg-config", "--cflags", "lsst_testPkgConfig"], env=env)
+        cflags = subprocess.check_output([_pkg_config(), "--cflags", "lsst_testPkgConfig"], env=env)
         cflags = cflags.decode().split()
         self.assertEqual(
             [os.path.realpath(f[2:]) for f in cflags],
             [os.path.realpath(os.path.join(fixture, "include"))],
         )
 
-        libs = subprocess.check_output(["pkg-config", "--libs", "lsst_testPkgConfig"], env=env)
+        libs = subprocess.check_output([_pkg_config(), "--libs", "lsst_testPkgConfig"], env=env)
         libs = libs.decode().split()
         self.assertEqual(os.path.realpath(libs[0][2:]), os.path.realpath(os.path.join(fixture, "lib")))
         self.assertEqual(libs[1:], ["-ltestPkgConfig"])
@@ -154,8 +164,8 @@ class SconsUtilsTestCase(unittest.TestCase):
             )
 
     @unittest.skipUnless(
-        shutil.which("pkg-config") and _conda_prefix(),
-        "pkg-config and a conda environment are required to configure the testPkgConfig fixture",
+        _pkg_config() and _conda_prefix(),
+        "pkgconf or pkg-config and a conda environment are required to configure the testPkgConfig fixture",
     )
     def testPkgConfigConfigurationErrors(self):
         def addCfgFile(root):

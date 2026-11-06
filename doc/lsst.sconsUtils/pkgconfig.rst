@@ -94,6 +94,14 @@ Running ``scons --clean`` with no explicit targets removes the generated ``lib/p
 Nothing is removed when ``--no-exec`` is also given, or when explicit targets are given, as in ``scons --clean install``.
 ``*.pc`` is not part of the default ``cleanExt`` pattern, so this removal is specific to the one generated file and does not touch ``.pc`` files tracked in a repository, such as sconsUtils's own static shims.
 
+Which pkg-config is run
+=======================
+
+conda-forge provides ``pkgconf`` as its pkg-config implementation, and not every build of it also installs a ``pkg-config`` link.
+sconsUtils therefore runs ``$PKG_CONFIG`` if that is set, and otherwise the first ``pkgconf`` or ``pkg-config`` on ``PATH``, preferring ``pkgconf`` within a directory.
+Searching ``PATH`` in order means that the conda environment's implementation, whichever it is, is used rather than a system one later on ``PATH``.
+Both pkgconf and pkg-config 0.29 are supported.
+
 Search path
 ===========
 
