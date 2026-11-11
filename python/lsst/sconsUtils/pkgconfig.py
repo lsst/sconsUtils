@@ -66,6 +66,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import types
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -90,6 +91,29 @@ _EXECUTABLE_NAMES = ("pkgconf", "pkg-config")
 # Matches the same `<name>_DIR` / `<name>_DIR_EXTRA` environment variables
 # that `state.py` scans when building the EUPS configuration search path.
 _DIR_VAR_RE = re.compile(r"^(?P<name>\w+)_DIR(?P<extra>_EXTRA)?$")
+
+#: Compiler and linker options whose argument is a separate token, such as
+#: ``-framework Accelerate``.  This is the list SCons's ``ParseFlags`` keeps
+#: together, plus the linker options pkg-config files are known to use.
+_OPTIONS_WITH_ARGUMENT = frozenset(
+    {
+        "--param",
+        "-D",
+        "-U",
+        "-Xlinker",
+        "-Xpreprocessor",
+        "-arch",
+        "-framework",
+        "-idirafter",
+        "-imacros",
+        "-include",
+        "-iquote",
+        "-isysroot",
+        "-isystem",
+        "-rpath",
+        "-weak_framework",
+    }
+)
 
 
 class PkgConfigError(RuntimeError):
@@ -314,8 +338,7 @@ def build_search_path(build_root: str, environ: Mapping[str, str]) -> list[str]:
         2. ``<value>/lib/pkgconfig`` for every environment variable matching
            ``^\\w+_DIR$`` whose directory exists, in the same way ``cfgPath``
            is built today in `state.py`.
-        3. ``$SCONSUTILS_DIR/pkgconfig``, the static shims, when that
-           variable is set and the directory exists.
+        3. `static_shim_dir`, the static shims, when it exists.
         4. ``<build_root>/.sconf_temp/pkgconfig``, the configure-time
            generated shims.
         5. Whatever ``PKG_CONFIG_PATH`` the user already had.
@@ -330,11 +353,9 @@ def build_search_path(build_root: str, environ: Mapping[str, str]) -> list[str]:
         if os.path.isdir(candidate):
             search_path.append(candidate)
 
-    sconsutils_dir = environ.get("SCONSUTILS_DIR")
-    if sconsutils_dir:
-        candidate = os.path.join(sconsutils_dir, "pkgconfig")
-        if os.path.isdir(candidate):
-            search_path.append(candidate)
+    static_dir = static_shim_dir()
+    if static_dir is not None:
+        search_path.append(static_dir)
 
     search_path.append(os.path.join(build_root, GENERATED_SHIM_SUBDIR))
 
@@ -406,6 +427,13 @@ class PkgConfig:
     PkgConfigError
         Raised if `executable` is not given and `find_executable` fails, or
         if `conda_prefix` is `None`.
+
+    Notes
+    -----
+    The result of every invocation is cached for the lifetime of the
+    instance, because resolving several packages with overlapping closures
+    repeats the same per-module queries.  An instance must therefore not be
+    reused once a ``.pc`` file it may already have read has changed.
     """
 
     def __init__(
@@ -424,14 +452,20 @@ class PkgConfig:
         # pkg-config's own default search path; queried on first use by
         # _default_search_path().
         self._default_path: list[str] | None = None
+        # Completed invocations, keyed by their arguments; see _invoke().
+        self._results: dict[tuple[str, ...], subprocess.CompletedProcess[str]] = {}
 
     def _invoke(self, *args: str) -> subprocess.CompletedProcess[str]:
         """Run the executable with `args` and return the completed process.
 
         The ``--define-variable=conda_prefix=...`` argument is always
         prepended.  This never raises on a non-zero exit status; callers
-        decide how to interpret the result.
+        decide how to interpret the result.  The executable is run only the
+        first time a given `args` is seen; later calls return the cached
+        result.
         """
+        if args in self._results:
+            return self._results[args]
         env = dict(os.environ)
         env["PKG_CONFIG_PATH"] = os.pathsep.join(self._search_path)
         env["PKG_CONFIG_ALLOW_SYSTEM_CFLAGS"] = "1"
@@ -441,12 +475,14 @@ class PkgConfig:
             f"--define-variable=conda_prefix={self._conda_prefix}",
             *args,
         ]
-        return subprocess.run(
+        result = subprocess.run(
             command,
             env=env,
             capture_output=True,
             text=True,
         )
+        self._results[args] = result
+        return result
 
     def run(self, *args: str) -> str:
         """Run the executable with the given arguments and return its output.
@@ -492,6 +528,26 @@ class PkgConfig:
             raises, even if `module` cannot be found.
         """
         return self._invoke("--exists", module).returncode == 0
+
+    def missing_reason(self, module: str) -> str | None:
+        """Return why `module` cannot be used, or `None` if it exists.
+
+        Parameters
+        ----------
+        module : `str`
+            The pkg-config module name to look up.
+
+        Returns
+        -------
+        reason : `str` or `None`
+            `None` if `exists` would be `True`, otherwise pkg-config's own
+            explanation, which names the module that is actually missing:
+            `module` itself, or one of the modules in its ``Requires``.
+        """
+        result = self._invoke("--print-errors", "--exists", module)
+        if result.returncode == 0:
+            return None
+        return result.stderr.strip() or f"{module} was not found"
 
     def present(self, module: str) -> bool:
         """Return whether a ``.pc`` file for `module` is on the search path.
@@ -769,14 +825,18 @@ class ResolvedDependencies:
     """All other include directories, normalized with `os.path.realpath`;
     these are treated as system headers."""
 
-    ccflags: list[str]
-    """Compiler flags other than ``-I``."""
+    ccflags: list[str | tuple[str, str]]
+    """Compiler flags other than ``-I``.  An option whose argument is a
+    separate token, such as ``-isystem /a``, is a tuple of the two, so that
+    SCons de-duplicates it as one flag."""
 
     libpath: list[str]
     """Library search directories, with the ``-L`` prefix stripped."""
 
-    linkflags: list[str]
-    """Linker flags other than ``-L`` and ``-l``."""
+    linkflags: list[str | tuple[str, str]]
+    """Linker flags other than ``-L`` and ``-l``, with an option and a
+    separate argument, such as ``-framework Accelerate``, paired into a
+    tuple as in `ccflags`."""
 
     libs: dict[str, list[str]]
     """Library names without the ``-l`` prefix, keyed by category
@@ -788,6 +848,28 @@ class ResolvedDependencies:
     versions: dict[str, str]
     """Version of every module in the closure, keyed by module name with a
     leading `MODULE_PREFIX` stripped."""
+
+
+def _group_flags(tokens: Sequence[str]) -> list[str | tuple[str, str]]:
+    """Pair each option in `_OPTIONS_WITH_ARGUMENT` with its argument.
+
+    The pair becomes a tuple, as SCons's ``ParseFlags`` does, so that
+    ``AppendUnique`` treats e.g. ``-framework Accelerate`` as one flag
+    rather than de-duplicating ``-framework`` on its own.  SCons expands a
+    tuple into its elements on the command line.  An option with nothing
+    after it is kept as a plain string.
+    """
+    grouped: list[str | tuple[str, str]] = []
+    tokens = list(tokens)
+    i = 0
+    while i < len(tokens):
+        if tokens[i] in _OPTIONS_WITH_ARGUMENT and i + 1 < len(tokens):
+            grouped.append((tokens[i], tokens[i + 1]))
+            i += 2
+        else:
+            grouped.append(tokens[i])
+            i += 1
+    return grouped
 
 
 def _strip_module_prefix(module: str) -> str:
@@ -878,19 +960,25 @@ def resolve(
     ------
     PkgConfigError
         Raised if the primary module or any of its build requirements
-        cannot be found, naming the missing module.
+        cannot be used, with pkg-config's explanation, which names the
+        missing module even when it is one of their ``Requires``.
     CyclicDependencyError
         Raised if the ``Requires`` graph contains a cycle.
     """
     primary = module_name(package_name)
-    if not pkgconfig.exists(primary):
-        raise PkgConfigError(f"pkg-config module {primary} for package {package_name!r} was not found")
+    reason = pkgconfig.missing_reason(primary)
+    if reason is not None:
+        raise PkgConfigError(
+            f"pkg-config module {primary} for package {package_name!r} is unusable: {reason}"
+        )
     module_set = [primary]
     if include_build_requires:
         for required in (pkgconfig.variable(primary, "lsst_build_requires") or "").split():
-            if not pkgconfig.exists(required):
+            reason = pkgconfig.missing_reason(required)
+            if reason is not None:
                 raise PkgConfigError(
-                    f"pkg-config module {required}, listed in lsst_build_requires of {primary}, was not found"
+                    f"pkg-config module {required}, listed in lsst_build_requires of {primary}, "
+                    f"is unusable: {reason}"
                 )
             module_set.append(required)
     module_set = _dedup_preserve_order(module_set)
@@ -903,9 +991,9 @@ def resolve(
         modules=modules,
         cpppath=cpppath,
         xcpppath=xcpppath,
-        ccflags=pkgconfig.cflags_only_other(module_set),
+        ccflags=_group_flags(pkgconfig.cflags_only_other(module_set)),
         libpath=_dedup_preserve_order(pkgconfig.libs_only_L(module_set)),
-        linkflags=pkgconfig.libs_only_other(module_set),
+        linkflags=_group_flags(pkgconfig.libs_only_other(module_set)),
         libs={
             "main": pkgconfig.libs_only_l(module_set),
             "python": _library_union(pkgconfig, modules, "lsst_python_libs"),
@@ -1087,13 +1175,24 @@ def synthesize_cfg_module(name: str, pkgconfig: PkgConfig, conda_prefix: str) ->
     Returns
     -------
     module : `types.SimpleNamespace`
-        An object with an empty ``dependencies`` dict, because pkg-config
-        has already flattened the closure, and a ``config`` attribute
-        holding a `SyntheticConfiguration`.  The package's
-        ``lsst_build_requires`` are not included, because a dependency's
-        build-only requirements are never applied to the package consuming
-        it.  Unlike in `resolve`, the package's own ``doxygen_tag`` is
-        included, ahead of those of the modules it requires.
+        An object with three attributes:
+
+        ``dependencies``
+            An empty `dict`, because pkg-config has already flattened the
+            closure, so there is nothing left for
+            `~lsst.sconsUtils.dependencies.PackageTree` to recurse into.
+        ``config``
+            A `SyntheticConfiguration` covering the whole closure.  The
+            package's ``lsst_build_requires`` are not included, because a
+            dependency's build-only requirements are never applied to the
+            package consuming it.  Unlike in `resolve`, the package's own
+            ``doxygen_tag`` is included, ahead of those of the modules it
+            requires.
+        ``provided``
+            The version of every other module in the closure, keyed by
+            module name with a leading `MODULE_PREFIX` stripped (`dict`
+            [`str`, `str`]), so that they can still be listed as
+            dependencies.
 
     Raises
     ------
@@ -1102,9 +1201,6 @@ def synthesize_cfg_module(name: str, pkgconfig: PkgConfig, conda_prefix: str) ->
         satisfied, with pkg-config's own explanation, or if it cannot be
         resolved for another reason; see `resolve`.
     """
-    # Fail with pkg-config's reason (e.g. which required module is missing)
-    # rather than resolve's generic "not found".
-    pkgconfig.run("--print-errors", "--exists", module_name(name))
     resolved = resolve(name, pkgconfig, conda_prefix, include_build_requires=False)
     # resolve() leaves out the primary module's own tag file, which only the
     # package being built must do; a dependency's tag file is wanted, as
@@ -1112,7 +1208,10 @@ def synthesize_cfg_module(name: str, pkgconfig: PkgConfig, conda_prefix: str) ->
     tag = pkgconfig.variable(module_name(name), "doxygen_tag")
     if tag is not None:
         resolved.doxygen["tags"].insert(0, tag)
-    return types.SimpleNamespace(dependencies={}, config=SyntheticConfiguration(name, resolved))
+    provided = {other: version for other, version in resolved.versions.items() if other != name}
+    return types.SimpleNamespace(
+        dependencies={}, config=SyntheticConfiguration(name, resolved), provided=provided
+    )
 
 
 def _write_if_changed(output: str, contents: str) -> bool:
@@ -1148,16 +1247,11 @@ def static_shim_dir() -> str | None:
     Returns
     -------
     directory : `str` or `None`
-        ``$SCONSUTILS_DIR/pkgconfig`` if the ``SCONSUTILS_DIR`` environment
-        variable is set and that directory exists, otherwise `None`.  The
-        `None` case is normal in the container, where the static shims
-        have already been copied into ``$CONDA_PREFIX/lib/pkgconfig`` and
-        sconsUtils is not set up by EUPS at all.
+        The ``pkgconfig_shims`` directory installed alongside this module,
+        whether sconsUtils is set up by EUPS or installed with pip, or
+        `None` if that directory does not exist.
     """
-    sconsutils_dir = os.environ.get("SCONSUTILS_DIR")
-    if not sconsutils_dir:
-        return None
-    candidate = os.path.join(sconsutils_dir, "pkgconfig")
+    candidate = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pkgconfig_shims")
     if not os.path.isdir(candidate):
         return None
     return candidate
@@ -1202,8 +1296,8 @@ def _write_numpy_shim(directory: str) -> str:
 def _write_starlink_ast_shim(directory: str) -> str:
     """Generate ``starlink_ast.pc`` in `directory` and return its path.
 
-    Runs the ``ast_link`` script found on ``PATH`` through ``sh``, exactly
-    as ``configs/starlink_ast.cfg`` did, to learn the library list.  If
+    Runs the ``ast_link`` script found on ``PATH`` through ``sh``, as
+    ``configs/starlink_ast.cfg`` does, to learn the library list.  If
     ``ast_link`` cannot be found or fails, nothing is written and
     `_ShimSkippedError` is raised.
     """
@@ -1236,11 +1330,9 @@ def write_shims(directory: str, static_dir: str | None = None, skipped: list[str
     directory : `str`
         Directory to write into.  Created if it does not already exist.
     static_dir : `str` or `None`, optional
-        Directory holding the static shims to copy, e.g. the repository's
-        top-level ``pkgconfig/`` directory.  Defaults to
+        Directory holding the static shims to copy.  Defaults to
         `static_shim_dir`.  If that is also `None`, no static shims are
-        copied; this is the container case, where they have already been
-        installed directly into the conda tree.
+        copied.
     skipped : `list` [`str`] or `None`, optional
         If given, a message is appended to this list for every generated
         shim that could not be written, naming the shim and saying why,
@@ -1293,10 +1385,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns
     -------
     status : `int`
-        Always ``0``.
+        ``0`` on success, or ``1`` if the static shims could not be found,
+        in which case nothing is written.  A generated shim that cannot be
+        written is not an error, but the reason is printed to standard
+        error.
     """
     parser = argparse.ArgumentParser(description="Write sconsUtils' pkg-config shims into a directory.")
     parser.add_argument("directory", help="Directory to write the shims into.")
     args = parser.parse_args(argv)
-    write_shims(args.directory)
+    static_dir = static_shim_dir()
+    if static_dir is None:
+        print("sconsUtils' static pkg-config shims are not installed; nothing was written.", file=sys.stderr)
+        return 1
+    skipped: list[str] = []
+    write_shims(args.directory, static_dir=static_dir, skipped=skipped)
+    for message in skipped:
+        print(f"{message}.", file=sys.stderr)
     return 0
