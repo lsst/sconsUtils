@@ -27,6 +27,7 @@ import collections
 import importlib
 import os
 import os.path
+import types
 from sys import platform
 
 import SCons.Script
@@ -534,11 +535,16 @@ class PackageTree:
         self.cfgPath = state.env.cfgPath
         self.packages = collections.OrderedDict()
         self._current = {primaryName}
+        # Packages in the closure of a dependency synthesized from
+        # pkg-config, which are configured as part of it rather than on
+        # their own; see _recurse().
+        self._provided = collections.OrderedDict()
         # The pkg-config runner used to synthesize configurations for
         # dependencies without a .cfg file; built on first use by
         # _pkgconfig(), which sets _pkgconfigFailed if that is impossible.
         self._pkgconfigInstance = None
         self._pkgconfigFailed = False
+        self._shimsWritten = False
         if noCfgFile:
             self.primary = None
             return
@@ -579,10 +585,12 @@ class PackageTree:
 
         A dependency that was not found has a version of `None`, and one
         whose configuration does not record a version has ``"unknown"``.
+        The closure of a dependency synthesized from pkg-config is
+        included, after the dependencies loaded in their own right.
         """
         return {
             name: (getattr(mod.config, "version", "unknown") if mod is not None else None)
-            for name, mod in self.packages.items()
+            for name, mod in self._all().items()
         }
 
     def configure(self, env):
@@ -606,7 +614,7 @@ class PackageTree:
         return env
 
     def __contains__(self, name):
-        return name == self.name or name in self.packages
+        return name == self.name or name in self.packages or name in self._provided
 
     has_key = __contains__
 
@@ -614,18 +622,28 @@ class PackageTree:
         if name == self.name:
             return self.primary
         else:
-            return self.packages[name]
+            return self._all()[name]
 
     def get(self, name, default=None):
         if name == self.name:
             return self.primary
         else:
-            return self.packages.get(name)
+            return self._all().get(name)
 
     def keys(self):
-        k = list(self.packages.keys())
+        k = list(self._all().keys())
         k.append(self.name)
         return k
+
+    def _all(self):
+        """Return ``self.packages`` followed by the provided packages that
+        were not also loaded in their own right.  A provided package
+        replaces an optional one of the same name that was not found."""
+        result = collections.OrderedDict(self.packages)
+        for name, module in self._provided.items():
+            if result.get(name) is None:
+                result[name] = module
+        return result
 
     def _pkgconfig(self):
         """Return the pkg-config runner used for dependencies without a
@@ -637,20 +655,9 @@ class PackageTree:
             The runner, or `None` if it cannot be constructed (no conda
             prefix, or neither ``pkgconf`` nor ``pkg-config`` on ``PATH``).
             The reason is logged once, and construction is not retried.
-
-        Notes
-        -----
-        The configure-time shims are written into
-        ``<build root>/.sconf_temp/pkgconfig`` before the runner is
-        constructed, as on the pkg-config path, so that a converted
-        dependency requiring e.g. ``numpy`` can be resolved.
         """
         if self._pkgconfigInstance is None and not self._pkgconfigFailed:
             root = SCons.Script.Dir("#").abspath
-            try:
-                _writeShims(root)
-            except OSError as err:
-                state.log.fail(str(err))
             searchPath = pkgconfig.build_search_path(root, os.environ)
             try:
                 self._pkgconfigInstance = pkgconfig.PkgConfig(searchPath, get_conda_prefix())
@@ -677,6 +684,17 @@ class PackageTree:
             `~lsst.sconsUtils.pkgconfig.synthesize_cfg_module`.  This is
             False for the primary package, which must have a ``.cfg`` file
             on this path.
+
+        Notes
+        -----
+        Before the first configuration module is synthesized, the
+        configure-time shims are written into
+        ``<build root>/.sconf_temp/pkgconfig``, as on the pkg-config path,
+        so that a converted dependency requiring e.g. ``numpy`` can be
+        resolved.  Under ``--clean`` or ``--help``, where `configure` is
+        never run, nothing is written or resolved: a ``lsst_<name>``
+        module that is merely present yields a placeholder module with no
+        version.
         """
         for path in self.cfgPath:
             filename = os.path.join(path, name + ".cfg")
@@ -712,6 +730,14 @@ class PackageTree:
         # absent optional dependency.
         if runner is not None and runner.present(moduleName):
             state.log.info(f"Using pkg-config module '{moduleName}' for package '{name}'.")
+            if state.env.GetOption("clean") or state.env.GetOption("help"):
+                return types.SimpleNamespace(dependencies={}, config=types.SimpleNamespace(name=name))
+            if not self._shimsWritten:
+                try:
+                    _writeShims(SCons.Script.Dir("#").abspath)
+                except OSError as err:
+                    state.log.fail(str(err))
+                self._shimsWritten = True
             try:
                 return pkgconfig.synthesize_cfg_module(name, runner, get_conda_prefix())
             except pkgconfig.PkgConfigError as err:
@@ -756,6 +782,14 @@ class PackageTree:
                 return False
         for dependency in module.dependencies.get("optional", ()):
             self._recurse(dependency)
+        # A synthesized module has no dependencies to recurse into, because
+        # its configuration already covers its whole closure; record that
+        # closure so that it is still listed, without configuring it again.
+        for provided, version in getattr(module, "provided", {}).items():
+            if provided not in self._provided:
+                self._provided[provided] = types.SimpleNamespace(
+                    dependencies={}, config=types.SimpleNamespace(name=provided, version=version)
+                )
         # This comes last to ensure the ordering puts all dependencies first.
         self.packages[name] = module
         self._current.remove(name)

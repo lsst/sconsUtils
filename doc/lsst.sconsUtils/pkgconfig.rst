@@ -43,7 +43,7 @@ The template for ``afw`` looks like this:
    Requires: lsst_cpputils lsst_daf_base lsst_pex_exceptions lsst_geom lsst_log lsst_pex_config eigen3 fftw3 ndarray numpy minuit2 gsl cfitsio lsst_astshim lsst_sphgeom
    Cflags: -I${includedir}
    Libs: -L${libdir} -lafw
-   lsst_build_requires=boost_test pybind11
+   lsst_build_requires=boost_test pybind11 python3
 
 Field rules
 ===========
@@ -73,6 +73,7 @@ Five custom variables are recognized, all optional.
 
 ``lsst_build_requires``
    Space-separated modules needed only to build this package, not to link against it.
+   A package that builds pybind11 modules lists ``python3`` alongside ``pybind11``, because conda's ``pybind11.pc`` does not require ``python3`` itself and so does not provide the ``Python.h`` include directory.
 ``lsst_python_libs``
    ``-l`` flags linked only into Python extension modules.
 ``lsst_test_libs``
@@ -109,7 +110,7 @@ sconsUtils constructs ``PKG_CONFIG_PATH`` for every pkg-config invocation, in th
 
 1. ``<build root>/lib/pkgconfig``, so the package being built finds its own freshly written file.
 2. ``<value>/lib/pkgconfig`` for every environment variable matching ``^\w+_DIR$``, in the same way ``cfgPath`` is built in ``state.py``.
-3. ``$SCONSUTILS_DIR/pkgconfig``, the static shims, when that variable is set.
+3. The static shims installed with sconsUtils.
 4. ``<build root>/.sconf_temp/pkgconfig``, the configure-time generated shims.
 5. Whatever ``PKG_CONFIG_PATH`` the user already had.
 
@@ -126,7 +127,8 @@ Every other directory is routed to ``XCPPPATH`` and treated as a system header d
 ``<conda_prefix>/include`` always goes to ``XCPPPATH``, regardless of which module claims it.
 Both sides of the comparison are passed through ``os.path.realpath`` first, because pkg-config does not normalize ``${pcfiledir}/../..``.
 
-Compiler flags other than ``-I`` are appended to ``CCFLAGS``, and linker flags other than ``-L`` and ``-l`` are appended to ``LINKFLAGS``.
+Compiler flags other than ``-I`` are appended to ``CCFLAGS``, and linker flags other than ``-L`` and ``-l`` are appended to ``LINKFLAGS``, skipping flags already there.
+An option whose argument is a separate word, such as ``-framework Accelerate`` or ``-isystem /a``, is kept together with its argument, so that it is skipped only if the pair is already there.
 
 Migration changes for a converting package
 =============================================
@@ -141,15 +143,22 @@ This fallback applies only to dependencies; the package being built still needs 
 If no ``lsst_<dep>.pc`` file is on the search path or on pkg-config's default path, the dependency is treated as an optional package that was not found.
 If the file is there but its own ``Requires`` cannot be satisfied, the build fails with pkg-config's explanation rather than treating the dependency as absent.
 This holds under both pkg-config and pkgconf.
+The same explanation, naming the module that is actually missing, is given when the package being built has a template.
+
+A converted dependency is configured as a whole: its configuration covers its entire pkg-config closure, so the modules in that closure are not configured again on their own.
+They are still listed as dependencies, under their module names with any ``lsst_`` prefix removed, so that for example ``__dependency_versions__`` includes them.
+
+With ``--clean`` or ``--help`` nothing is resolved through pkg-config and no shims are written, as for a package with a template; a dependency is only looked for, so that a missing one is still reported.
 
 Shims
 =====
 
 A shim is a ``.pc`` file sconsUtils ships for a third-party library that conda does not provide one for, so that a ``Requires:`` naming it still resolves.
-The static shims live in sconsUtils's top-level ``pkgconfig/`` directory, covering Boost, Minuit2, and ndarray.
+The static shims live in the ``pkgconfig_shims/`` directory of the ``lsst.sconsUtils`` Python package, covering Boost, Minuit2, and ndarray, so that they are installed both by EUPS and by ``pip``.
 Two further shims, for NumPy and Starlink AST, cannot be static because they depend on the Python interpreter or the installed AST library, and are generated at configure time into ``.sconf_temp/pkgconfig/``.
 
 The console script ``sconsUtils-write-pkgconfig-shims DIRECTORY`` writes every shim, static and generated, into the given directory.
-sconsUtils does the same itself at configure time with ``<build root>/.sconf_temp/pkgconfig/`` as the target, both for a package with a template and for a ``.cfg`` package the first time it falls back to pkg-config for a dependency.
+sconsUtils does the same itself at configure time with ``<build root>/.sconf_temp/pkgconfig/`` as the target, both for a package with a template and for a ``.cfg`` package the first time it uses pkg-config to configure a dependency.
 A container install runs the script with ``$CONDA_PREFIX/lib/pkgconfig`` so that the shims are available with no sconsUtils involvement at all.
-A generated shim that cannot be written, because ``numpy`` is not importable or ``ast_link`` is not on ``PATH``, is skipped rather than treated as an error, and sconsUtils logs why with ``--verbose``.
+A generated shim that cannot be written, because ``numpy`` is not importable or ``ast_link`` is not on ``PATH``, is skipped rather than treated as an error; the console script prints why to standard error, and sconsUtils logs it with ``--verbose``.
+The console script fails if the static shims are not installed.

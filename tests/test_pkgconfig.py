@@ -34,7 +34,7 @@ import unittest
 from unittest import mock
 
 import SCons.Environment
-from lsst.sconsUtils import dependencies, state
+from lsst.sconsUtils import dependencies, pkgconfig, state
 from lsst.sconsUtils.pkgconfig import (
     GENERATED_SHIM_SUBDIR,
     CyclicDependencyError,
@@ -60,8 +60,8 @@ from lsst.sconsUtils.pkgconfig import (
 #: Absolute path to the root of this repository.
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-#: Absolute path to the repository's top-level static shim directory.
-_STATIC_SHIM_DIR = os.path.join(_REPO_ROOT, "pkgconfig")
+#: Absolute path to the repository's static shim directory.
+_STATIC_SHIM_DIR = os.path.join(_REPO_ROOT, "python", "lsst", "sconsUtils", "pkgconfig_shims")
 
 
 def _python_has_numpy() -> bool:
@@ -133,17 +133,16 @@ class SearchPathTestCase(unittest.TestCase):
             tempfile.TemporaryDirectory() as root,
             tempfile.TemporaryDirectory() as foo_dir,
             tempfile.TemporaryDirectory() as bar_dir,
-            tempfile.TemporaryDirectory() as sconsutils_dir,
+            tempfile.TemporaryDirectory() as shim_dir,
+            mock.patch.object(pkgconfig, "static_shim_dir", return_value=shim_dir),
         ):
             os.makedirs(os.path.join(root, "lib", "pkgconfig"))
             os.makedirs(os.path.join(foo_dir, "lib", "pkgconfig"))
             # bar_dir deliberately has no lib/pkgconfig subdirectory.
-            os.makedirs(os.path.join(sconsutils_dir, "pkgconfig"))
 
             environ = {
                 "FOO_DIR": foo_dir,
                 "BAR_DIR": bar_dir,
-                "SCONSUTILS_DIR": sconsutils_dir,
                 "PKG_CONFIG_PATH": "/x:/y",
             }
             path = build_search_path(root, environ)
@@ -152,16 +151,19 @@ class SearchPathTestCase(unittest.TestCase):
                 [
                     os.path.join(root, "lib", "pkgconfig"),
                     os.path.join(foo_dir, "lib", "pkgconfig"),
-                    os.path.join(sconsutils_dir, "pkgconfig"),
+                    shim_dir,
                     os.path.join(root, GENERATED_SHIM_SUBDIR),
                     "/x",
                     "/y",
                 ],
             )
 
-    def test_sconsutils_dir_without_shims_is_skipped(self):
-        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as sconsutils_dir:
-            path = build_search_path(root, {"SCONSUTILS_DIR": sconsutils_dir})
+    def test_missing_static_shims_are_skipped(self):
+        with (
+            tempfile.TemporaryDirectory() as root,
+            mock.patch.object(pkgconfig, "static_shim_dir", return_value=None),
+        ):
+            path = build_search_path(root, {})
             self.assertEqual(
                 path,
                 [os.path.join(root, "lib", "pkgconfig"), os.path.join(root, GENERATED_SHIM_SUBDIR)],
@@ -600,7 +602,7 @@ class ResolveTestCase(ResolveFixture, unittest.TestCase):
     def test_lib_categories(self):
         r = resolve("prim", self.pc, self.conda)
         self.assertEqual(r.libs["main"], ["prim", "dep"])
-        # Review Focus 5: boost_unit_test_framework is declared by both
+        # boost_unit_test_framework is declared by both
         # lsst_dep and boost_test, and appears once, in first-seen order.
         self.assertEqual(r.libs["test"], ["boost_unit_test_framework", "dep_test"])
         self.assertEqual(r.libs["python"], ["python_extra"])
@@ -611,7 +613,7 @@ class ResolveTestCase(ResolveFixture, unittest.TestCase):
         self.assertEqual(r.doxygen["tags"], [self.dep_tag])
         self.assertEqual(r.doxygen["includes"], [self.prim_inc_file])
 
-    def test_missing_build_require_names_module(self):  # Review Focus 4
+    def test_missing_build_require_names_module(self):
         with self.assertRaises(PkgConfigError) as cm:
             resolve("prim2", self.pc, self.conda)
         self.assertIn("nonexistent_mod", str(cm.exception))
@@ -628,6 +630,82 @@ class ResolveTestCase(ResolveFixture, unittest.TestCase):
         # lsst_dep still contributes its test libraries.
         self.assertEqual(r.libs["test"], ["boost_unit_test_framework", "dep_test"])
         self.assertEqual(r.xcpppath, [os.path.realpath(os.path.join(self.conda, "include", "eigen3"))])
+
+    def test_missing_requires_of_primary_is_named(self):
+        write_pc(
+            self.pcdir,
+            "lsst_needy",
+            "Name: lsst_needy\nDescription: x\nVersion: 1.0\nRequires: lsst_gone\nCflags:\nLibs:\n",
+        )
+        with self.assertRaises(PkgConfigError) as cm:
+            resolve("needy", self.pc, self.conda)
+        self.assertIn("lsst_needy", str(cm.exception))
+        self.assertIn("lsst_gone", str(cm.exception))
+
+    def test_missing_requires_of_build_require_is_named(self):
+        write_pc(
+            self.pcdir,
+            "lsst_prim3",
+            "lsst_build_requires=needy_tool\n"
+            "\n"
+            "Name: lsst_prim3\nDescription: x\nVersion: 1.0\nCflags:\nLibs:\n",
+        )
+        write_pc(
+            self.pcdir,
+            "needy_tool",
+            "Name: needy_tool\nDescription: x\nVersion: 1.0\nRequires: gone_tool\nCflags:\nLibs:\n",
+        )
+        with self.assertRaises(PkgConfigError) as cm:
+            resolve("prim3", self.pc, self.conda)
+        self.assertIn("needy_tool", str(cm.exception))
+        self.assertIn("gone_tool", str(cm.exception))
+
+    def test_options_with_separate_arguments_are_kept_together(self):
+        write_pc(
+            self.pcdir,
+            "lsst_fw",
+            "Name: lsst_fw\nDescription: x\nVersion: 1.0\nRequires: lsst_fwdep\n"
+            "Cflags: -isystem /a -DA\nLibs: -framework Accelerate -framework CoreFoundation\n",
+        )
+        write_pc(
+            self.pcdir,
+            "lsst_fwdep",
+            "Name: lsst_fwdep\nDescription: x\nVersion: 1.0\n"
+            "Cflags: -isystem /b\nLibs: -framework Accelerate -Wl,-z,defs\n",
+        )
+        r = resolve("fw", self.pc, self.conda)
+        self.assertEqual(r.ccflags, [("-isystem", "/a"), "-DA", ("-isystem", "/b")])
+        self.assertEqual(
+            r.linkflags,
+            [
+                ("-framework", "Accelerate"),
+                ("-framework", "CoreFoundation"),
+                ("-framework", "Accelerate"),
+                "-Wl,-z,defs",
+            ],
+        )
+        env = make_cfg_env()
+        apply_to_env(env, r)
+        self.assertEqual(env.subst("$CCFLAGS"), "-isystem /a -DA -isystem /b")
+        self.assertEqual(
+            env.subst("$LINKFLAGS"), "-framework Accelerate -framework CoreFoundation -Wl,-z,defs"
+        )
+
+    def test_trailing_option_is_kept(self):
+        self.assertEqual(pkgconfig._group_flags(["-DA", "-isystem"]), ["-DA", "-isystem"])
+
+    def test_queries_are_cached(self):
+        resolve("prim", self.pc, self.conda)
+        with mock.patch.object(pkgconfig.subprocess, "run", wraps=subprocess.run) as run:
+            resolve("prim", self.pc, self.conda)
+            self.assertEqual(run.call_count, 0)
+            # lsst_dep was already queried as part of lsst_prim's closure,
+            # so only the queries over the new module set are run.
+            synthesize_cfg_module("dep", self.pc, self.conda)
+        queries = [call.args[0][2] for call in run.call_args_list]
+        self.assertTrue(queries)
+        for query in queries:
+            self.assertNotIn(query.split("=")[0], ("--modversion", "--variable", "--print-requires"))
 
 
 def make_cfg_env() -> SCons.Environment.Environment:
@@ -673,6 +751,8 @@ class SynthesizeTestCase(ResolveFixture, unittest.TestCase):
             mod.config.doxygen, {"tags": [self.prim_tag, self.dep_tag], "includes": [self.prim_inc_file]}
         )
         self.assertEqual(mod.config.provides, {"headers": (), "libs": ("prim", "dep")})
+        # The rest of the closure, which PackageTree still lists.
+        self.assertEqual(mod.provided, {"dep": "2.0", "eigen3": "3.4"})
 
     def test_configure_applies_and_reversal_restores_order(self):
         env = make_cfg_env()
@@ -738,6 +818,23 @@ class SynthesizeTestCase(ResolveFixture, unittest.TestCase):
         self.assertEqual(env["LINKFLAGS"], ["-Wl,-z,defs"])
         self.assertEqual(env["LIBPATH"], ["/lib/flagged"])
         self.assertEqual(env.libs["main"], ["flagged"])
+
+    def test_configure_does_not_merge_multi_token_flags(self):
+        # Two dependencies each linking a framework must neither repeat it
+        # nor lose a -framework option to de-duplication.
+        for name, framework in (("fw1", "Accelerate"), ("fw2", "CoreFoundation")):
+            write_pc(
+                self.pcdir,
+                f"lsst_{name}",
+                f"Name: lsst_{name}\nDescription: x\nVersion: 1.0\n"
+                f"Cflags:\nLibs: -framework Accelerate -framework {framework}\n",
+            )
+        env = make_cfg_env()
+        conf = types.SimpleNamespace(env=env)
+        for name in ("fw1", "fw2"):
+            mod = synthesize_cfg_module(name, self.pc, self.conda)
+            self.assertTrue(mod.config.configure(conf, packages={}, build=False))
+        self.assertEqual(env.subst("$LINKFLAGS"), "-framework Accelerate -framework CoreFoundation")
 
     def test_missing_module_raises(self):
         with self.assertRaises(PkgConfigError):
@@ -903,6 +1000,12 @@ class ShimTestCase(unittest.TestCase):
         self.assertEqual(self._libs("boost_math").split(), ["-lboost_math_c99", "-lpthread"])
         self.assertEqual(self._libs("boost").strip(), "-lpthread")
 
+        # ndarray links both the double and single precision FFTW
+        # libraries, as configs/fftw.cfg does.
+        for name, libs in (("numpy", ""), ("eigen3", ""), ("fftw3", "-lfftw3"), ("fftw3f", "-lfftw3f")):
+            write_pc(self.target, name, f"Name: {name}\nDescription: x\nVersion: 1\nCflags:\nLibs: {libs}\n")
+        self.assertEqual(self._libs("ndarray").split(), ["-lpthread", "-lfftw3", "-lfftw3f"])
+
     @unittest.skipUnless(_python_has_numpy(), "the python on PATH cannot import numpy")
     def test_generated_numpy(self):
         written = write_shims(self.target, static_dir=_STATIC_SHIM_DIR)
@@ -942,10 +1045,17 @@ class ShimTestCase(unittest.TestCase):
         with open(boost_pc) as f, open(os.path.join(_STATIC_SHIM_DIR, "boost.pc")) as g:
             self.assertEqual(f.read(), g.read())
 
-    def test_sconsutils_dir_without_shims_copies_nothing(self):
-        with mock.patch.dict(os.environ, {"SCONSUTILS_DIR": self._tmpdir.name}):
-            write_shims(self.target)
-        self.assertFalse(os.path.exists(os.path.join(self.target, "boost.pc")))
+    def test_static_shims_are_installed_with_the_module(self):
+        # Wherever sconsUtils is installed from, with or without
+        # SCONSUTILS_DIR, the static shims are found next to the module.
+        with mock.patch.dict(os.environ):
+            os.environ.pop("SCONSUTILS_DIR", None)
+            self.assertEqual(
+                pkgconfig.static_shim_dir(),
+                os.path.join(os.path.dirname(os.path.abspath(pkgconfig.__file__)), "pkgconfig_shims"),
+            )
+            written = write_shims(self.target)
+        self.assertIn(os.path.join(self.target, "boost.pc"), written)
 
     def _write_shims_with_stubs(self, python_script, ast_link_script=None):
         """Run `write_shims` with only stub ``python`` and (optionally)
@@ -984,11 +1094,9 @@ class ShimTestCase(unittest.TestCase):
         self.assertEqual(pc.libs_only_l(["starlink_ast"]), ["ast", "erfa"])
 
     def test_no_static_dir_copies_nothing(self):
-        # Simulate the container case, where SCONSUTILS_DIR is unset (or
-        # unusable) and no static_dir is passed explicitly: static_shim_dir
-        # falls back to None and nothing is copied.
-        with mock.patch.dict(os.environ):
-            os.environ.pop("SCONSUTILS_DIR", None)
+        # If the static shims are missing from the installation and no
+        # static_dir is passed explicitly, nothing is copied.
+        with mock.patch.object(pkgconfig, "static_shim_dir", return_value=None):
             written = write_shims(self.target, static_dir=None)
         self.assertFalse(os.path.exists(os.path.join(self.target, "boost.pc")))
         # numpy is still generated if it can be, since it does not depend
@@ -1015,17 +1123,32 @@ class ShimTestCase(unittest.TestCase):
         self.assertIn("ast_link was not found", skipped[1])
 
     def test_console_script(self):
-        target2 = os.path.join(self._tmpdir.name, "shims2")
+        # As after a pip install: no SCONSUTILS_DIR, and a python that
+        # cannot import numpy and no ast_link on PATH.
+        stub_dir = os.path.join(self._tmpdir.name, "bin")
+        os.makedirs(stub_dir)
+        write_stub_python(stub_dir, "exit 1")
+        with mock.patch.dict(os.environ, {"PATH": stub_dir}):
+            os.environ.pop("SCONSUTILS_DIR", None)
+            with (
+                contextlib.redirect_stdout(io.StringIO()) as stdout,
+                contextlib.redirect_stderr(io.StringIO()) as stderr,
+            ):
+                self.assertEqual(main([self.target]), 0)
+        self.assertTrue(os.path.exists(os.path.join(self.target, "boost.pc")))
+        self.assertEqual(stdout.getvalue(), "")
+        # Skipped shims are not an error, but are reported.
+        self.assertIn("Not writing pkg-config shim numpy.pc: numpy is not importable", stderr.getvalue())
+        self.assertIn("Not writing pkg-config shim starlink_ast.pc", stderr.getvalue())
+
+    def test_console_script_without_static_shims_fails(self):
         with (
-            mock.patch.dict(os.environ, {"SCONSUTILS_DIR": _REPO_ROOT}),
-            contextlib.redirect_stdout(io.StringIO()) as stdout,
+            mock.patch.object(pkgconfig, "static_shim_dir", return_value=None),
             contextlib.redirect_stderr(io.StringIO()) as stderr,
         ):
-            self.assertEqual(main([target2]), 0)
-        self.assertTrue(os.path.exists(os.path.join(target2, "boost.pc")))
-        # The console script is quiet, even about skipped shims.
-        self.assertEqual(stdout.getvalue(), "")
-        self.assertEqual(stderr.getvalue(), "")
+            self.assertEqual(main([self.target]), 1)
+        self.assertIn("static pkg-config shims are not installed", stderr.getvalue())
+        self.assertFalse(os.path.exists(self.target))
 
 
 def make_resolved() -> ResolvedDependencies:
@@ -1194,6 +1317,44 @@ class PackageTreeFallbackTestCase(unittest.TestCase):
         with self.assertRaises(SystemExit):
             tree.configure(env)
         self.assertIn("bad was found but did not pass configuration checks", self.stderr.getvalue())
+
+    def test_closure_of_fallback_is_listed(self):
+        tree = self._make_tree()
+        tree.primary = types.SimpleNamespace(config=types.SimpleNamespace(name="prim"))
+        # An optional package not found on its own, but in the closure.
+        tree.packages["numpy"] = None
+        self.assertTrue(tree._recurse("conv"))
+        self.assertIn("numpy", tree)
+        self.assertEqual(tree["numpy"].config.version, "1.99")
+        self.assertEqual(tree.versions, {"numpy": "1.99", "conv": "1.0"})
+        # numpy is configured as part of conv, not on its own.
+        self.assertEqual(list(tree.packages), ["numpy", "conv"])
+        self.assertIsNone(tree.packages["numpy"])
+
+    def test_absent_optional_package_writes_no_shims(self):
+        self.assertIsNone(self._make_tree()._tryImport("absent"))
+        self.assertFalse(os.path.exists(os.path.join(self.root, GENERATED_SHIM_SUBDIR)))
+
+    def test_clean_and_help_do_not_resolve(self):
+        # A present but broken module would fail to resolve.
+        write_pc(
+            self.pcdir,
+            "lsst_broken",
+            "Name: lsst_broken\nDescription: x\nVersion: 1.0\nRequires: lsst_gone\nCflags:\nLibs:\n",
+        )
+        for option in ("clean", "help"):
+            with (
+                self.subTest(option=option),
+                mock.patch.object(state.env, "GetOption", lambda name, option=option: name == option),
+            ):
+                tree = self._make_tree()
+                module = tree._tryImport("broken")
+                self.assertEqual(module.config.name, "broken")
+                self.assertEqual(module.dependencies, {})
+                tree.packages["broken"] = module
+                self.assertEqual(tree.versions, {"broken": "unknown"})
+                self.assertFalse(os.path.exists(os.path.join(self.root, GENERATED_SHIM_SUBDIR)))
+                self.assertIsNone(tree._tryImport("absent"))
 
     def test_fallback_not_used_for_primary(self):
         write_pc(self.pcdir, "lsst_prim", "Name: lsst_prim\nDescription: x\nVersion: 1.0\nCflags:\nLibs:\n")

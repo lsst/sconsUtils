@@ -46,6 +46,9 @@ test = []
 [tool.setuptools.packages.find]
 where = ["python"]
 
+[tool.setuptools.package-data]
+"lsst.sconsUtils" = ["pkgconfig_shims/*.pc"]
+
 [tool.setuptools]
 zip-safe = true
 

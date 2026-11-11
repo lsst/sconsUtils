@@ -28,6 +28,7 @@ or by typing
    pytest
 """
 
+import contextlib
 import os
 import shutil
 import subprocess
@@ -60,6 +61,34 @@ def _conda_prefix():
     return None
 
 
+def _has_pybind11():
+    """Return whether pkg-config can find the ``pybind11`` and ``python3``
+    modules that the testPkgConfig fixture needs to build its Python
+    module."""
+    executable = _pkg_config()
+    if executable is None:
+        return False
+    return subprocess.run([executable, "--exists", "pybind11", "python3"]).returncode == 0
+
+
+@contextlib.contextmanager
+def _fixtureCopy():
+    """Copy the testPkgConfig fixture into a temporary directory and yield
+    the path of the copy.
+
+    Every test builds in its own copy, so that tests running concurrently
+    never see one another's build products, and the fixture itself is
+    never built in.
+    """
+    fixture = os.path.join(os.path.dirname(__file__), "testPkgConfig")
+    with tempfile.TemporaryDirectory() as tmp:
+        copy = os.path.join(tmp, "testPkgConfig")
+        shutil.copytree(
+            fixture, copy, ignore=shutil.ignore_patterns(".sconf_temp", ".sconsign.dblite", "config.log")
+        )
+        yield copy
+
+
 class SconsUtilsTestCase(unittest.TestCase):
     """A test case for sconsUtils"""
 
@@ -82,11 +111,12 @@ class SconsUtilsTestCase(unittest.TestCase):
         )
 
     @unittest.skipUnless(
-        _pkg_config() and _conda_prefix(),
-        "pkgconf or pkg-config and a conda environment are required to build the testPkgConfig fixture",
+        _pkg_config() and _conda_prefix() and _has_pybind11(),
+        "pkgconf or pkg-config, a conda environment and pybind11 are required to build the testPkgConfig "
+        "fixture",
     )
     def testPkgConfigPackage(self):
-        fixture = os.path.join(os.path.dirname(__file__), "testPkgConfig")
+        fixture = self.enterContext(_fixtureCopy())
         sconsEnv = dict(os.environ, CONDA_PREFIX=_conda_prefix())
 
         def clean():
@@ -101,7 +131,7 @@ class SconsUtilsTestCase(unittest.TestCase):
 
         def build():
             result = subprocess.run(
-                ["scons", "-Q", "lib", "examples"],
+                ["scons", "-Q", "lib", "python", "examples"],
                 cwd=fixture,
                 env=sconsEnv,
                 capture_output=True,
@@ -117,6 +147,22 @@ class SconsUtilsTestCase(unittest.TestCase):
         build()
         self.assertTrue(os.path.exists(pc))
         self.assertTrue(os.path.exists(os.path.join(fixture, "examples", "hello")))
+        # The pybind11 module compiles, because python3 is among the
+        # template's build requirements, and works.
+        moduleDir = os.path.join(fixture, "python", "lsst", "testPkgConfig")
+        self.assertTrue(os.path.exists(os.path.join(moduleDir, "_testPkgConfig.so")))
+        hello = subprocess.run(
+            ["python", "-c", "import _testPkgConfig; print(_testPkgConfig.hello())"],
+            cwd=moduleDir,
+            env=dict(
+                sconsEnv,
+                LD_LIBRARY_PATH=os.path.join(fixture, "lib"),
+                DYLD_LIBRARY_PATH=os.path.join(fixture, "lib"),
+            ),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(hello.stdout.strip(), "42", hello.stderr)
         # An unchanged .pc file is not rewritten.
         mtime = os.path.getmtime(pc)
         build()
@@ -148,12 +194,7 @@ class SconsUtilsTestCase(unittest.TestCase):
     def _configureFixtureCopy(self, modify):
         """Configure a modified copy of the testPkgConfig fixture with scons
         and return the completed process."""
-        fixture = os.path.join(os.path.dirname(__file__), "testPkgConfig")
-        with tempfile.TemporaryDirectory() as tmp:
-            copy = os.path.join(tmp, "testPkgConfig")
-            shutil.copytree(
-                fixture, copy, ignore=shutil.ignore_patterns(".sconf_temp", ".sconsign.dblite", "config.log")
-            )
+        with _fixtureCopy() as copy:
             modify(copy)
             return subprocess.run(
                 ["scons", "-Q", "lib"],
