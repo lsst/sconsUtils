@@ -10,6 +10,11 @@ The ``sconsUtils`` module provides tooling to support the building of standard L
 
 .. Add subsections with toctree to individual topic pages.
 
+.. toctree::
+   :maxdepth: 1
+
+   pkgconfig
+
 .. _lsst.sconsUtils-contributing:
 
 Contributing

@@ -27,28 +27,37 @@ import collections
 import importlib
 import os
 import os.path
+import types
 from sys import platform
 
 import SCons.Script
 from SCons.Script.SConscript import SConsEnvironment
 
-from . import eupsForScons, installation, state
+from . import eupsForScons, installation, pkgconfig, state
 from .utils import get_conda_prefix, use_conda_compilers
 
 
 def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath=None, noCfgFile=False):
-    """Recursively configure a package using ups/.cfg files.
+    """Configure a package from its pkg-config template or ups/.cfg files.
 
     Aliased as `lsst.sconsUtils.configure`.
 
     Usually, LSST packages will call this function through
     `~lsst.sconsUtils.scripts.BasicSConstruct`.
 
+    If the build root contains a pkg-config template
+    ``lsst_<packageName>.pc.in``, ``lib/pkgconfig/lsst_<packageName>.pc`` is
+    written from it and the package's dependencies are resolved through
+    pkg-config; ``.cfg`` files are never consulted.  Otherwise the
+    dependency tree is loaded recursively from ``.cfg`` files.  A package
+    with both a template and a ``ups/<packageName>.cfg`` is an error.
+
     Parameters
     ----------
     packageName : `str`
-        Name of the package being built; must correspond to a ``.cfg`` file
-        in the ``ups`` directory.
+        Name of the package being built; must correspond to a pkg-config
+        template at the build root or a ``.cfg`` file in the ``ups``
+        directory.
     versionString : `str`, optional
         Version-control system string to be parsed for version information
         (``$HeadURL$`` for SVN).
@@ -58,7 +67,8 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     eupsProductPath : `str`, optional
         An alternate directory where the package should be installed.
     noCfgFile : `bool`
-        If True, this package has no ``.cfg`` file.
+        If True, this package has no ``.cfg`` file.  Ignored if the package
+        has a pkg-config template.
 
     Returns
     -------
@@ -93,7 +103,15 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
     #
     state.log.traceback = state.env.GetOption("traceback")
     state.log.verbose = state.env.GetOption("verbose")
-    packages = PackageTree(packageName, noCfgFile=noCfgFile)
+    root = SCons.Script.Dir("#").abspath
+    try:
+        pkgconfig.check_single_format(root, packageName)
+    except pkgconfig.PkgConfigError as err:
+        state.log.fail(str(err))
+    # A pkg-config template selects the pkg-config path, in which case no
+    # .cfg file is ever consulted for this build.
+    usePkgConfig = os.path.exists(pkgconfig.template_path(root, packageName))
+    packages = None if usePkgConfig else PackageTree(packageName, noCfgFile=noCfgFile)
     state.log.flush()  # if we've already hit a fatal error, die now.
     state.env.libs = {"main": [], "python": [], "test": []}
     state.env.doxygen = {"tags": [], "includes": []}
@@ -130,22 +148,122 @@ def configure(packageName, versionString=None, eupsProduct=None, eupsProductPath
         "$( ${_concat(INCPREFIX, CPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)}"
         " ${_concat(XCPPPREFIX, XCPPPATH, INCSUFFIX, __env__, RDirs, TARGET, SOURCE)} $)"
     )
-    state.env["_SWIGINCFLAGS"] = (
-        state.env["_CPPINCFLAGS"].replace("CPPPATH", "SWIGPATH").replace("XCPPPREFIX", "SWIGINCPREFIX")
-    )
 
     if state.env.linkFarmDir:
         for d in [state.env.linkFarmDir, "#"]:
             state.env.Append(CPPPATH=os.path.join(d, "include"))
             state.env.Append(LIBPATH=os.path.join(d, "lib"))
-        state.env["SWIGPATH"] = state.env["CPPPATH"]
 
+    if usePkgConfig:
+        state.env.dependencies = _configurePkgConfig(root, packageName)
+    else:
+        if not state.env.GetOption("clean") and not state.env.GetOption("help"):
+            packages.configure(state.env)
+        state.env.dependencies = packages
     if not state.env.GetOption("clean") and not state.env.GetOption("help"):
-        packages.configure(state.env, check=state.env.GetOption("checkDependencies"))
         for target in state.env.libs:
             state.log.info(f"Libraries in target '{target}': {state.env.libs[target]}")
-    state.env.dependencies = packages
     state.log.flush()
+
+
+def _configurePkgConfig(root, packageName):
+    """Configure the package being built through pkg-config.
+
+    Parameters
+    ----------
+    root : `str`
+        Absolute path to the build root, holding the package's pkg-config
+        template.
+    packageName : `str`
+        Name of the package being built.
+
+    Returns
+    -------
+    dependencies : `~lsst.sconsUtils.pkgconfig.PkgConfigDependencies`
+        The resolved dependencies, to be stored as ``env.dependencies``.
+        With ``--clean`` or ``--help`` pkg-config is not run at all and the
+        result is empty; with ``--clean`` and no explicit targets the
+        generated ``.pc`` file is removed instead, unless ``--no-exec`` is
+        also given.
+    """
+    if state.env.GetOption("clean") or state.env.GetOption("help"):
+        if _removesGeneratedPc(state.env, SCons.Script.COMMAND_LINE_TARGETS):
+            if pkgconfig.remove_generated_pc(root, packageName):
+                state.log.info(f"Removed {pkgconfig.output_path(root, packageName)}.")
+        empty = pkgconfig.ResolvedDependencies(
+            modules=[],
+            cpppath=[],
+            xcpppath=[],
+            ccflags=[],
+            libpath=[],
+            linkflags=[],
+            libs={"main": [], "python": [], "test": []},
+            doxygen={"tags": [], "includes": []},
+            versions={},
+        )
+        return pkgconfig.PkgConfigDependencies(packageName, empty)
+
+    try:
+        _writeShims(root)
+        template = pkgconfig.template_path(root, packageName)
+        output = pkgconfig.output_path(root, packageName)
+        if pkgconfig.write_pc_from_template(template, output, state.env["version"]):
+            state.log.info(f"Wrote {output} from {template}.")
+        condaPrefix = get_conda_prefix()
+        runner = pkgconfig.PkgConfig(pkgconfig.build_search_path(root, os.environ), condaPrefix)
+        state.log.info(f"Using pkg-config at '{runner.executable}'.")
+        resolved = pkgconfig.resolve(packageName, runner, condaPrefix)
+    except (pkgconfig.PkgConfigError, OSError) as err:
+        state.log.fail(str(err))
+    state.log.info(f"Configuring package '{packageName}' through pkg-config modules {resolved.modules}.")
+    state.log.info(f"CPPPATH from pkg-config: {resolved.cpppath}")
+    state.log.info(f"XCPPPATH from pkg-config: {resolved.xcpppath}")
+    pkgconfig.apply_to_env(state.env, resolved)
+    return pkgconfig.PkgConfigDependencies(packageName, resolved)
+
+
+def _removesGeneratedPc(env, commandLineTargets):
+    """Return whether this SCons invocation removes the generated ``.pc``
+    file.
+
+    Parameters
+    ----------
+    env : `SCons.Environment.Environment`
+        The environment whose ``clean`` and ``no_exec`` options are read.
+    commandLineTargets : `list`
+        The targets given on the command line.
+
+    Returns
+    -------
+    removes : `bool`
+        `True` for ``--clean`` with no explicit targets, mirroring the
+        condition `~lsst.sconsUtils.builders.CleanTree` uses so that e.g.
+        ``scons --clean install`` does not remove the file, unless
+        ``--no-exec`` is also given.
+    """
+    return bool(env.GetOption("clean") and not commandLineTargets and not env.GetOption("no_exec"))
+
+
+def _writeShims(root):
+    """Write the configure-time pkg-config shims for a build.
+
+    Parameters
+    ----------
+    root : `str`
+        Absolute path to the build root; the shims are written into its
+        ``.sconf_temp/pkgconfig`` directory.
+
+    Notes
+    -----
+    A generated shim that cannot be written, e.g. ``numpy.pc`` when
+    ``numpy`` is not importable, is reported through ``state.log.info``
+    rather than treated as an error.  `OSError` from writing a file is
+    propagated.
+    """
+    skipped = []
+    pkgconfig.write_shims(os.path.join(root, pkgconfig.GENERATED_SHIM_SUBDIR), skipped=skipped)
+    for message in skipped:
+        state.log.info(f"{message}.")
 
 
 class Configuration:
@@ -181,8 +299,8 @@ class Configuration:
         autoconf-style tests and to support ``env.getLibs(...)``, which
         recursively computes the libraries a package must be linked with.
     hasSwigFiles : `bool`, optional
-        If True, the package provides SWIG interface files in
-        ``<root>/python``.
+        Accepted for backwards compatibility and ignored; SWIG support has
+        been removed from sconsUtils.
     hasDoxygenInclude : `bool`, optional
         If True, the package provides a Doxygen include file with the
         name ``<root>/doc/<name>.inc``.
@@ -284,10 +402,6 @@ class Configuration:
         else:
             self.libs = {"main": libs, "python": [], "test": []}
         self.paths = {}
-        if hasSwigFiles:
-            self.paths["SWIGPATH"] = [os.path.join(self.root, "python")]
-        else:
-            self.paths["SWIGPATH"] = []
 
         for pathName, subDirs in [("CPPPATH", includeFileDirs), ("LIBPATH", libFileDirs)]:
             self.paths[pathName] = []
@@ -302,23 +416,7 @@ class Configuration:
 
         self.provides = {"headers": tuple(headers), "libs": tuple(self.libs["main"])}
 
-    def addCustomTests(self, tests):
-        """Add custom SCons configuration tests to the Configure Context
-        passed to the configure() method.
-
-        This needs to be done up-front so we can pass in a dictionary of
-        custom tests when calling ``env.Configure()``, and use the same
-        configure context for all packages.
-
-        Parameters
-        ----------
-        tests : `dict`
-            A dictionary to add custom tests to.  This will be passed as the
-            custom_tests argument to ``env.Configure()``.
-        """
-        pass
-
-    def configure(self, conf, packages, check=False, build=True):
+    def configure(self, conf, packages, build=True):
         """Update an SCons environment to make use of the package.
 
         Parameters
@@ -331,15 +429,11 @@ class Configuration:
             dependencies (or `None` if the dependency was optional and was not
             found).  The ``<module>.config.configure(...)`` method will have
             already been called on all dependencies.
-        check : `bool`, optional
-            If True, perform autoconf-style tests to verify that key
-            components are in fact in place.
         build : `bool`, optional
             If True, this is the package currently being built, and packages in
             "buildRequired" and "buildOptional" dependencies will also be
             present in the packages dict.
         """
-        assert not (check and build)
         conf.env.PrependUnique(**self.paths)
         state.log.info(f"Configuring package '{self.name}'.")
         conf.env.doxygen["includes"].extend(self.doxygen["includes"])
@@ -354,13 +448,6 @@ class Configuration:
                     if lib not in conf.env.libs[target]:
                         conf.env.libs[target].append(lib)
                         state.log.info(f"Adding '{lib}' library to target '{target}'.")
-        if check:
-            for header in self.provides["headers"]:
-                if not conf.CheckCXXHeader(header):
-                    return False
-            for lib in self.libs["main"]:
-                if not conf.CheckLib(lib, autoadd=False, language="C++"):
-                    return False
         return True
 
 
@@ -413,125 +500,6 @@ class ExternalConfiguration(Configuration):
         del self.paths["CPPPATH"]
 
 
-def CustomCFlagCheck(context, flag, append=True):
-    """A configuration test that checks whether a C compiler supports
-    a particular flag.
-
-    Parameters
-    ----------
-    context :
-        Configuration context.
-    flag : `str`
-        Flag to test, e.g., ``-fvisibility-inlines-hidden``.
-    append : `bool`, optional
-        Automatically append the flag to ``context.env["CCFLAGS"]``
-        if the compiler supports it?
-
-    Returns
-    -------
-    result : `bool`
-        Did the flag work?
-    """
-    context.Message("Checking if C compiler supports " + flag + " flag ")
-    ccflags = context.env["CCFLAGS"]
-    context.env.Append(CCFLAGS=flag)
-    result = context.TryCompile("int main(int argc, char **argv) { return 0; }", ".c")
-    context.Result(result)
-    if not append or not result:
-        context.env.Replace(CCFLAGS=ccflags)
-    return result
-
-
-def CustomCppFlagCheck(context, flag, append=True):
-    """A configuration test that checks whether a C++ compiler supports
-    a particular flag.
-
-    Parameters
-    ----------
-    context :
-        Configuration context.
-    flag : `str`
-        Flag to test, e.g., ``-fvisibility-inlines-hidden``.
-    append : `bool`, optional
-        Automatically append the flag to ``context.env["CXXFLAGS"]``
-        if the compiler supports it?
-
-    Returns
-    -------
-    result : `bool`
-        Did the flag work?
-    """
-    context.Message("Checking if C++ compiler supports " + flag + " flag ")
-    cxxflags = context.env["CXXFLAGS"]
-    context.env.Append(CXXFLAGS=flag)
-    result = context.TryCompile("int main(int argc, char **argv) { return 0; }", ".cc")
-    context.Result(result)
-    if not append or not result:
-        context.env.Replace(CXXFLAGS=cxxflags)
-    return result
-
-
-def CustomCompileCheck(context, message, source, extension=".cc"):
-    """A configuration test that checks whether the given source code
-    compiles.
-
-    Parameters
-    ----------
-    context :
-        Configuration context.
-    message : `str`
-        Message displayed on console prior to running the test.
-    source : `str`
-        Source code to compile.
-    extension : `str`, optional
-        Identifies the language of the source code. Use ".c" for C, and ".cc"
-        for C++ (the default).
-
-    Returns
-    -------
-    result : `bool`
-        Did the code compile?
-    """
-    context.Message(message)
-
-    env = context.env
-    if env.GetOption("clean") or env.GetOption("help") or env.GetOption("no_exec"):
-        result = True
-    else:
-        result = context.TryCompile(source, extension)
-
-    context.Result(result)
-
-    return result
-
-
-def CustomLinkCheck(context, message, source, extension=".cc"):
-    """A configuration test that checks whether the given source code
-    compiles and links.
-
-    Parameters
-    ----------
-    context :
-        Configuration context.
-    message : `str`
-        Message displayed on console prior to running the test.
-    source : `str`
-        Source code to compile.
-    extension : `str`, optional
-        Identifies the language of the source code. Use ".c" for C, and ".cc"
-        for C++ (the default).
-
-    Returns
-    -------
-    result : `bool`
-        Did the code compile and link?
-    """
-    context.Message(message)
-    result = context.TryLink(source, extension)
-    context.Result(result)
-    return result
-
-
 class PackageTree:
     """A class for loading and managing the dependency tree of a package,
     as defined by its configuration module (.cfg) file.
@@ -566,18 +534,25 @@ class PackageTree:
     def __init__(self, primaryName, noCfgFile=False):
         self.cfgPath = state.env.cfgPath
         self.packages = collections.OrderedDict()
-        self.customTests = {
-            "CustomCFlagCheck": CustomCFlagCheck,
-            "CustomCppFlagCheck": CustomCppFlagCheck,
-            "CustomCompileCheck": CustomCompileCheck,
-            "CustomLinkCheck": CustomLinkCheck,
-        }
         self._current = {primaryName}
+        # Packages in the closure of a dependency synthesized from
+        # pkg-config, which are configured as part of it rather than on
+        # their own; see _recurse().
+        self._provided = collections.OrderedDict()
+        # The pkg-config runner used to synthesize configurations for
+        # dependencies without a .cfg file; built on first use by
+        # _pkgconfig(), which sets _pkgconfigFailed if that is impossible.
+        self._pkgconfigInstance = None
+        self._pkgconfigFailed = False
+        self._shimsWritten = False
         if noCfgFile:
             self.primary = None
             return
 
-        self.primary = self._tryImport(primaryName)
+        # The pkg-config fallback is for dependencies only; a primary
+        # package without a .cfg file must not pick up e.g. a stale
+        # lib/pkgconfig/lsst_<name>.pc instead.
+        self.primary = self._tryImport(primaryName, allowPkgConfig=False)
         if self.primary is None:
             state.log.fail(f"Failed to load primary package configuration for {primaryName}.")
 
@@ -603,20 +578,33 @@ class PackageTree:
 
     name = property(lambda self: self.primary.config.name)
 
-    def configure(self, env, check=False):
+    @property
+    def versions(self):
+        """Version of every dependency, keyed by package name
+        (`dict` [`str`, `str` or `None`]).
+
+        A dependency that was not found has a version of `None`, and one
+        whose configuration does not record a version has ``"unknown"``.
+        The closure of a dependency synthesized from pkg-config is
+        included, after the dependencies loaded in their own right.
+        """
+        return {
+            name: (getattr(mod.config, "version", "unknown") if mod is not None else None)
+            for name, mod in self._all().items()
+        }
+
+    def configure(self, env):
         """Configure the entire dependency tree in order. and return an
         updated environment."""
-        conf = env.Configure(custom_tests=self.customTests)
+        conf = env.Configure()
         for name, module in self.packages.items():
             if module is None:
                 state.log.info(f"Skipping missing optional package {name}.")
                 continue
-            if not module.config.configure(conf, packages=self.packages, check=check, build=False):
+            if not module.config.configure(conf, packages=self.packages, build=False):
                 state.log.fail(f"{name} was found but did not pass configuration checks.")
         if self.primary:
-            self.primary.config.configure(conf, packages=self.packages, check=False, build=True)
-        env.AppendUnique(SWIGPATH=env["CPPPATH"])
-        env.AppendUnique(XSWIGPATH=env["XCPPPATH"])
+            self.primary.config.configure(conf, packages=self.packages, build=True)
         # reverse the order of libraries in env.libs, so libraries that
         # fulfill a dependency of another appear after it. required by the
         # linker to successfully resolve symbols in static libraries.
@@ -626,7 +614,7 @@ class PackageTree:
         return env
 
     def __contains__(self, name):
-        return name == self.name or name in self.packages
+        return name == self.name or name in self.packages or name in self._provided
 
     has_key = __contains__
 
@@ -634,22 +622,80 @@ class PackageTree:
         if name == self.name:
             return self.primary
         else:
-            return self.packages[name]
+            return self._all()[name]
 
     def get(self, name, default=None):
         if name == self.name:
             return self.primary
         else:
-            return self.packages.get(name)
+            return self._all().get(name)
 
     def keys(self):
-        k = list(self.packages.keys())
+        k = list(self._all().keys())
         k.append(self.name)
         return k
 
-    def _tryImport(self, name):
+    def _all(self):
+        """Return ``self.packages`` followed by the provided packages that
+        were not also loaded in their own right.  A provided package
+        replaces an optional one of the same name that was not found."""
+        result = collections.OrderedDict(self.packages)
+        for name, module in self._provided.items():
+            if result.get(name) is None:
+                result[name] = module
+        return result
+
+    def _pkgconfig(self):
+        """Return the pkg-config runner used for dependencies without a
+        .cfg file, constructing it on first use.
+
+        Returns
+        -------
+        pkgconfig : `~lsst.sconsUtils.pkgconfig.PkgConfig` or `None`
+            The runner, or `None` if it cannot be constructed (no conda
+            prefix, or neither ``pkgconf`` nor ``pkg-config`` on ``PATH``).
+            The reason is logged once, and construction is not retried.
+        """
+        if self._pkgconfigInstance is None and not self._pkgconfigFailed:
+            root = SCons.Script.Dir("#").abspath
+            searchPath = pkgconfig.build_search_path(root, os.environ)
+            try:
+                self._pkgconfigInstance = pkgconfig.PkgConfig(searchPath, get_conda_prefix())
+            except pkgconfig.PkgConfigError as err:
+                state.log.info(f"Not looking for pkg-config modules: {err}.")
+                self._pkgconfigFailed = True
+            else:
+                state.log.info(f"Using pkg-config at '{self._pkgconfigInstance.executable}'.")
+        return self._pkgconfigInstance
+
+    def _tryImport(self, name, allowPkgConfig=True):
         """Search for and import an individual configuration module from
-        file."""
+        file.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the package.
+        allowPkgConfig : `bool`, optional
+            If True (the default) and no ``<name>.cfg`` file is found on
+            the configuration path but pkg-config can find a
+            ``lsst_<name>`` module, a configuration module is synthesized
+            from pkg-config instead; see
+            `~lsst.sconsUtils.pkgconfig.synthesize_cfg_module`.  This is
+            False for the primary package, which must have a ``.cfg`` file
+            on this path.
+
+        Notes
+        -----
+        Before the first configuration module is synthesized, the
+        configure-time shims are written into
+        ``<build root>/.sconf_temp/pkgconfig``, as on the pkg-config path,
+        so that a converted dependency requiring e.g. ``numpy`` can be
+        resolved.  Under ``--clean`` or ``--help``, where `configure` is
+        never run, nothing is written or resolved: a ``lsst_<name>``
+        module that is merely present yields a placeholder module with no
+        version.
+        """
         for path in self.cfgPath:
             filename = os.path.join(path, name + ".cfg")
             if os.path.exists(filename):
@@ -674,9 +720,28 @@ class PackageTree:
                 if not hasattr(module, "config") or not isinstance(module.config, Configuration):
                     state.log.warn(f"Configuration module for package '{name}' lacks a config object.")
                     return None
-                else:
-                    module.config.addCustomTests(self.customTests)
                 return module
+        if not allowPkgConfig:
+            return None
+        runner = self._pkgconfig()
+        moduleName = pkgconfig.module_name(name)
+        # present() rather than exists(): a module whose Requires cannot be
+        # satisfied is broken, not missing, and must not be skipped as an
+        # absent optional dependency.
+        if runner is not None and runner.present(moduleName):
+            state.log.info(f"Using pkg-config module '{moduleName}' for package '{name}'.")
+            if state.env.GetOption("clean") or state.env.GetOption("help"):
+                return types.SimpleNamespace(dependencies={}, config=types.SimpleNamespace(name=name))
+            if not self._shimsWritten:
+                try:
+                    _writeShims(SCons.Script.Dir("#").abspath)
+                except OSError as err:
+                    state.log.fail(str(err))
+                self._shimsWritten = True
+            try:
+                return pkgconfig.synthesize_cfg_module(name, runner, get_conda_prefix())
+            except pkgconfig.PkgConfigError as err:
+                state.log.fail(str(err))
         state.log.info(f"Failed to import configuration for optional package '{name}'.")
 
     def _recurse(self, name):
@@ -717,6 +782,14 @@ class PackageTree:
                 return False
         for dependency in module.dependencies.get("optional", ()):
             self._recurse(dependency)
+        # A synthesized module has no dependencies to recurse into, because
+        # its configuration already covers its whole closure; record that
+        # closure so that it is still listed, without configuring it again.
+        for provided, version in getattr(module, "provided", {}).items():
+            if provided not in self._provided:
+                self._provided[provided] = types.SimpleNamespace(
+                    dependencies={}, config=types.SimpleNamespace(name=provided, version=version)
+                )
         # This comes last to ensure the ordering puts all dependencies first.
         self.packages[name] = module
         self._current.remove(name)

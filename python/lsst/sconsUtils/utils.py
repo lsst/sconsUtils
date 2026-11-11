@@ -26,6 +26,7 @@ from __future__ import annotations
 __all__ = (
     "Log",
     "_has_OSX_SIP",
+    "conda_compilers",
     "get_conda_prefix",
     "is_within_tree",
     "libraryLoaderEnvironment",
@@ -297,6 +298,27 @@ def use_conda_compilers():
     if os.environ.get("CONDA_BUILD", "0") == "1":
         return True
     return False
+
+
+def conda_compilers() -> tuple[str, str]:
+    """Return the C and C++ compilers to use with conda compilers.
+
+    The compiler activation scripts of conda-forge ``compilers`` < 2 export
+    ``CC`` and ``CXX``. From version 2 the compilers are installed under
+    their plain names with no activation script, so fall back to those.
+
+    Returns
+    -------
+    cc : `str`
+        C compiler.
+    cxx : `str`
+        C++ compiler.
+    """
+    if sys.platform == "darwin":
+        default_cc, default_cxx = "clang", "clang++"
+    else:
+        default_cc, default_cxx = "gcc", "g++"
+    return os.environ.get("CC", default_cc), os.environ.get("CXX", default_cxx)
 
 
 def is_within_tree(path: str, root: str) -> bool:

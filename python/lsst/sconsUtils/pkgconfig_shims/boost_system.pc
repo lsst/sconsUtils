@@ -1,0 +1,8 @@
+conda_prefix=${pcfiledir}/../..
+
+Name: boost_system
+Description: Boost system library
+Version: unknown
+Requires: boost
+Cflags:
+Libs: -lboost_system

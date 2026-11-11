@@ -1,0 +1,8 @@
+conda_prefix=${pcfiledir}/../..
+
+Name: boost_thread
+Description: Boost thread library
+Version: unknown
+Requires: boost
+Cflags:
+Libs: -lboost_thread
