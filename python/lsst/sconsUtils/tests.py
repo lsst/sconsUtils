@@ -24,6 +24,7 @@
 __all__ = ("Control",)
 
 import glob
+import importlib.util
 import os
 import shlex
 import sys
@@ -278,6 +279,7 @@ class Control:
                 interpreter += f" --junit-prefix={self.junitPrefix()}"
                 interpreter += " --log-level=DEBUG"
                 interpreter += self._getPytestCoverageCommand()
+                interpreter += self._getPytestJsonReportCommand()
 
             if self.ignore(f):
                 continue
@@ -466,9 +468,12 @@ class Control:
         interpreter += f" --junit-prefix={self.junitPrefix()}"
         interpreter += " --log-level=DEBUG"
         interpreter += self._getPytestCoverageCommand()
-        # Avoids target install overwrite the real coverage
+        # Avoids target install overwrite the real coverage and JSON report
+        jsonReport = lfnfOpt != "none" and self._jsonReportEnabled()
         if lfnfOpt == "none":
             interpreter += " --no-cov"
+        if jsonReport:
+            interpreter += self._getPytestJsonReportCommand()
 
         # Ignore doxygen build directories since they can confuse pytest
         # test collection
@@ -533,9 +538,13 @@ class Control:
         # If we ran all the test, then copy the previous test
         # execution products to `.all' files so we can retrieve later.
         # If we skip the test (exit code 5), retrieve those `.all' files.
+        saveReport = restoreReport = ""
+        if jsonReport:
+            saveReport = "cp ${TARGET}-report.json ${TARGET}-report.json.all || true;"
+            restoreReport = "mv ${TARGET}-report.json.all ${TARGET}-report.json || true;"
         cmd = ""
         if lfnfOpt == "all":
-            cmd += "@rm -f ${{TARGET}} ${{TARGET}}.failed;"
+            cmd += "@rm -f ${{TARGET}} ${{TARGET}}.failed ${{TARGET}}-report.json;"
         cmd += """
         @printf "%s\\n" 'running global pytest... ';
         @({2} {0} {1}); \
@@ -544,18 +553,21 @@ class Control:
             echo "Global pytest run completed successfully"; \
             cp ${{TARGET}} ${{TARGET}}.all || true; \
             cp ${{TARGET}}.out ${{TARGET}}.out.all || true; \
+            {3} \
         elif [ "$$rc" -eq 5 ]; then \
             echo "Global pytest run completed successfully - no tests ran"; \
             mv ${{TARGET}}.all ${{TARGET}} || true; \
             mv ${{TARGET}}.out.all ${{TARGET}}.out || true; \
+            {4} \
         else \
             echo "Global pytest run: failed with $$rc"; \
             mv ${{TARGET}}.out ${{TARGET}}.failed; \
         fi;
         """
         testfiles = shlex.join(pythonTestFiles)
-        result = self._env.Command(target, None, cmd.format(interpreter, testfiles, libpathstr))
-
+        result = self._env.Command(
+            target, None, cmd.format(interpreter, testfiles, libpathstr, saveReport, restoreReport)
+        )
         self._env.Alias(os.path.basename(target), target)
         self._env.Clean(target, self._tmpDir)
 
@@ -626,3 +638,19 @@ class Control:
         options += f" --cov-report=html{htmlfile}"
 
         return options
+    def _jsonReportEnabled(self):
+        """Return whether a pytest Json report should be written
+        """
+        if not self._env.GetOption("ci_reports"):
+            return False
+        if not hasattr(self, "_haveJsonReport"):
+            self._haveJsonReport = importlib.util.find_spec("pytest_jsonreport") is not None
+            if not self._haveJsonReport:
+                state.log.warn("--ci-reports: pytest-json-report is not installed; no JSON report")
+        return self._haveJsonReport
+    def _getPytestJsonReportCommand(self):
+        """Form the additional arguments required to write a JSON report.
+        """
+        if not self._jsonReportEnabled():
+            return ""
+        return " --json-report --json-report-file=${TARGET}-report.json"

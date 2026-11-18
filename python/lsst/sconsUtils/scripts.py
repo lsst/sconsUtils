@@ -166,7 +166,7 @@ class BasicSConstruct:
         dependencies.configure(packageName, versionString, eupsProduct, eupsProductPath, noCfgFile)
         state.env.BuildETags()
         if cleanExt is None:
-            cleanExt = r"*~ core core.[1-9]* *.so *.os *.o *.pyc *.pkgc"
+            cleanExt = r"*~ core core.[1-9]* *.so *.os *.o *.pyc *.pkgc *.sarif"
         state.env.CleanTree(cleanExt, "__pycache__ .pytest_cache *.dist-info")
         if versionModuleName is not None:
             try:
