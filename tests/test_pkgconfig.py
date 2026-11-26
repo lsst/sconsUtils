@@ -1395,7 +1395,9 @@ class VersionModuleTestCase(unittest.TestCase):
 
     def test_dependency_versions(self):
         for versions, expected in (
-            ({"base": "1.0", "gone": None}, '{\n    "base": "1.0",\n    "gone": None,\n}\n'),
+            ({"base": "1.0", "gone": None}, "{\n    'base': '1.0',\n    'gone': None,\n}\n"),
+            # A pkg-config Version field is free text.
+            ({"odd": 'a"b\\c'}, "{\n    'odd': 'a\"b\\\\c',\n}\n"),
             ({}, "{}\n"),
         ):
             with self.subTest(versions=versions), tempfile.TemporaryDirectory() as d:
@@ -1408,6 +1410,9 @@ class VersionModuleTestCase(unittest.TestCase):
                 with open(output) as f:
                     contents = f.read()
                 self.assertIn("__dependency_versions__: dict[str, str | None] = " + expected, contents)
+                namespace = {}
+                exec(contents, namespace)
+                self.assertEqual(namespace["__dependency_versions__"], versions)
 
 
 class RemovesGeneratedPcTestCase(unittest.TestCase):

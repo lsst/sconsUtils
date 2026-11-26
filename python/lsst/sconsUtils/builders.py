@@ -626,10 +626,7 @@ def VersionModule(self, filename, versionString=None):
             if dependencyVersions:
                 outFile.write("\n")
                 for name, depVersion in dependencyVersions.items():
-                    if depVersion is None:
-                        outFile.write(f'    "{name}": None,\n')
-                    else:
-                        outFile.write(f'    "{name}": "{depVersion}",\n')
+                    outFile.write(f"    {name!r}: {depVersion!r},\n")
             outFile.write("}\n")
 
             # Write out an entry per line as there can be many names
