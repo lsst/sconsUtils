@@ -4,20 +4,20 @@
 
 #######################################
 Describing dependencies with pkg-config
-########################################
+#######################################
 
 A package that ships C++ headers or a C++ library describes its build-time dependencies with a pkg-config template rather than a ``ups/<name>.cfg`` file.
 This page describes the template format, how sconsUtils uses it, and the related shims and tooling.
 
 Which packages need a template
-===============================
+==============================
 
 A package needs a template if and only if it has an ``include/`` or ``src/`` directory.
 Header-only packages count.
 Pure-Python packages do not, and carry no C++ configuration file at all.
 
 File name and location
-=======================
+======================
 
 The template is committed at the top level of the repository, next to ``SConstruct``, named ``lsst_<product>.pc.in``.
 It is not placed in ``ups/`` because it is not EUPS metadata.
@@ -67,13 +67,14 @@ A header-only package has ``Libs:`` with only ``-L${libdir}``, or omits the fiel
 ``Cflags`` is ``-I${includedir}``.
 
 Custom variables
-=================
+================
 
 Five custom variables are recognized, all optional.
 
 ``lsst_build_requires``
    Space-separated modules needed only to build this package, not to link against it.
-   A package that builds pybind11 modules lists ``python3`` alongside ``pybind11``, because conda's ``pybind11.pc`` does not require ``python3`` itself and so does not provide the ``Python.h`` include directory.
+   A package that builds pybind11 modules lists ``python3`` alongside ``pybind11``.
+   Upstream's ``pybind11.pc`` deliberately has no ``Requires``, leaving the choice between ``python3`` (extension modules) and ``python3-embed`` (embedding) to the consumer, so it does not provide the ``Python.h`` include directory.
 ``lsst_python_libs``
    ``-l`` flags linked only into Python extension modules.
 ``lsst_test_libs``
@@ -120,7 +121,7 @@ Because ``*_DIR`` entries come before the defaults, a product set up by EUPS alw
 Builds without a conda environment are unsupported on this path: sconsUtils fails with a clear message if no conda prefix can be found, rather than attempting a fallback.
 
 Include routing
-================
+===============
 
 An ``-I`` directory is routed to ``CPPPATH``, and so is dependency-scanned, if it equals the ``includedir`` of some ``lsst_*`` module in the dependency closure.
 Every other directory is routed to ``XCPPPATH`` and treated as a system header directory with ``-isystem``.
@@ -131,7 +132,7 @@ Compiler flags other than ``-I`` are appended to ``CCFLAGS``, and linker flags o
 An option whose argument is a separate word, such as ``-framework Accelerate`` or ``-isystem /a``, is kept together with its argument, so that it is skipped only if the pair is already there.
 
 Migration changes for a converting package
-=============================================
+==========================================
 
 A package converting from a ``.cfg`` file adds ``lib/pkgconfig/`` to its ``.gitignore``, because the ``.pc`` file there is generated at configure time.
 It also passes ``noCfgFile=True`` to ``configure()``, even though the pkg-config template is what actually selects the pkg-config path regardless of ``noCfgFile``.
@@ -140,6 +141,8 @@ A converted package may only depend on other converted packages, because pkg-con
 Conversion therefore proceeds bottom-up through the dependency graph.
 A ``.cfg`` package, by contrast, may depend on a converted package: when ``PackageTree._tryImport`` finds no ``<dep>.cfg`` file, it looks for a ``lsst_<dep>`` pkg-config module on the search path above.
 This fallback applies only to dependencies; the package being built still needs its own ``ups/<name>.cfg``.
+Only the ``lsst_<dep>`` name is looked up, never a bare ``<dep>``.
+Third-party modules such as ``ndarray`` are found by pkg-config itself, while it resolves the ``Requires`` of that ``lsst_<dep>`` module.
 If no ``lsst_<dep>.pc`` file is on the search path or on pkg-config's default path, the dependency is treated as an optional package that was not found.
 If the file is there but its own ``Requires`` cannot be satisfied, the build fails with pkg-config's explanation rather than treating the dependency as absent.
 This holds under both pkg-config and pkgconf.
