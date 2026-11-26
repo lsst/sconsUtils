@@ -1,0 +1,8 @@
+conda_prefix=${pcfiledir}/../..
+
+Name: boost_serialization
+Description: Boost serialization library
+Version: unknown
+Requires: boost
+Cflags:
+Libs: -lboost_serialization
